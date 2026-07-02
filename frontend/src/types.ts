@@ -1,15 +1,18 @@
 export type Balance = {
   currency: string;
   amount: number | string;
+  comment?: string;
 };
 
 export type Organization = {
   id: string;
   name: string;
+  comment?: string;
   balances: Balance[];
 };
 
 export type SnapshotData = {
+  comment?: string;
   rates: Record<string, number | string>; // Currency to RUB rate
   organizations: Organization[];
 };

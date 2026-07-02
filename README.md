@@ -42,12 +42,12 @@ Make sure you have the following installed on your machine:
 We use a universal Bash script that automatically builds the React frontend, compiles the Go backend, and opens the app in your default browser.
 
 1. Make the script executable (only needed once):
-   ```bash
+   ```shell
    chmod +x bin/run.sh
    ```
 
 2. Start the application:
-   ```bash
+   ```shell
    ./bin/run.sh
    ```
 

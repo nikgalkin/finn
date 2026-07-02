@@ -33,13 +33,14 @@ if [ ! -f "$FRONT_BUILD_DIR/index.html" ] || [ -n "$(find frontend/src frontend/
     npm run build
     # Возвращаемся в корень
     cd "$GIT_ROOT"
+    go build -o "$BINARY"
 else
     echo -e "${GREEN}Фронтенд не менялся, берем из кэша! ⚡${NC}"
 fi
 
 echo -e "${BLUE}[2/3] Проверяем бэкенд на Go...${NC}"
 # Проверяем кэш бэкенда (ищем изменения в *.go файлах)
-if [ ! -f "$BINARY" ] || [ -n "$(find . -name '*.go' -newer "$BINARY" 2>/dev/null)" ]; then
+if [ ! -f "$BINARY" ] || [ -n "$(find . -name '*.go' -newer "$BINARY" 2>/dev/null)" ] || [ ! -f "$FRONT_BUILD_DIR/index.html" ] || [ -n "$(find frontend/src frontend/package.json -newer $FRONT_BUILD_DIR/index.html 2>/dev/null)" ]; then
     echo -e "${YELLOW}Код бэкенда изменился. Компилируем в $BIN_DIR/...${NC}"
     # Флаг -o кладет готовый бинарник прямиком в папку bin/
     go build -o "$BINARY"
@@ -48,7 +49,9 @@ else
 fi
 
 open_browser() {
-    if command -v open &> /dev/null; then
+    if [[ $NO_OPEN == 1 ]]; then
+        echo skip..
+    elif command -v open &> /dev/null; then
         open "$URL"
     elif command -v xdg-open &> /dev/null; then
         xdg-open "$URL"

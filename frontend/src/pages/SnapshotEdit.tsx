@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Copy, List } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Copy, List, MessageSquare, X } from 'lucide-react';
 import { API_URL } from '../types';
 import type { SnapshotData, Balance, Snapshot, AppSettings } from '../types';
 
@@ -9,15 +10,12 @@ import type { SnapshotData, Balance, Snapshot, AppSettings } from '../types';
 const evaluateMath = (expr: string | number): number => {
   if (typeof expr === 'number') return expr;
   try {
-    // Keep only digits and basic math operators (commas from formatting will be stripped here!)
     const sanitized = expr.replace(/[^-()\d/*+.]/g, '');
     if (!sanitized) return 0;
-
-    // Safe eval alternative for simple expressions
     const result = new Function(`return ${sanitized}`)();
     return Number.isFinite(result) ? result : 0;
   } catch (e) {
-    return 0; // Return 0 on parsing error
+    return 0; 
   }
 };
 
@@ -30,16 +28,34 @@ export default function SnapshotEdit() {
   const [currentMonth, setCurrentMonth] = useState('');
   const [originalMonth, setOriginalMonth] = useState('');
   const [data, setData] = useState<SnapshotData>({
+    comment: '',
     rates: { USD: 90, EUR: 100 },
     organizations: []
   });
+  
+  // State for the comment modal
+  const [activeComment, setActiveComment] = useState<{
+    type: 'month' | 'org' | 'balance';
+    orgId?: string;
+    index?: number;
+    text: string;
+    initialText: string;
+    title: string;
+  } | null>(null);
+
   const [latestSnapshot, setLatestSnapshot] = useState<SnapshotData | null>(null);
   const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [] });
   const [loading, setLoading] = useState(true);
   const [fetchingRates, setFetchingRates] = useState(false);
 
+  // Единый стиль для всех кнопок комментариев (светло-белый, если пусто)
+  const getIconStyle = (hasComment: boolean) => ({
+    padding: '8px',
+    color: hasComment ? '#3b82f6' : 'rgba(255, 255, 255, 0.6)',
+    transition: 'color 0.2s'
+  });
+
   useEffect(() => {
-    // Fetch settings first
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
       .then(resData => {
@@ -97,7 +113,6 @@ export default function SnapshotEdit() {
     }
   }, [month, sourceMonth, isNew, isCopy]);
 
-  // Ensure all currencies from settings appear in the rates list
   useEffect(() => {
     if (settings.currencies.length > 0) {
       setData(prev => {
@@ -121,7 +136,6 @@ export default function SnapshotEdit() {
   const handleSave = () => {
     const usedCurrencies = new Set<string>();
 
-    // 1. Collect all currencies that have a non-zero balance
     data.organizations.forEach(org => {
       org.balances.forEach(b => {
         if (Number(b.amount) !== 0 && b.currency) {
@@ -133,7 +147,6 @@ export default function SnapshotEdit() {
     const baseCur = settings.baseCurrency || 'RUB';
     const missingRates: string[] = [];
 
-    // 2. Check if they have a valid rate
     usedCurrencies.forEach(curr => {
       if (curr !== baseCur) {
         const rate = Number(data.rates[curr]);
@@ -143,7 +156,6 @@ export default function SnapshotEdit() {
       }
     });
 
-    // 3. Block saving if rates are missing
     if (missingRates.length > 0) {
       alert(`⚠️ Save Error!\n\nYou have balances in ${missingRates.join(', ')}, but their exchange rates are missing.\n\nPlease enter a rate > 0 to calculate totals correctly.`);
       return;
@@ -271,10 +283,10 @@ export default function SnapshotEdit() {
     });
   };
 
-  const updateOrganization = (id: string, name: string) => {
+  const updateOrganizationField = (id: string, field: 'name' | 'comment', value: string) => {
     setData({
       ...data,
-      organizations: data.organizations.map(o => o.id === id ? { ...o, name } : o)
+      organizations: data.organizations.map(o => o.id === id ? { ...o, [field]: value } : o)
     });
   };
 
@@ -294,7 +306,7 @@ export default function SnapshotEdit() {
         if (o.id === orgId) {
           return {
             ...o,
-            balances: [...o.balances, { currency: settings.baseCurrency || 'RUB', amount: 0 }]
+            balances: [...o.balances, { currency: settings.baseCurrency || 'RUB', amount: 0, comment: '' }]
           };
         }
         return o;
@@ -316,14 +328,12 @@ export default function SnapshotEdit() {
     });
   };
 
-  // --- SAFE ROW REMOVAL ---
   const removeBalance = (orgId: string, index: number) => {
     const org = data.organizations.find(o => o.id === orgId);
     if (!org) return;
     
     const balance = org.balances[index];
     
-    // Check if the balance is non-zero and not empty
     if (balance && balance.amount !== 0 && balance.amount !== '') {
       if (!confirm('This balance is not empty. Are you sure you want to delete it?')) {
         return;
@@ -360,66 +370,138 @@ export default function SnapshotEdit() {
     }
   };
 
+  const saveComment = () => {
+    if (!activeComment) return;
+    const { type, text, orgId, index } = activeComment;
+    
+    if (type === 'month') {
+      setData(prev => ({ ...prev, comment: text }));
+    } else if (type === 'org' && orgId) {
+      updateOrganizationField(orgId, 'comment', text);
+    } else if (type === 'balance' && orgId && index !== undefined) {
+      updateBalance(orgId, index, 'comment', text);
+    }
+    setActiveComment(null);
+  };
+
+  const handleCloseComment = () => {
+    if (activeComment && activeComment.text !== activeComment.initialText) {
+      if (confirm('You have unsaved changes. Do you want to save them?')) {
+        saveComment();
+        return;
+      }
+    }
+    setActiveComment(null);
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
     <div>
+      {/* Скрываем стрелочки у числовых полей во всех браузерах */}
+      <style>{`
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        input[type="number"] {
+          -moz-appearance: textfield;
+        }
+      `}</style>
+
+      {/* HEADER SECTION */}
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-4">
-          <Link to="/" className="btn">
-            <ArrowLeft size={18} />
+          <Link to="/" className="btn" style={{ padding: '8px 12px' }}>
+            <ArrowLeft size={20} />
           </Link>
-          <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>
-            {isNew ? 'New Snapshot' : isCopy ? `New Snapshot (copy of ${sourceMonth})` : `Edit Snapshot ${month}`}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0, lineHeight: 1 }}>
+              {isNew ? 'New Snapshot' : isCopy ? `New Snapshot (copy of ${sourceMonth})` : `Edit Snapshot ${month}`}
+            </h2>
+          </div>
         </div>
-        <button className="btn btn-primary" onClick={handleSave}>
-          <Save size={18} /> Save
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            className="btn" 
+            style={{ ...getIconStyle(!!data.comment), padding: '6px' }}
+            title="Add monthly note"
+            onClick={() => setActiveComment({ type: 'month', text: data.comment || '', initialText: data.comment || '', title: 'Monthly Note' })}
+          >
+            <MessageSquare size={18} />
+          </button>
+          <button className="btn btn-primary" onClick={handleSave}>
+            <Save size={18} className="mr-2" /> Save
+          </button>
+        </div>
       </div>
 
-      <div className="glass-panel mb-8">
-        <div className="flex gap-4 items-center mb-4">
-          <div style={{ flex: 1 }}>
-            <label className="stat-label">Month (YYYY-MM)</label>
+      {/* OVERVIEW SECTION */}
+      <div className="glass-panel mb-8 p-6" style={{ display: 'flex', gap: '32px', alignItems: 'stretch' }}>
+        
+        {/* LEFT COLUMN - PERIOD */}
+        <div style={{ flex: '0 0 180px', display: 'flex', flexDirection: 'column' }}>
+          {/* Header aligned with right side */}
+          <div className="flex items-center justify-center mb-4" style={{ height: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem' }}>Period</h3>
+          </div>
+          {/* Centered Content */}
+          <div style={{ flex: 0.5, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+            <div className="text-xs text-[var(--text-secondary)] mb-2 font-medium text-center">Month (YYYY-MM)</div>
             <input
-              className="input mt-2"
+              className="input w-full text-center"
               value={currentMonth}
               onChange={e => setCurrentMonth(e.target.value)}
               placeholder="YYYY-MM"
+              style={{ textAlign: 'center' }}
             />
           </div>
         </div>
 
-        <div className="flex justify-between items-end mb-4 mt-8">
-          <h3 style={{ margin: 0 }}>Exchange Rates (to {settings.baseCurrency || 'RUB'})</h3>
-          <button className="btn" onClick={fetchRates} disabled={fetchingRates}>
-            <RefreshCw size={16} className={fetchingRates ? 'animate-spin' : ''} />
-            {fetchingRates ? 'Fetching...' : 'Fetch Rates'}
-          </button>
-        </div>
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          {Object.entries(data.rates).map(([curr, rate]) => (
-            <div key={curr}>
-              <label className="stat-label">{curr}</label>
-              <input
-                type="number"
-                className="input mt-2"
-                value={rate === 0 ? '' : rate}
-                placeholder="0"
-                onChange={e => {
-                  const val = e.target.value;
-                  updateRate(curr, val === '' ? 0 : (val.endsWith('.') ? val : parseFloat(val)));
-                }}
-              />
-            </div>
-          ))}
-          <div className="flex items-end">
-            <button className="btn" onClick={addRate}>
-              <Plus size={16} /> Add Rate
+        {/* ВЕРТИКАЛЬНЫЙ РАЗДЕЛИТЕЛЬ */}
+        <div style={{ width: '1px', background: 'rgba(255,255,255,0.05)' }}></div>
+
+        {/* RIGHT COLUMN - EXCHANGE RATES */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {/* Header aligned with left side */}
+          <div className="flex justify-between items-center mb-4" style={{ height: '40px' }}>
+            <h3 style={{ margin: 0, fontSize: '1rem' }}>
+              Exchange Rates (to {settings.baseCurrency || 'RUB'})
+            </h3>
+            <button className="btn" onClick={fetchRates} disabled={fetchingRates}>
+              <RefreshCw size={16} className={`mr-2 ${fetchingRates ? 'animate-spin' : ''}`} />
+              {fetchingRates ? 'Fetching...' : 'Fetch Rates'}
             </button>
           </div>
+          
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', flex: 1, alignContent: 'flex-start' }}>
+            {Object.entries(data.rates).map(([curr, rate]) => (
+              <div key={curr} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
+                <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium">{curr}</div>
+                <input
+                  type="number"
+                  className="input w-full"
+                  value={rate === 0 ? '' : rate}
+                  placeholder="0"
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()} // Снимаем фокус при скролле
+                  onChange={e => {
+                    const val = e.target.value;
+                    updateRate(curr, val === '' ? 0 : (val.endsWith('.') ? val : parseFloat(val)));
+                  }}
+                />
+              </div>
+            ))}
+            
+            <div style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
+               <div className="text-xs mb-1 font-medium opacity-0"></div>
+               <button className="btn w-full justify-center" style={{ height: '42px' }} onClick={addRate}>
+                 <Plus size={16} className="mr-1" /> Add
+               </button>
+            </div>
+          </div>
         </div>
+        
       </div>
 
       <div className="flex justify-between items-center mb-4">
@@ -429,17 +511,17 @@ export default function SnapshotEdit() {
             <div className="flex gap-2 ml-4">
               {latestSnapshot && (
                 <button className="btn" onClick={copyFromPrevious}>
-                  <Copy size={14} /> Copy from previous
+                  <Copy size={14} className="mr-1" /> Copy from previous
                 </button>
               )}
               <button className="btn" onClick={fillFromSettings}>
-                <List size={14} /> Fill from Settings
+                <List size={14} className="mr-1" /> Fill from Settings
               </button>
             </div>
           )}
         </div>
         <button className="btn btn-primary" onClick={addOrganization}>
-          <Plus size={18} /> Add Organization
+          <Plus size={18} className="mr-1" /> Add Organization
         </button>
       </div>
 
@@ -451,7 +533,7 @@ export default function SnapshotEdit() {
                 <select
                   className="input"
                   value={org.name}
-                  onChange={e => updateOrganization(org.id, e.target.value)}
+                  onChange={e => updateOrganizationField(org.id, 'name', e.target.value)}
                   style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
                 >
                   <option value="" disabled>Select Organization</option>
@@ -461,17 +543,27 @@ export default function SnapshotEdit() {
                   )}
                 </select>
               </div>
-              <button className="btn btn-danger absolute right-0" onClick={() => removeOrganization(org.id)}>
-                <Trash2 size={16} />
-              </button>
+              <div className="absolute right-0 flex gap-2">
+                <button
+                  className="btn"
+                  style={getIconStyle(!!org.comment)}
+                  title="Organization Note"
+                  onClick={() => setActiveComment({ type: 'org', orgId: org.id, text: org.comment || '', initialText: org.comment || '', title: `${org.name || 'Organization'} Note` })}
+                >
+                  <MessageSquare size={16} />
+                </button>
+                <button className="btn btn-danger" onClick={() => removeOrganization(org.id)}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
 
             <table className="table mb-4">
               <thead>
                 <tr>
-                  <th>Currency</th>
-                  <th>Amount</th>
-                  <th></th>
+                  <th style={{ width: '30%' }}>Currency</th>
+                  <th style={{ width: '45%' }}>Amount</th>
+                  <th style={{ width: '25%' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -483,7 +575,7 @@ export default function SnapshotEdit() {
                         value={b.currency}
                         onChange={e => updateBalance(org.id, i, 'currency', e.target.value)}
                       >
-                        <option value="" disabled>Select Currency</option>
+                        <option value="" disabled>Select</option>
                         {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
                         {!settings.currencies.includes(b.currency) && b.currency && (
                           <option value={b.currency}>{b.currency}</option>
@@ -496,46 +588,42 @@ export default function SnapshotEdit() {
                         className="input"
                         value={b.amount === 0 ? '' : (typeof b.amount === 'number' ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(b.amount) : b.amount)}
                         placeholder="0"
-                        onChange={e => {
-                          // Save string as is while typing (e.g. "1,000 + 500")
-                          updateBalance(org.id, i, 'amount', e.target.value);
-                        }}
+                        onChange={e => updateBalance(org.id, i, 'amount', e.target.value)}
                         onBlur={e => {
-                          // Calculate and format strictly to number on blur
                           const calculated = evaluateMath(e.target.value);
                           updateBalance(org.id, i, 'amount', calculated);
                         }}
                         onKeyDown={e => {
-                          // Calculate and format strictly to number on Enter
                           if (e.key === 'Enter') {
                             const calculated = evaluateMath((e.target as HTMLInputElement).value);
                             updateBalance(org.id, i, 'amount', calculated);
                             (e.target as HTMLInputElement).blur();
                           }
                         }}
-                        // --- INTERCEPT COPY EVENT TO REMOVE COMMAS ---
                         onCopy={e => {
                           const target = e.target as HTMLInputElement;
-                          const selectionStart = target.selectionStart || 0;
-                          const selectionEnd = target.selectionEnd || 0;
-                          
-                          // Get exactly what the user highlighted
-                          const selectedText = target.value.substring(selectionStart, selectionEnd);
-                          
+                          const selectedText = target.value.substring(target.selectionStart || 0, target.selectionEnd || 0);
                           if (selectedText) {
-                            // Prevent default copy behavior
                             e.preventDefault();
-                            // Strip commas and push to clipboard
-                            const cleanText = selectedText.replace(/,/g, '');
-                            e.clipboardData.setData('text/plain', cleanText);
+                            e.clipboardData.setData('text/plain', selectedText.replace(/,/g, ''));
                           }
                         }}
                       />
                     </td>
                     <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0 }}>
-                      <button className="btn" style={{ padding: '8px' }} onClick={() => removeBalance(org.id, i)}>
-                        <Trash2 size={14} className="text-danger" />
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          className="btn" 
+                          style={getIconStyle(!!b.comment)} 
+                          title="Balance Note"
+                          onClick={() => setActiveComment({ type: 'balance', orgId: org.id, index: i, text: b.comment || '', initialText: b.comment || '', title: `${b.currency || 'Balance'} Note` })}
+                        >
+                          <MessageSquare size={14} />
+                        </button>
+                        <button className="btn" style={{ padding: '8px' }} onClick={() => removeBalance(org.id, i)}>
+                          <Trash2 size={14} className="text-danger" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -543,11 +631,75 @@ export default function SnapshotEdit() {
             </table>
 
             <button className="btn" onClick={() => addBalance(org.id)}>
-              <Plus size={16} /> Add Balance
+              <Plus size={16} className="mr-1" /> Add Balance
             </button>
           </div>
         ))}
       </div>
+
+      {/* --- TELEPORTED MODAL --- */}
+      {activeComment && createPortal(
+        <div 
+          className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
+        >
+          <div 
+            className="glass-panel flex flex-col" 
+            style={{ 
+              width: '600px',
+              minWidth: '300px',
+              minHeight: '300px',
+              resize: 'both', 
+              overflow: 'hidden', 
+              padding: '24px', 
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+              position: 'relative'
+            }}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 style={{ margin: 0, fontSize: '18px' }}>{activeComment.title}</h3>
+              <button className="btn" style={{ padding: '4px' }} onClick={handleCloseComment}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <textarea
+              className="input w-full flex-1"
+              style={{ resize: 'none', paddingTop: '12px', minHeight: '150px' }}
+              placeholder="Type your notes here... (Enter to save, Shift+Enter for new line)"
+              value={activeComment.text}
+              onChange={e => setActiveComment({ ...activeComment, text: e.target.value })}
+              onKeyDown={e => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  handleCloseComment();
+                } else if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  saveComment();
+                }
+              }}
+              autoFocus
+            />
+            
+            <div className="flex justify-end gap-2 mt-6">
+              <button className="btn mt-2" onClick={handleCloseComment}>
+                Cancel
+              </button>
+              <button className="btn btn-primary mt-2" onClick={saveComment}>
+                Save Note
+              </button>
+            </div>
+
+            <div style={{ position: 'absolute', bottom: '4px', right: '4px', pointerEvents: 'none', opacity: 0.4 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="21" y1="15" x2="15" y2="21"></line>
+                <line x1="21" y1="10" x2="10" y2="21"></line>
+              </svg>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
