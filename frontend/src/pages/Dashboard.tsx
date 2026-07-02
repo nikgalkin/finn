@@ -6,6 +6,47 @@ import { createPortal } from 'react-dom';
 import { API_URL } from '../types';
 import type { ParsedSnapshot, Snapshot } from '../types';
 
+const CustomTooltip = ({ active, payload, label, baseCurrency }: any) => {
+  if (!active || !payload || !payload.length) return null;
+
+  const hasComment = payload[0]?.payload?.hasComment;
+
+  return (
+    <div 
+      className="custom-tooltip" 
+      style={{
+        backgroundColor: 'var(--bg-color)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: '8px',
+        padding: '10px 14px',
+        fontSize: '14px'
+      }}
+    >
+      <div style={{ fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-primary)' }}>
+        {label} {hasComment && '📝 (Click to view notes)'}
+      </div>
+
+      <ul style={{ listStyleType: 'none', padding: 0, margin: 0 }}>
+        {payload.map((item: any) => {
+          const isBase = item.name === 'BASE';
+          const numValue = Number(item.value) || 0;
+          const formattedValue = numValue.toLocaleString('en-US');
+
+          const color = isBase ? '#10b981' : '#6366f1';
+          const title = isBase ? `Total ${baseCurrency}` : 'Total USD';
+          const valueString = isBase ? formattedValue : `$${formattedValue}`;
+
+          return (
+            <li key={item.name} style={{ color, padding: '2px 0', fontWeight: 500 }}>
+              {title} : {valueString}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const [snapshots, setSnapshots] = useState<ParsedSnapshot[]>([]);
   const [baseCurrency, setBaseCurrency] = useState('RUB');
@@ -339,7 +380,6 @@ export default function Dashboard() {
                     </Pie>
                     <Tooltip
                       contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }}
-                      // Передаем имя организации в качестве лейбла строки тултипа
                       formatter={(value: any, _name: any, props: any) => [
                         `${Number(value).toLocaleString('en-US')} ${baseCurrency}`,
                         props.payload.name
@@ -368,30 +408,38 @@ export default function Dashboard() {
 
           </div>
 
+          {/* NET WORTH TREND CHART */}
           {snapshots.length > 0 && (
-            <div className="glass-panel" style={{ height: '400px', display: 'flex', flexDirection: 'column', marginBottom: '16px' }}>
-              <h3 className="mb-4" style={{ margin: 0, paddingBottom: 16 }}>Net Worth Trend</h3>
+            <div className="glass-panel" style={chartStyles.panel}>
+              <h3 className="mb-4" style={chartStyles.title}>Net Worth Trend</h3>
               <div style={{ flex: 1 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 15 }} onClick={handleChartClick}>
+                  <AreaChart data={chartData} margin={chartStyles.margin} onClick={handleChartClick}>
                     <defs>
                       <linearGradient id="colorBase" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.6} />
                         <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                       </linearGradient>
                     </defs>
+                    
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="name" stroke="var(--text-secondary)" tickMargin={10} />
-                    <YAxis yAxisId="left" stroke="var(--text-secondary)" tickFormatter={(val) => formatCompactNumber(val)} />
-                    <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => '$' + formatCompactNumber(val)} />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }} itemStyle={{ fontWeight: 500 }} formatter={(value: any, name: any, props: any) => {
-                      const numValue = Number(value) || 0;
-                      const hasNoteText = props.payload.hasComment ? ' 📝 (Click to view notes)' : '';
-                      return [
-                        name === 'USD' ? `$${numValue.toLocaleString('en-US')}` : `${numValue.toLocaleString('en-US')} ${baseCurrency}`,
-                        name === 'BASE' ? `Total ${baseCurrency}${hasNoteText}` : 'Total USD'
-                      ];
-                    }} />
+                    
+                    <YAxis 
+                      yAxisId="left" 
+                      stroke="var(--text-secondary)" 
+                      tickFormatter={(val) => formatCompactNumber(val)} 
+                    />
+                    <YAxis 
+                      yAxisId="right" 
+                      orientation="right" 
+                      stroke="#6366f1" 
+                      tickFormatter={(val) => '$' + formatCompactNumber(val)} 
+                    />
+                    
+                    {/* Использование отрефакторенного кастомного тултипа */}
+                    <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} />} />
+                    
                     <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" />
                     <Line yAxisId="right" type="monotone" dataKey="USD" name="USD" stroke="#6366f1" strokeWidth={3} dot={<CustomDot />} activeDot={{ r: 6 }} />
                   </AreaChart>
@@ -717,3 +765,22 @@ export default function Dashboard() {
     </div>
   );
 }
+
+const chartStyles = {
+  panel: {
+    height: '400px',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    marginBottom: '16px',
+  },
+  title: {
+    margin: 0,
+    paddingBottom: 16,
+  },
+  margin: {
+    top: 10,
+    right: 10,
+    left: 0,
+    bottom: 15,
+  },
+};
