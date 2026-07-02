@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, LineChart as LineChartIcon } from 'lucide-react';
-import { AreaChart, Area, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { Plus, TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, LineChart as LineChartIcon, MessageSquare, X } from 'lucide-react';
+import { AreaChart, Area, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Dot } from 'recharts';
+import { createPortal } from 'react-dom';
 import { API_URL } from '../types';
 import type { ParsedSnapshot, Snapshot } from '../types';
 
@@ -13,7 +14,21 @@ export default function Dashboard() {
   // State to track hidden lines on the multi-currency chart
   const [hiddenBalances, setHiddenBalances] = useState<Record<string, boolean>>({});
   
+  // State for viewing notes in a modal
+  const [activeViewNotes, setActiveViewNotes] = useState<ParsedSnapshot | null>(null);
+  
   const navigate = useNavigate();
+
+  // Listen for Escape key to close the notes modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveViewNotes(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     fetch(`${API_URL}/settings`)
@@ -103,10 +118,50 @@ export default function Dashboard() {
     return totals;
   };
 
+  // Helper to check if a snapshot has any comments
+  const hasAnyComments = (snap: ParsedSnapshot) => {
+    if (snap.data.comment) return true;
+    for (const org of snap.data.organizations) {
+      if (org.comment) return true;
+      if (org.balances.some(b => b.comment)) return true;
+    }
+    return false;
+  };
+
   const chartData = snapshots.map(s => {
     const totals = calculateTotals(s);
-    return { name: s.month, BASE: Math.round(totals.totalBase), USD: Math.round(totals.totalUsd) };
+    return { 
+      name: s.month, 
+      BASE: Math.round(totals.totalBase), 
+      USD: Math.round(totals.totalUsd),
+      hasComment: hasAnyComments(s)
+    };
   });
+
+  // Custom Dot renderer for Main Net Worth Chart to emphasize snapshots with comments
+  const CustomDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (payload && payload.hasComment) {
+      return (
+        <g key={cx} style={{ cursor: 'pointer' }}>
+          <circle cx={cx} cy={cy} r={7} fill="none" stroke="#3b82f6" strokeWidth={2} />
+          <circle cx={cx} cy={cy} r={4} fill="#3b82f6" />
+        </g>
+      );
+    }
+    return <Dot {...props} />;
+  };
+
+  // Handler for clicking on the chart area/points
+  const handleChartClick = (state: any) => {
+    if (state && state.activeLabel) {
+      const clickedMonth = state.activeLabel;
+      const snapshot = snapshots.find(s => s.month === clickedMonth);
+      if (snapshot && hasAnyComments(snapshot)) {
+        setActiveViewNotes(snapshot);
+      }
+    }
+  };
 
   const allCurrenciesSet = new Set<string>();
   snapshots.forEach(s => {
@@ -202,7 +257,6 @@ export default function Dashboard() {
     }
   };
 
-  // Helper for formatting Y-Axis in compact notation (k, M, B)
   const formatCompactNumber = (number: number) => {
     return Intl.NumberFormat('en-US', {
       notation: "compact",
@@ -249,7 +303,8 @@ export default function Dashboard() {
               <h3 className="mb-4" style={{ margin: 0, paddingBottom: 16 }}>Net Worth Trend</h3>
               <div style={{ flex: 1 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 15 }}>
+                  {/* Added onClick handler to the chart container */}
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 15 }} onClick={handleChartClick}>
                     <defs>
                       <linearGradient id="colorBase" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.6} />
@@ -258,15 +313,18 @@ export default function Dashboard() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="name" stroke="var(--text-secondary)" tickMargin={10} />
-                    {/* Updated Y-Axis formatting with Intl.NumberFormat */}
                     <YAxis yAxisId="left" stroke="var(--text-secondary)" tickFormatter={(val) => formatCompactNumber(val)} />
                     <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => '$' + formatCompactNumber(val)} />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }} itemStyle={{ fontWeight: 500 }} formatter={(value: any, name: any) => {
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }} itemStyle={{ fontWeight: 500 }} formatter={(value: any, name: any, props: any) => {
                       const numValue = Number(value) || 0;
-                      return [name === 'USD' ? `$${numValue.toLocaleString('en-US')}` : `${numValue.toLocaleString('en-US')} ${baseCurrency}`, name === 'BASE' ? `Total ${baseCurrency}` : 'Total USD'];
+                      const hasNoteText = props.payload.hasComment ? ' 📝 (Click to view notes)' : '';
+                      return [
+                        name === 'USD' ? `$${numValue.toLocaleString('en-US')}` : `${numValue.toLocaleString('en-US')} ${baseCurrency}`, 
+                        name === 'BASE' ? `Total ${baseCurrency}${hasNoteText}` : 'Total USD'
+                      ];
                     }} />
                     <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" />
-                    <Line yAxisId="right" type="monotone" dataKey="USD" name="USD" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: 'var(--bg-color)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                    <Line yAxisId="right" type="monotone" dataKey="USD" name="USD" stroke="#6366f1" strokeWidth={3} dot={<CustomDot />} activeDot={{ r: 6 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -319,7 +377,6 @@ export default function Dashboard() {
                   <LineChart data={usedCurrenciesData} margin={{ top: 10, right: 10, left: 10, bottom: 15 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="month" stroke="var(--text-secondary)" tickMargin={10} />
-                    {/* Updated Y-Axis formatting with Intl.NumberFormat */}
                     <YAxis 
                       stroke="var(--text-secondary)" 
                       tickFormatter={(val) => formatCompactNumber(val)} 
@@ -446,7 +503,18 @@ export default function Dashboard() {
 
                         return (
                           <tr key={s.month}>
-                            <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>{s.month}</td>
+                            <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
+                              <div style={{ fontWeight: 500, fontSize: '1.05em' }}>{s.month}</div>
+                              {hasAnyComments(s) && (
+                                <button 
+                                  className="btn text-primary hover:underline"
+                                  style={{ padding: 0, marginTop: '8px', background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85em', color: '#3b82f6' }}
+                                  onClick={() => setActiveViewNotes(s)}
+                                >
+                                  <MessageSquare size={14} /> Notes
+                                </button>
+                              )}
+                            </td>
                             <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
                               <div style={{ fontWeight: 500 }}>{Math.round(totals.totalBase).toLocaleString('en-US')}</div>
                               {renderDiff(totals.totalBase, prevTotals?.totalBase, false)}
@@ -489,6 +557,73 @@ export default function Dashboard() {
             );
           })}
         </>
+      )}
+
+      {/* --- TELEPORTED VIEW NOTES POPUP --- */}
+      {activeViewNotes && createPortal(
+        <div 
+          className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
+          onClick={() => setActiveViewNotes(null)}
+        >
+          <div 
+            className="glass-panel flex flex-col" 
+            style={{ 
+              width: '500px',
+              maxWidth: '90vw',
+              maxHeight: '80vh',
+              overflowY: 'auto', 
+              padding: '24px', 
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Notes for {activeViewNotes.month}</h3>
+              <button className="btn" style={{ padding: '4px' }} onClick={() => setActiveViewNotes(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {activeViewNotes.data.comment && (
+                <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                  <div style={{ color: '#10b981', fontWeight: 600, fontSize: '0.9em', marginBottom: '6px', letterSpacing: '0.05em' }}>SNAPSHOT NOTE</div>
+                  <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95em' }}>{activeViewNotes.data.comment}</div>
+                </div>
+              )}
+
+              {activeViewNotes.data.organizations.map(org => {
+                const balancesWithComments = org.balances.filter(b => b.comment);
+                if (!org.comment && balancesWithComments.length === 0) return null;
+                
+                return (
+                  <div key={org.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                    <div style={{ color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '1.05em', marginBottom: '6px' }}>{org.name}</div>
+                    
+                    {org.comment && (
+                      <div style={{ fontStyle: 'italic', color: 'var(--text-secondary)', marginBottom: '8px', paddingLeft: '4px' }}>
+                        {org.comment}
+                      </div>
+                    )}
+                    
+                    {balancesWithComments.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', borderTop: org.comment ? '1px solid rgba(255,255,255,0.03)' : 'none', paddingTop: org.comment ? '8px' : '0' }}>
+                        {balancesWithComments.map((b, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '0.9em' }}>
+                            <span style={{ color: '#8b5cf6', fontWeight: 600, minWidth: '50px' }}>[{b.currency}]</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>{b.comment}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

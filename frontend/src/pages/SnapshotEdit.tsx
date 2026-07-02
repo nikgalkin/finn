@@ -19,6 +19,22 @@ const evaluateMath = (expr: string | number): number => {
   }
 };
 
+// Helper to strip comments from snapshot data when copying
+const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => {
+  return {
+    ...snapshotData,
+    comment: '',
+    organizations: snapshotData.organizations.map(org => ({
+      ...org,
+      comment: '',
+      balances: org.balances.map(b => ({
+        ...b,
+        comment: ''
+      }))
+    }))
+  };
+};
+
 export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
   const navigate = useNavigate();
@@ -73,7 +89,9 @@ export default function SnapshotEdit() {
           .then(res => res.json())
           .then((s: any) => {
             if (s.data) {
-              setData(JSON.parse(s.data));
+              const rawData = JSON.parse(s.data);
+              // Стираем комментарии при создании копии через экшен в таблице
+              setData(stripCommentsFromSnapshot(rawData));
             }
             setLoading(false);
           })
@@ -258,7 +276,9 @@ export default function SnapshotEdit() {
 
   const copyFromPrevious = () => {
     if (latestSnapshot) {
-      setData({ ...data, organizations: latestSnapshot.organizations });
+      // Стираем комментарии при копировании структуры из формы
+      const cleanData = stripCommentsFromSnapshot(latestSnapshot);
+      setData({ ...data, organizations: cleanData.organizations });
     }
   };
 
@@ -398,7 +418,6 @@ export default function SnapshotEdit() {
 
   return (
     <div>
-      {/* Скрываем стрелочки у числовых полей во всех браузерах */}
       <style>{`
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button {
@@ -439,14 +458,10 @@ export default function SnapshotEdit() {
 
       {/* OVERVIEW SECTION */}
       <div className="glass-panel mb-8 p-6" style={{ display: 'flex', gap: '32px', alignItems: 'stretch' }}>
-        
-        {/* LEFT COLUMN - PERIOD */}
         <div style={{ flex: '0 0 180px', display: 'flex', flexDirection: 'column' }}>
-          {/* Header aligned with right side */}
           <div className="flex items-center justify-center mb-4" style={{ height: '40px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem' }}>Period</h3>
           </div>
-          {/* Centered Content */}
           <div style={{ flex: 0.5, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
             <div className="text-xs text-[var(--text-secondary)] mb-2 font-medium text-center">Month (YYYY-MM)</div>
             <input
@@ -459,12 +474,9 @@ export default function SnapshotEdit() {
           </div>
         </div>
 
-        {/* ВЕРТИКАЛЬНЫЙ РАЗДЕЛИТЕЛЬ */}
         <div style={{ width: '1px', background: 'rgba(255,255,255,0.05)' }}></div>
 
-        {/* RIGHT COLUMN - EXCHANGE RATES */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {/* Header aligned with left side */}
           <div className="flex justify-between items-center mb-4" style={{ height: '40px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem' }}>
               Exchange Rates (to {settings.baseCurrency || 'RUB'})
@@ -484,7 +496,7 @@ export default function SnapshotEdit() {
                   className="input w-full"
                   value={rate === 0 ? '' : rate}
                   placeholder="0"
-                  onWheel={(e) => (e.target as HTMLInputElement).blur()} // Снимаем фокус при скролле
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
                   onChange={e => {
                     const val = e.target.value;
                     updateRate(curr, val === '' ? 0 : (val.endsWith('.') ? val : parseFloat(val)));
@@ -501,7 +513,6 @@ export default function SnapshotEdit() {
             </div>
           </div>
         </div>
-        
       </div>
 
       <div className="flex justify-between items-center mb-4">
