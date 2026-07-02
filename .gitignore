@@ -1,0 +1,4 @@
+budget-tracker*
+node_modules
+dist
+*.db
