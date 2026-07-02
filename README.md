@@ -53,8 +53,13 @@ We use a universal Bash script that automatically builds the React frontend, com
 
 The script features **smart caching**: it will only rebuild the frontend or recompile the backend if it detects changes in your source files, making subsequent startups lightning fast! ⚡️
 
-## 📝 Usage Tips
+## 📝 Usage Tips and screenshots
 
 * **Adding a Snapshot:** Click "New Snapshot". You can automatically copy balances from your previous month to save time.
 * **Exchange Rates:** Make sure to click "Fetch Rates" when creating a snapshot to get accurate conversions.
 * **Math in Inputs:** The balance inputs support basic math! You can type `15000 + 5000` directly into the amount field, and it will calculate the total automatically when you press Enter or click away.
+
+Overview:
+![Overview](media/overview.jpg)
+History:
+![History](media/history.jpg)
