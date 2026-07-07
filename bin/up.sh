@@ -70,22 +70,9 @@ fi
 # --- ШАГ 4: ЗАПУСК ПРИЛОЖЕНИЯ ---
 echo -e "${BLUE}[4/4] Запускаем сервер...${NC}"
 
-open_browser() {
-    if [[ $NO_OPEN == 1 ]]; then
-        echo "Пропускаем открытие браузера..."
-    elif command -v open &> /dev/null; then
-        open "$URL"
-    elif command -v xdg-open &> /dev/null; then
-        xdg-open "$URL"
-    elif command -v start &> /dev/null; then
-        start "$URL"
-    else
-        echo -e "${YELLOW}Не смог определить ОС для автооткрытия браузера. Открой сам: $URL${NC}"
-    fi
-}
-
-# Фоновый процесс для открытия браузера
-(sleep 1.1 && open_browser) &
-
-# Запускаем бинарник
-"$BINARY"
+# Если локально в bash была выставлена переменная NO_OPEN=1, передаем флаг в Go
+if [[ $NO_OPEN == 1 ]]; then
+    "$BINARY" -no-open
+else
+    "$BINARY"
+fi
