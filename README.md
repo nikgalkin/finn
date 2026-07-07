@@ -10,6 +10,16 @@ No transaction imports.
 
 Just snapshots.
 
+## Installation
+
+### Quick Install (Linux & macOS)
+
+You can install the latest version of `finn` automatically using the one-liner command below. It detects your operating system and CPU architecture, downloads the correct executable, bypasses macOS Gatekeeper quarantine attributes, and moves it to your local path:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.sh | sh
+```
+
 ## ✨ Features
 
 * **Monthly Snapshots:** Save the state of your balances across different organizations and accounts once a month.
