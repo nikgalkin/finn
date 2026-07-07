@@ -7,50 +7,72 @@ set -e
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # Без цвета
+NC='\033[0m'
 
-# 1. Находим корень git-репозитория и переходим в него. 
-# Если папка вдруг не под git, падаем на pwd (текущую директорию).
+# 1. Находим корень git-репозитория и переходим в него
 GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-echo $GIT_ROOT
 cd "$GIT_ROOT"
 
-# Настройки путей (все пути теперь считаются от корня проекта)
 PORT=8080
 URL="http://localhost:$PORT"
-FRONT_BUILD_DIR="frontend/dist" # Или frontend/build
-BIN_DIR="bin"
-BINARY="$BIN_DIR/budget-tracker"
+FRONT_BUILD_DIR="frontend/dist"
+BIN_DIR="build"
+BINARY="$BIN_DIR/finn"
 
-# Убедимся, что папка bin существует (если скрипт запускают не из неё)
 mkdir -p "$BIN_DIR"
 
-echo -e "${BLUE}[1/3] Проверяем фронтенд...${NC}"
-# Проверяем кэш фронтенда
-if [ ! -f "$FRONT_BUILD_DIR/index.html" ] || [ -n "$(find frontend/src frontend/package.json -newer $FRONT_BUILD_DIR/index.html 2>/dev/null)" ]; then
-    echo -e "${YELLOW}Нашли изменения во фронтенде (или сборки нет). Запускаем билд...${NC}"
+# Переменная-флаг: нужно ли пересобирать Go бинарник
+NEED_GO_BUILD=0
+
+# --- ШАГ 1: ПРОВЕРКА NODE_MODULES ---
+echo -e "${BLUE}[1/4] Проверяем зависимости фронтенда...${NC}"
+if [ ! -d "frontend/node_modules" ] || [ -n "$(find frontend/package-lock.json -newer frontend/node_modules 2>/dev/null)" ]; then
+    echo -e "${YELLOW}Зависимости устарели или отсутствуют. Запускаем npm install...${NC}"
     cd frontend
-    npm run build
-    # Возвращаемся в корень
+    npm install --no-audit --no-fund
     cd "$GIT_ROOT"
-    go build -o "$BINARY"
 else
-    echo -e "${GREEN}Фронтенд не менялся, берем из кэша! ⚡${NC}"
+    echo -e "${GREEN}Зависимости фронтенда в порядке! ⚡${NC}"
 fi
 
-echo -e "${BLUE}[2/3] Проверяем бэкенд на Go...${NC}"
-# Проверяем кэш бэкенда (ищем изменения в *.go файлах)
-if [ ! -f "$BINARY" ] || [ -n "$(find . -name '*.go' -newer "$BINARY" 2>/dev/null)" ] || [ ! -f "$FRONT_BUILD_DIR/index.html" ] || [ -n "$(find frontend/src frontend/package.json -newer $FRONT_BUILD_DIR/index.html 2>/dev/null)" ]; then
-    echo -e "${YELLOW}Код бэкенда изменился. Компилируем в $BIN_DIR/...${NC}"
-    # Флаг -o кладет готовый бинарник прямиком в папку bin/
-    go build -o "$BINARY"
+
+# --- ШАГ 2: СБОРКА ФРОНТЕНДА (REACT) ---
+echo -e "${BLUE}[2/4] Проверяем кэш фронтенда...${NC}"
+
+# Проверяем, изменились ли исходники фронта по сравнению с готовым index.html
+if [ ! -f "$FRONT_BUILD_DIR/index.html" ] || [ -n "$(find frontend/src frontend/package.json -newer $FRONT_BUILD_DIR/index.html 2>/dev/null)" ]; then
+    echo -e "${YELLOW}Нашли изменения в React-коде. Собираем фронтенд...${NC}"
+    cd frontend
+    npm run build
+    cd "$GIT_ROOT"
+    
+    # Фронтенд изменился -> значит //go:embed должен его перепечь! Включаем флаг.
+    NEED_GO_BUILD=1
 else
-    echo -e "${GREEN}Бэкенд не менялся, пропускаем компиляцию! ⚡${NC}"
+    echo -e "${GREEN}React-код не менялся, берем из кэша! ⚡${NC}"
 fi
+
+
+# --- ШАГ 3: СБОРКА БЭКЕНДА (GO) ---
+echo -e "${BLUE}[3/4] Проверяем бэкенд на Go...${NC}"
+
+# Если бинарника нет, или изменился любой .go файл, или сработал флаг изменения фронтенда
+if [ ! -f "$BINARY" ] || [ -n "$(find . -maxdepth 1 -name '*.go' -newer "$BINARY" 2>/dev/null)" ] || [ $NEED_GO_BUILD -eq 1 ]; then
+    echo -e "${YELLOW}Требуется компиляция Go. Собираем в $BINARY...${NC}"
+    # Собираем строго из корня (.), указывая выходной файл (-o)
+    go build -o "$BINARY" .
+    echo -e "${GREEN}Бэкенд успешно скомпилирован!${NC}"
+else
+    echo -e "${GREEN}Бэкенд и статика не менялись, пропускаем компиляцию! ⚡${NC}"
+fi
+
+
+# --- ШАГ 4: ЗАПУСК ПРИЛОЖЕНИЯ ---
+echo -e "${BLUE}[4/4] Запускаем сервер...${NC}"
 
 open_browser() {
     if [[ $NO_OPEN == 1 ]]; then
-        echo skip..
+        echo "Пропускаем открытие браузера..."
     elif command -v open &> /dev/null; then
         open "$URL"
     elif command -v xdg-open &> /dev/null; then
@@ -62,10 +84,8 @@ open_browser() {
     fi
 }
 
-echo -e "${GREEN}[3/3] Все готово! Запускаем сервер...${NC}"
-
 # Фоновый процесс для открытия браузера
-(sleep 1 && open_browser) &
+(sleep 1.1 && open_browser) &
 
-# Запускаем бинарник из папки bin
+# Запускаем бинарник
 "$BINARY"

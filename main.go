@@ -13,6 +13,7 @@ import (
 
 //go:embed frontend/dist
 var frontendFS embed.FS
+var version = "dev"
 
 func main() {
 	db := initDB()
@@ -25,6 +26,10 @@ func main() {
 	r.Use(cors.New(config))
 
 	setupAPI(r, db)
+
+	r.GET("/api/version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"version": version})
+	})
 
 	dist, err := fs.Sub(frontendFS, "frontend/dist")
 	if err == nil {
@@ -48,7 +53,6 @@ func main() {
 		log.Println("Frontend not built. Run 'npm run build' in 'frontend' directory.")
 	}
 
-	log.Println("Server starting on http://localhost:8080")
+	// log.Printf("Server starting on http://localhost:8080 (Version: %s)\n", version)
 	r.Run("127.0.0.1:8080")
-	// r.Run(":8080")
 }

@@ -1,6 +1,14 @@
-# 📈 Personal Net Worth Tracker
+# 📈 # Finn - Personal Net Worth Tracker
 
-A lightweight, fast, and feature-rich personal finance dashboard to track your net worth over time. Built with **Go** and **React**, it supports multi-currency accounts, real-time exchange rates, and advanced financial metrics like FX Impact (Currency Translation Effect).
+A net worth tracker for people with multiple accounts and currencies. Like Git, but for your net worth
+
+Take monthly snapshots of your financial state and watch your wealth evolve over time
+
+No expense tracking.
+No budgets.
+No transaction imports.
+
+Just snapshots.
 
 ## ✨ Features
 
@@ -34,19 +42,24 @@ A lightweight, fast, and feature-rich personal finance dashboard to track your n
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 Make sure you have the following installed on your machine:
+
 * [Go](https://golang.org/dl/) (1.20+)
 * [Node.js](https://nodejs.org/) & npm
 
 ### Running the App
+
 We use a universal Bash script that automatically builds the React frontend, compiles the Go backend, and opens the app in your default browser.
 
 1. Make the script executable (only needed once):
+
    ```shell
    chmod +x bin/run.sh
    ```
 
 2. Start the application:
+
    ```shell
    ./bin/run.sh
    ```

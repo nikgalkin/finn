@@ -1,0 +1,57 @@
+name: Release CI/CD
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build for ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            artifact_name: finn-windows-amd64.exe
+          - goos: linux
+            goarch: amd64
+            artifact_name: finn-linux-amd64
+          - goos: darwin
+            goarch: arm64
+            artifact_name: finn-darwin-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Execute Full Autonomous Build Script
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          chmod +x bin/build.sh
+          ./bin/build.sh ${{ matrix.goos }} ${{ matrix.goarch }}
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/${{ matrix.artifact_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
