@@ -89,4 +89,5 @@ fi
 echo "========================================="
 echo "🎉 $APP_NAME has been successfully installed!"
 echo "Run it anywhere by typing: $APP_NAME"
+echo "$($FINAL_PATH -v)"
 echo "========================================="

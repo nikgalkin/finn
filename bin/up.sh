@@ -56,23 +56,33 @@ fi
 # --- ШАГ 3: СБОРКА БЭКЕНДА (GO) ---
 echo -e "${BLUE}[3/4] Проверяем бэкенд на Go...${NC}"
 
-# Если бинарника нет, или изменился любой .go файл, или сработал флаг изменения фронтенда
-if [ ! -f "$BINARY" ] || [ -n "$(find . -maxdepth 1 -name '*.go' -newer "$BINARY" 2>/dev/null)" ] || [ $NEED_GO_BUILD -eq 1 ]; then
-    echo -e "${YELLOW}Требуется компиляция Go. Собираем в $BINARY...${NC}"
+# Проверяем изменения:
+# 1. Есть ли вообще бинарник
+# 2. Появились ли новые изменения в любых файлах .go (ищем рекурсивно)
+# 3. Изменилось ли что-то в папке demo/ (наш demo.sql)
+# 4. Был ли пересобран фронтенд на Шаге 2
+if [ ! -f "$BINARY" ] || \
+   [ -n "$(find . -name '*.go' -newer "$BINARY" 2>/dev/null)" ] || \
+   [[ -d "demo" && -n "$(find demo -newer "$BINARY" 2>/dev/null)" ]] || \
+   [ $NEED_GO_BUILD -eq 1 ]; then
+    
+    echo -e "${YELLOW}Обнаружены изменения в Go-коде или ресурсах demo/. Собираем в $BINARY...${NC}"
     # Собираем строго из корня (.), указывая выходной файл (-o)
     go build -o "$BINARY" .
     echo -e "${GREEN}Бэкенд успешно скомпилирован!${NC}"
 else
-    echo -e "${GREEN}Бэкенд и статика не менялись, пропускаем компиляцию! ⚡${NC}"
+    echo -e "${GREEN}Бэкенд, демо-данные и статика не менялись, пропускаем компиляцию! ⚡${NC}"
 fi
-
 
 # --- ШАГ 4: ЗАПУСК ПРИЛОЖЕНИЯ ---
 echo -e "${BLUE}[4/4] Запускаем сервер...${NC}"
 
 # Если локально в bash была выставлена переменная NO_OPEN=1, передаем флаг в Go
 if [[ $NO_OPEN == 1 ]]; then
-    "$BINARY" -no-open
+    "$BINARY" -no-open "$@"
 else
-    "$BINARY"
+    "$BINARY" "$@"
 fi
+
+# make a sql dump for db
+# sqlite3 finn.db .dump > demo/demo.sql

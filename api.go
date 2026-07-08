@@ -13,6 +13,10 @@ type SnapshotRequest struct {
 }
 
 func setupAPI(r *gin.Engine, db *sql.DB) {
+	r.GET("/api/version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"version": version})
+	})
+
 	api := r.Group("/api")
 
 	api.GET("/snapshots", func(c *gin.Context) {

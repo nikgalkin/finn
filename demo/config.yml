@@ -1,0 +1,18 @@
+app:
+  port: 8080
+  open_browser: true
+
+database:
+  filename: "finn.db"
+  demo_filename: "finn-demo.db"
+
+backup:
+  enabled: true
+  interval_hours: 12
+  targets:
+    - name: "local_storage"
+      path: "$HOME/.finn/backups"
+      retention: 20
+    - name: "google_drive"
+      path: "/Users/user/Library/CloudStorage/GoogleDrive-main/My Drive/FinnBackups"
+      retention: 10
