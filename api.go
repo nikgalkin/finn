@@ -8,8 +8,9 @@ import (
 )
 
 type SnapshotRequest struct {
-	Month string `json:"month" binding:"required"`
-	Data  string `json:"data" binding:"required"`
+	Month           string `json:"month" binding:"required"`
+	Data            string `json:"data" binding:"required"`
+	DurationSeconds int    `json:"duration_seconds"`
 }
 
 func setupAPI(r *gin.Engine, db *sql.DB) {
@@ -20,7 +21,7 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 	api := r.Group("/api")
 
 	api.GET("/snapshots", func(c *gin.Context) {
-		rows, err := db.Query("SELECT id, month, data FROM snapshots ORDER BY month DESC")
+		rows, err := db.Query("SELECT id, month, data, duration_seconds FROM snapshots ORDER BY month DESC")
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -32,11 +33,12 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 			var id int
 			var month string
 			var data string
-			if err := rows.Scan(&id, &month, &data); err != nil {
+			var durationSeconds int
+			if err := rows.Scan(&id, &month, &data, &durationSeconds); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			snapshots = append(snapshots, gin.H{"id": id, "month": month, "data": data})
+			snapshots = append(snapshots, gin.H{"id": id, "month": month, "data": data, "duration_seconds": durationSeconds})
 		}
 		c.JSON(http.StatusOK, snapshots)
 	})
@@ -45,7 +47,8 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 		month := c.Param("month")
 		var id int
 		var data string
-		err := db.QueryRow("SELECT id, data FROM snapshots WHERE month = ?", month).Scan(&id, &data)
+		var durationSeconds int
+		err := db.QueryRow("SELECT id, data, duration_seconds FROM snapshots WHERE month = ?", month).Scan(&id, &data, &durationSeconds)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
@@ -54,20 +57,22 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 			}
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"id": id, "month": month, "data": data})
+		c.JSON(http.StatusOK, gin.H{"id": id, "month": month, "data": data, "duration_seconds": durationSeconds})
 	})
 
 	api.PUT("/snapshots/:month", func(c *gin.Context) {
 		origMonth := c.Param("month")
-		var req struct {
-			Month string `json:"month" binding:"required"`
-			Data  string `json:"data" binding:"required"`
-		}
+		var req SnapshotRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		// If month changed, check there's no conflict
+
+		// Валидация времени (не может быть отрицательным)
+		if req.DurationSeconds < 0 {
+			req.DurationSeconds = 0
+		}
+
 		if req.Month != origMonth {
 			var exists int
 			db.QueryRow("SELECT COUNT(*) FROM snapshots WHERE month = ?", req.Month).Scan(&exists)
@@ -76,7 +81,7 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 				return
 			}
 		}
-		_, err := db.Exec("UPDATE snapshots SET month=?, data=? WHERE month=?", req.Month, req.Data, origMonth)
+		_, err := db.Exec("UPDATE snapshots SET month=?, data=?, duration_seconds=? WHERE month=?", req.Month, req.Data, req.DurationSeconds, origMonth)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -91,7 +96,11 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 			return
 		}
 
-		// Check for existing snapshot with same month
+		// Валидация времени
+		if req.DurationSeconds < 0 {
+			req.DurationSeconds = 0
+		}
+
 		var exists int
 		db.QueryRow("SELECT COUNT(*) FROM snapshots WHERE month = ?", req.Month).Scan(&exists)
 		if exists > 0 {
@@ -99,7 +108,7 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 			return
 		}
 
-		_, err := db.Exec("INSERT INTO snapshots (month, data) VALUES (?, ?)", req.Month, req.Data)
+		_, err := db.Exec("INSERT INTO snapshots (month, data, duration_seconds) VALUES (?, ?, ?)", req.Month, req.Data, req.DurationSeconds)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -159,9 +168,9 @@ func setupAPI(r *gin.Engine, db *sql.DB) {
 		var ratesHistory []gin.H
 		for rows.Next() {
 			var month string
-			var ratesJson string // SQLite вернет строку с JSON
+			var ratesJson string
 			if err := rows.Scan(&month, &ratesJson); err != nil {
-				continue // пропускаем ошибки сканирования
+				continue
 			}
 			ratesHistory = append(ratesHistory, gin.H{"month": month, "rates": ratesJson})
 		}

@@ -61,7 +61,7 @@ export default function Settings() {
       <div className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-4">
           <Link to="/" className="btn">
-            <ArrowLeft size={18} />
+            <ArrowLeft size={18} />Dashboard
           </Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Settings</h2>
         </div>

@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Copy, List, MessageSquare, X } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Copy, List, MessageSquare, X, Clock } from 'lucide-react';
 import { API_URL } from '../types';
 import type { SnapshotData, Balance, Snapshot, AppSettings } from '../types';
 
-// Safe math evaluation
 const evaluateMath = (expr: string | number): number => {
   if (typeof expr === 'number') return expr;
   try {
@@ -19,7 +18,6 @@ const evaluateMath = (expr: string | number): number => {
   }
 };
 
-// Helper to strip comments from snapshot data when copying
 const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => {
   return {
     ...snapshotData,
@@ -38,6 +36,8 @@ const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => 
 export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  
   const isNew = !month && !sourceMonth;
   const isCopy = !!sourceMonth;
 
@@ -48,8 +48,9 @@ export default function SnapshotEdit() {
     rates: { USD: 90, EUR: 100 },
     organizations: []
   });
+
+  const [durationSeconds, setDurationSeconds] = useState(0);
   
-  // State for the comment modal
   const [activeComment, setActiveComment] = useState<{
     type: 'month' | 'org' | 'balance';
     orgId?: string;
@@ -64,12 +65,19 @@ export default function SnapshotEdit() {
   const [loading, setLoading] = useState(true);
   const [fetchingRates, setFetchingRates] = useState(false);
 
-  // Единый стиль для всех кнопок комментариев (светло-белый, если пусто)
-  const getIconStyle = (hasComment: boolean) => ({
-    padding: '8px',
-    color: hasComment ? '#3b82f6' : 'rgba(255, 255, 255, 0.6)',
-    transition: 'color 0.2s'
-  });
+  const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (loading) return;
+
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        setDurationSeconds(prev => prev + 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [loading]);
 
   useEffect(() => {
     fetch(`${API_URL}/settings`)
@@ -90,7 +98,6 @@ export default function SnapshotEdit() {
           .then((s: any) => {
             if (s.data) {
               const rawData = JSON.parse(s.data);
-              // Стираем комментарии при создании копии через экшен в таблице
               setData(stripCommentsFromSnapshot(rawData));
             }
             setLoading(false);
@@ -116,11 +123,15 @@ export default function SnapshotEdit() {
     } else {
       setCurrentMonth(month || '');
       setOriginalMonth(month || '');
+
       fetch(`${API_URL}/snapshots/${month}`)
         .then(res => res.json())
         .then((s: any) => {
           if (s.data) {
             setData(JSON.parse(s.data));
+          }
+          if (s.duration_seconds) {
+            setDurationSeconds(s.duration_seconds);
           }
           setLoading(false);
         })
@@ -130,6 +141,23 @@ export default function SnapshotEdit() {
         });
     }
   }, [month, sourceMonth, isNew, isCopy]);
+
+  useEffect(() => {
+    if (!loading && data.organizations.length > 0) {
+      const params = new URLSearchParams(location.search);
+      const focusOrgName = params.get('focusOrg');
+      if (focusOrgName) {
+        const org = data.organizations.find(o => o.name.toLowerCase() === focusOrgName.toLowerCase());
+        if (org && orgRefs.current[org.id]) {
+          setTimeout(() => {
+            orgRefs.current[org.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const selectEl = orgRefs.current[org.id]?.querySelector('select');
+            if (selectEl) selectEl.focus();
+          }, 300);
+        }
+      }
+    }
+  }, [loading, data.organizations, location.search]);
 
   useEffect(() => {
     if (settings.currencies.length > 0) {
@@ -186,7 +214,7 @@ export default function SnapshotEdit() {
         fetch(`${API_URL}/snapshots`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data) })
+          body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
         })
           .then(res => {
             if (res.ok) navigate('/');
@@ -218,7 +246,7 @@ export default function SnapshotEdit() {
       fetch(`${API_URL}/snapshots/${originalMonth}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data) })
+        body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
       })
         .then(res => {
           if (res.status === 409) {
@@ -233,7 +261,7 @@ export default function SnapshotEdit() {
       fetch(`${API_URL}/snapshots/${originalMonth}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data) })
+        body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
       })
         .then(res => {
           if (res.ok) navigate('/');
@@ -276,7 +304,6 @@ export default function SnapshotEdit() {
 
   const copyFromPrevious = () => {
     if (latestSnapshot) {
-      // Стираем комментарии при копировании структуры из формы
       const cleanData = stripCommentsFromSnapshot(latestSnapshot);
       setData({ ...data, organizations: cleanData.organizations });
     }
@@ -353,7 +380,6 @@ export default function SnapshotEdit() {
     if (!org) return;
     
     const balance = org.balances[index];
-    
     if (balance && balance.amount !== 0 && balance.amount !== '') {
       if (!confirm('This balance is not empty. Are you sure you want to delete it?')) {
         return;
@@ -414,6 +440,26 @@ export default function SnapshotEdit() {
     setActiveComment(null);
   };
 
+  const getIconStyle = (hasComment: boolean) => ({
+    padding: '8px',
+    color: hasComment ? '#3b82f6' : 'rgba(255, 255, 255, 0.6)',
+    transition: 'color 0.2s'
+  });
+
+  const formatTimer = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    
+    const mm = String(m).padStart(2, '0');
+    const ss = String(s).padStart(2, '0');
+    
+    if (h > 0) {
+      return `${String(h).padStart(2, '0')}:${mm}:${ss}`;
+    }
+    return `${mm}:${ss}`;
+  };
+
   if (loading) return <div>Loading...</div>;
 
   return (
@@ -441,7 +487,12 @@ export default function SnapshotEdit() {
             </h2>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.04)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '14px', fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)' }}>
+            <Clock size={16} />
+            <span>{formatTimer(durationSeconds)}</span>
+          </div>
+
           <button 
             className="btn" 
             style={{ ...getIconStyle(!!data.comment), padding: '6px' }}
@@ -515,6 +566,7 @@ export default function SnapshotEdit() {
         </div>
       </div>
 
+      {/* ORGANIZATIONS HEADER */}
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <h3>Organizations & Accounts</h3>
@@ -536,9 +588,10 @@ export default function SnapshotEdit() {
         </button>
       </div>
 
+      {/* ORGANIZATIONS GRID */}
       <div className="grid grid-cols-2 gap-4">
         {data.organizations.map((org) => (
-          <div key={org.id} className="glass-panel">
+          <div key={org.id} ref={el => { orgRefs.current[org.id] = el; }} className="glass-panel">
             <div className="flex items-center mb-6 relative">
               <div className="flex-1 flex justify-center">
                 <select
@@ -611,14 +664,6 @@ export default function SnapshotEdit() {
                             (e.target as HTMLInputElement).blur();
                           }
                         }}
-                        onCopy={e => {
-                          const target = e.target as HTMLInputElement;
-                          const selectedText = target.value.substring(target.selectionStart || 0, target.selectionEnd || 0);
-                          if (selectedText) {
-                            e.preventDefault();
-                            e.clipboardData.setData('text/plain', selectedText.replace(/,/g, ''));
-                          }
-                        }}
                       />
                     </td>
                     <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0 }}>
@@ -648,7 +693,7 @@ export default function SnapshotEdit() {
         ))}
       </div>
 
-      {/* --- TELEPORTED MODAL --- */}
+      {/* TELEPORTED COMMENT MODAL */}
       {activeComment && createPortal(
         <div 
           className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
@@ -677,7 +722,7 @@ export default function SnapshotEdit() {
             <textarea
               className="input w-full flex-1"
               style={{ resize: 'none', paddingTop: '12px', minHeight: '150px' }}
-              placeholder="Type your notes here... (Enter to save, Shift+Enter for new line)"
+              placeholder="Type your notes here..."
               value={activeComment.text}
               onChange={e => setActiveComment({ ...activeComment, text: e.target.value })}
               onKeyDown={e => {
@@ -693,19 +738,8 @@ export default function SnapshotEdit() {
             />
             
             <div className="flex justify-end gap-2 mt-6">
-              <button className="btn mt-2" onClick={handleCloseComment}>
-                Cancel
-              </button>
-              <button className="btn btn-primary mt-2" onClick={saveComment}>
-                Save Note
-              </button>
-            </div>
-
-            <div style={{ position: 'absolute', bottom: '4px', right: '4px', pointerEvents: 'none', opacity: 0.4 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="21" y1="15" x2="15" y2="21"></line>
-                <line x1="21" y1="10" x2="10" y2="21"></line>
-              </svg>
+              <button className="btn mt-2" onClick={handleCloseComment}>Cancel</button>
+              <button className="btn btn-primary mt-2" onClick={saveComment}>Save Note</button>
             </div>
           </div>
         </div>,

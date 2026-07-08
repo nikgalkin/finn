@@ -63,7 +63,8 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 	CREATE TABLE IF NOT EXISTS snapshots (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		month TEXT UNIQUE NOT NULL,
-		data TEXT NOT NULL
+		data TEXT NOT NULL,
+		duration_seconds INTEGER DEFAULT 0
 	);
 	CREATE TABLE IF NOT EXISTS settings (
 		key TEXT PRIMARY KEY,
@@ -74,6 +75,9 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 	if err != nil {
 		log.Fatalf("❌ DB CRITICAL: Migration failed: %v\n", err)
 	}
+
+	// Попытка добавить колонку в старую бд, если она была создана ранее без нее
+	_, _ = db.Exec("ALTER TABLE snapshots ADD COLUMN duration_seconds INTEGER DEFAULT 0")
 
 	if isDemo {
 		var count int
