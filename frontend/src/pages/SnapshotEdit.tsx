@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Copy, List, MessageSquare, X, Clock } from 'lucide-react';
 import { API_URL } from '../types';
 import type { SnapshotData, Balance, Snapshot, AppSettings } from '../types';
+import { MultiTagSelect } from './components/MultiTagSelect';
+import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 
 const evaluateMath = (expr: string | number): number => {
   if (typeof expr === 'number') return expr;
@@ -27,7 +29,8 @@ const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => 
       comment: '',
       balances: org.balances.map(b => ({
         ...b,
-        comment: ''
+        comment: '',
+        tags: b.tags || []
       }))
     }))
   };
@@ -50,6 +53,7 @@ export default function SnapshotEdit() {
   });
 
   const [durationSeconds, setDurationSeconds] = useState(0);
+  const [activeDropdownOrgId, setActiveDropdownOrgId] = useState<string | null>(null);
 
   const [activeComment, setActiveComment] = useState<{
     type: 'month' | 'org' | 'balance';
@@ -61,16 +65,13 @@ export default function SnapshotEdit() {
   } | null>(null);
 
   const [latestSnapshot, setLatestSnapshot] = useState<SnapshotData | null>(null);
-  const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [] });
+  const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [], tags: [] });
   const [loading, setLoading] = useState(true);
   const [fetchingRates, setFetchingRates] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  // Draft & Exit protection hooks
   const initialDataHash = useRef<string>('');
-  const [draftToRestore, setDraftToRestore] = useState<any>(null);
   const draftKey = `finn_draft_${month || 'new'}`;
 
   const isDirty = useMemo(() => {
@@ -78,7 +79,16 @@ export default function SnapshotEdit() {
     return initialDataHash.current !== JSON.stringify({ data, currentMonth });
   }, [data, currentMonth]);
 
-  // Prompt user before closing or reloading if dirty
+  // Hook into draft management system
+  const { draftToRestore, setDraftToRestore, discardDraft } = useSnapshotDraft({
+    draftKey,
+    isDirty,
+    data,
+    currentMonth,
+    durationSeconds,
+    isNew
+  });
+
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDirty) {
@@ -89,25 +99,6 @@ export default function SnapshotEdit() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
-
-  // Autosave draft to localStorage
-  useEffect(() => {
-    if (!isDirty) return;
-    
-    // CRITICAL: Do not overwrite the draft if we are currently displaying the "Restore Draft" prompt
-    if (draftToRestore) return;
-    
-    // Safety check: do not save a draft if a new snapshot has no organizations added yet
-    if (isNew && data.organizations.length === 0) return;
-
-    const draftData = {
-      data,
-      currentMonth,
-      durationSeconds,
-      timestamp: Date.now()
-    };
-    localStorage.setItem(draftKey, JSON.stringify(draftData));
-  }, [isDirty, data, currentMonth, durationSeconds, draftKey, isNew, draftToRestore]);
 
   const handleRestoreDraft = () => {
     if (draftToRestore) {
@@ -120,8 +111,7 @@ export default function SnapshotEdit() {
 
   const handleDiscardDraft = () => {
     if (confirm('Are you sure you want to discard this draft? This cannot be undone.')) {
-      localStorage.removeItem(draftKey);
-      setDraftToRestore(null);
+      discardDraft();
     }
   };
 
@@ -141,7 +131,9 @@ export default function SnapshotEdit() {
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
       .then(resData => {
-        setSettings(JSON.parse(resData.value));
+        const parsed = JSON.parse(resData.value);
+        if (!parsed.tags) parsed.tags = [];
+        setSettings(parsed);
         setSettingsLoaded(true);
       });
 
@@ -159,14 +151,6 @@ export default function SnapshotEdit() {
               const rawData = JSON.parse(s.data);
               setData(stripCommentsFromSnapshot(rawData));
             }
-            const savedDraft = localStorage.getItem(draftKey);
-            if (savedDraft) {
-              try {
-                setDraftToRestore(JSON.parse(savedDraft));
-              } catch (e) {
-                localStorage.removeItem(draftKey);
-              }
-            }
             setLoading(false);
           })
           .catch(e => {
@@ -179,14 +163,6 @@ export default function SnapshotEdit() {
           .then((snaps: Snapshot[]) => {
             if (snaps && snaps.length > 0) {
               setLatestSnapshot(JSON.parse(snaps[0].data));
-            }
-            const savedDraft = localStorage.getItem(draftKey);
-            if (savedDraft) {
-              try {
-                setDraftToRestore(JSON.parse(savedDraft));
-              } catch (e) {
-                localStorage.removeItem(draftKey);
-              }
             }
             setLoading(false);
           })
@@ -203,18 +179,20 @@ export default function SnapshotEdit() {
         .then(res => res.json())
         .then((s: any) => {
           if (s.data) {
-            setData(JSON.parse(s.data));
+            const parsedData = JSON.parse(s.data);
+            if (parsedData.organizations) {
+              parsedData.organizations = parsedData.organizations.map((org: any) => ({
+                ...org,
+                balances: org.balances.map((b: any) => ({
+                  ...b,
+                  tags: b.tags || []
+                }))
+              }));
+            }
+            setData(parsedData);
           }
           if (s.duration_seconds) {
             setDurationSeconds(s.duration_seconds);
-          }
-          const savedDraft = localStorage.getItem(draftKey);
-          if (savedDraft) {
-            try {
-              setDraftToRestore(JSON.parse(savedDraft));
-            } catch (e) {
-              localStorage.removeItem(draftKey);
-            }
           }
           setLoading(false);
         })
@@ -223,9 +201,8 @@ export default function SnapshotEdit() {
           setLoading(false);
         });
     }
-  }, [month, sourceMonth, isNew, isCopy, draftKey]);
+  }, [month, sourceMonth, isNew, isCopy]);
 
-  // Set the initial hash once data is loaded and settings are merged so we can track modifications
   useEffect(() => {
     if (!loading && settingsLoaded && !initialDataHash.current) {
       const timer = setTimeout(() => {
@@ -413,7 +390,7 @@ export default function SnapshotEdit() {
       organizations: settings.organizations.map(name => ({
         id: uuidv4(),
         name,
-        balances: [{ currency: settings.baseCurrency || 'RUB', amount: 0 }]
+        balances: [{ currency: settings.baseCurrency || 'RUB', amount: 0, comment: '', tags: [] }]
       }))
     });
   };
@@ -451,7 +428,7 @@ export default function SnapshotEdit() {
         if (o.id === orgId) {
           return {
             ...o,
-            balances: [...o.balances, { currency: settings.baseCurrency || 'RUB', amount: 0, comment: '' }]
+            balances: [...o.balances, { currency: settings.baseCurrency || 'RUB', amount: 0, comment: '', tags: [] }]
           };
         }
         return o;
@@ -459,7 +436,7 @@ export default function SnapshotEdit() {
     });
   };
 
-  const updateBalance = (orgId: string, index: number, field: keyof Balance, value: string | number) => {
+  const updateBalance = (orgId: string, index: number, field: keyof Balance, value: any) => {
     setData({
       ...data,
       organizations: data.organizations.map(o => {
@@ -702,114 +679,146 @@ export default function SnapshotEdit() {
 
       {/* ORGANIZATIONS GRID */}
       <div className="grid grid-cols-2 gap-4">
-        {data.organizations.map((org) => (
-          <div key={org.id} ref={el => { orgRefs.current[org.id] = el; }} className="glass-panel">
-            <div className="flex items-center mb-6 relative">
-              <div className="flex-1 flex justify-center">
-                <select
-                  className="input"
-                  value={org.name}
-                  onChange={e => updateOrganizationField(org.id, 'name', e.target.value)}
-                  style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
-                >
-                  <option value="" disabled>Select Organization</option>
-                  {settings.organizations.map(o => <option key={o} value={o}>{o}</option>)}
-                  {!settings.organizations.includes(org.name) && org.name && (
-                    <option value={org.name}>{org.name}</option>
-                  )}
-                </select>
-              </div>
-              <div className="absolute right-0 flex gap-2">
-                <button
-                  className="btn"
-                  style={getIconStyle(!!org.comment)}
-                  title="Organization Note"
-                  onClick={() => setActiveComment({ type: 'org', orgId: org.id, text: org.comment || '', initialText: org.comment || '', title: `${org.name || 'Organization'} Note` })}
-                >
-                  <MessageSquare size={16} />
-                </button>
-                <button className="btn btn-danger" onClick={() => removeOrganization(org.id)}>
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
+        {data.organizations.map((org) => {
+          const isCurrentOrgDropdownOpen = activeDropdownOrgId === org.id;
 
-            <table className="table mb-4">
-              <thead>
-                <tr>
-                  <th style={{ width: '30%' }}>Currency</th>
-                  <th style={{ width: '45%' }}>Amount</th>
-                  <th style={{ width: '25%' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {org.balances.map((b, i) => (
-                  <tr key={i}>
-                    <td style={{ paddingLeft: 0, paddingRight: 8 }}>
-                      <select
-                        className="input"
-                        value={b.currency}
-                        onChange={e => updateBalance(org.id, i, 'currency', e.target.value)}
-                      >
-                        <option value="" disabled>Select</option>
-                        {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
-                        {!settings.currencies.includes(b.currency) && b.currency && (
-                          <option value={b.currency}>{b.currency}</option>
-                        )}
-                      </select>
-                    </td>
-                    <td style={{ paddingLeft: 0, paddingRight: 8 }}>
-                      <input
-                        type="text"
-                        className="input"
-                        value={b.amount === 0 ? '' : (typeof b.amount === 'number' ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(b.amount) : b.amount)}
-                        placeholder="0"
-                        onChange={e => updateBalance(org.id, i, 'amount', e.target.value)}
-                        onBlur={e => {
-                          const calculated = evaluateMath(e.target.value);
-                          updateBalance(org.id, i, 'amount', calculated);
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            const calculated = evaluateMath((e.target as HTMLInputElement).value);
-                            updateBalance(org.id, i, 'amount', calculated);
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                      />
-                    </td>
-                    <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0 }}>
-                      <div className="flex justify-end gap-2">
-                        <button
-                          className="btn"
-                          style={getIconStyle(!!b.comment)}
-                          title="Balance Note"
-                          onClick={() => setActiveComment({ type: 'balance', orgId: org.id, index: i, text: b.comment || '', initialText: b.comment || '', title: `${b.currency || 'Balance'} Note` })}
-                        >
-                          <MessageSquare size={14} />
-                        </button>
-                        <button className="btn" style={{ padding: '8px' }} onClick={() => removeBalance(org.id, i)}>
-                          <Trash2 size={14} className="text-danger" />
-                        </button>
-                      </div>
-                    </td>
+          return (
+            <div
+              key={org.id}
+              ref={el => { orgRefs.current[org.id] = el; }}
+              className="glass-panel"
+              style={{
+                zIndex: isCurrentOrgDropdownOpen ? 10 : 1,
+                position: 'relative'
+              }}
+            >
+              <div className="flex items-center mb-6 relative">
+                <div className="flex-1 flex justify-center">
+                  <select
+                    className="input"
+                    value={org.name}
+                    onChange={e => updateOrganizationField(org.id, 'name', e.target.value)}
+                    style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
+                  >
+                    <option value="" disabled>Select Organization</option>
+                    {settings.organizations.map(o => <option key={o} value={o}>{o}</option>)}
+                    {!settings.organizations.includes(org.name) && org.name && (
+                      <option value={org.name}>{org.name}</option>
+                    )}
+                  </select>
+                </div>
+                <div className="absolute right-0 flex gap-2">
+                  <button
+                    className="btn"
+                    style={getIconStyle(!!org.comment)}
+                    title="Organization Note"
+                    onClick={() => setActiveComment({ type: 'org', orgId: org.id, text: org.comment || '', initialText: org.comment || '', title: `${org.name || 'Organization'} Note` })}
+                  >
+                    <MessageSquare size={16} />
+                  </button>
+                  <button className="btn btn-danger" onClick={() => removeOrganization(org.id)}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <table className="table mb-4" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '20%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Currency</th>
+                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Tags</th>
+                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Amount</th>
+                    <th style={{ width: '10%', padding: '10px 0' }}></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {org.balances.map((b, i) => (
+                    <tr key={i}>
+                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                        <select
+                          className="input"
+                          value={b.currency}
+                          onChange={e => updateBalance(org.id, i, 'currency', e.target.value)}
+                          style={{ width: '100%', paddingRight: '20px' }}
+                        >
+                          <option value="" disabled>Select</option>
+                          {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
+                          {!settings.currencies.includes(b.currency) && b.currency && (
+                            <option value={b.currency}>{b.currency}</option>
+                          )}
+                        </select>
+                      </td>
+                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                        <MultiTagSelect
+                          selectedTags={b.tags || []}
+                          availableTags={settings.tags || []}
+                          onChange={(newTags: string[]) => updateBalance(org.id, i, 'tags', newTags)}
+                          onOpen={() => setActiveDropdownOrgId(org.id)}
+                          onClose={() => setActiveDropdownOrgId(null)}
+                        />
+                      </td>
+                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                        <input
+                          type="text"
+                          className="input"
+                          value={b.amount === 0 ? '' : (typeof b.amount === 'number' ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(b.amount) : b.amount)}
+                          placeholder="0"
+                          onChange={e => updateBalance(org.id, i, 'amount', e.target.value)}
+                          onBlur={e => {
+                            const calculated = evaluateMath(e.target.value);
+                            updateBalance(org.id, i, 'amount', calculated);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              const calculated = evaluateMath((e.target as HTMLInputElement).value);
+                              updateBalance(org.id, i, 'amount', calculated);
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                        />
+                      </td>
+                      <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0, paddingTop: 4, paddingBottom: 4 }}>
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            className="btn"
+                            style={{ ...getIconStyle(!!b.comment), padding: '6px' }}
+                            title="Balance Note"
+                            onClick={() => setActiveComment({ type: 'balance', orgId: org.id, index: i, text: b.comment || '', initialText: b.comment || '', title: `${b.currency || 'Balance'} Note` })}
+                          >
+                            <MessageSquare size={14} />
+                          </button>
+                          <button className="btn" style={{ padding: '6px' }} onClick={() => removeBalance(org.id, i)}>
+                            <Trash2 size={14} className="text-danger" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            <button className="btn" onClick={() => addBalance(org.id)}>
-              <Plus size={16} className="mr-1" /> Add Balance
-            </button>
-          </div>
-        ))}
+              <button className="btn" onClick={() => addBalance(org.id)}>
+                <Plus size={16} className="mr-1" /> Add Balance
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {/* TELEPORTED COMMENT MODAL */}
+      {/* TELEPORTED COMMENT MODAL */}
       {activeComment && createPortal(
         <div
-          className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
+          className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            // Added absolute styling override to conquer the backdrop-filter stacking context
+            zIndex: 100000
+          }}
         >
           <div
             className="glass-panel flex flex-col"
