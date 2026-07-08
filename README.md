@@ -20,6 +20,14 @@ You can install the latest version of `finn` automatically using the one-liner c
 curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.sh | sh
 ```
 
+### Quick Install (Windows PowerShell)
+
+Open your PowerShell terminal and run the following command to download and install the latest Windows binary:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1 | iex"
+```
+
 ## ✨ Features
 
 * **Monthly Snapshots:** Save the state of your balances across different organizations and accounts once a month.

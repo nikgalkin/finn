@@ -16,6 +16,13 @@ import (
 	"time"
 )
 
+const (
+	backupPrefix     = "finn_backup_"
+	backupTimeFormat = "2006_01_02_150405"
+	extEncrypted     = "enc"
+	extRaw           = "db"
+)
+
 // encryptData blocks the bytes using AES-256-GCM
 func encryptData(plaintext []byte, passphrase string) ([]byte, error) {
 	key := sha256.Sum256([]byte(passphrase))
@@ -77,7 +84,7 @@ func rotateBackups(target BackupTarget) {
 
 	var backupFiles []os.FileInfo
 	for _, f := range files {
-		if !f.IsDir() && strings.HasPrefix(f.Name(), "finn_backup_") {
+		if !f.IsDir() && strings.HasPrefix(f.Name(), backupPrefix) {
 			info, err := f.Info()
 			if err == nil {
 				backupFiles = append(backupFiles, info)
@@ -131,15 +138,15 @@ func RunBackupJob(cfg *Config, db *sql.DB) {
 			return
 		}
 		finalData = encrypted
-		extension = "enc"
+		extension = extEncrypted
 	} else {
 		log.Println("⚠️  Backup: Running without encryption (unsecured payload).")
 		finalData = dbBytes
-		extension = "db"
+		extension = extRaw
 	}
 
-	timestamp := time.Now().Format("2006_01_02_150405")
-	filename := fmt.Sprintf("finn_backup_%s.%s", timestamp, extension)
+	timestamp := time.Now().Format(backupTimeFormat)
+	filename := fmt.Sprintf("%s%s.%s", backupPrefix, timestamp, extension)
 
 	for _, target := range cfg.Backup.Targets {
 		if err := os.MkdirAll(target.Path, 0755); err != nil {
@@ -187,7 +194,7 @@ func RunRestoreJob(cfg *Config, backupFilePath string) {
 
 	var finalDbBytes []byte
 
-	if filepath.Ext(backupFilePath) == ".enc" {
+	if filepath.Ext(backupFilePath) == "."+extEncrypted {
 		if cfg.Backup.CipherKey == "" {
 			log.Fatalf("❌ Restore CRITICAL: File is encrypted, but FINN_BACKUP_CIPHER_KEY environment variable is empty!\n")
 		}
