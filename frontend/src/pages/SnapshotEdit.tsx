@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +14,7 @@ const evaluateMath = (expr: string | number): number => {
     const result = new Function(`return ${sanitized}`)();
     return Number.isFinite(result) ? result : 0;
   } catch (e) {
-    return 0; 
+    return 0;
   }
 };
 
@@ -37,7 +37,7 @@ export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const isNew = !month && !sourceMonth;
   const isCopy = !!sourceMonth;
 
@@ -50,7 +50,7 @@ export default function SnapshotEdit() {
   });
 
   const [durationSeconds, setDurationSeconds] = useState(0);
-  
+
   const [activeComment, setActiveComment] = useState<{
     type: 'month' | 'org' | 'balance';
     orgId?: string;
@@ -64,8 +64,66 @@ export default function SnapshotEdit() {
   const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [] });
   const [loading, setLoading] = useState(true);
   const [fetchingRates, setFetchingRates] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Draft & Exit protection hooks
+  const initialDataHash = useRef<string>('');
+  const [draftToRestore, setDraftToRestore] = useState<any>(null);
+  const draftKey = `finn_draft_${month || 'new'}`;
+
+  const isDirty = useMemo(() => {
+    if (!initialDataHash.current) return false;
+    return initialDataHash.current !== JSON.stringify({ data, currentMonth });
+  }, [data, currentMonth]);
+
+  // Prompt user before closing or reloading if dirty
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // Autosave draft to localStorage
+  useEffect(() => {
+    if (!isDirty) return;
+    
+    // CRITICAL: Do not overwrite the draft if we are currently displaying the "Restore Draft" prompt
+    if (draftToRestore) return;
+    
+    // Safety check: do not save a draft if a new snapshot has no organizations added yet
+    if (isNew && data.organizations.length === 0) return;
+
+    const draftData = {
+      data,
+      currentMonth,
+      durationSeconds,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(draftKey, JSON.stringify(draftData));
+  }, [isDirty, data, currentMonth, durationSeconds, draftKey, isNew, draftToRestore]);
+
+  const handleRestoreDraft = () => {
+    if (draftToRestore) {
+      setData(draftToRestore.data);
+      setCurrentMonth(draftToRestore.currentMonth);
+      setDurationSeconds(draftToRestore.durationSeconds || 0);
+      setDraftToRestore(null);
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    if (confirm('Are you sure you want to discard this draft? This cannot be undone.')) {
+      localStorage.removeItem(draftKey);
+      setDraftToRestore(null);
+    }
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -84,6 +142,7 @@ export default function SnapshotEdit() {
       .then(res => res.json())
       .then(resData => {
         setSettings(JSON.parse(resData.value));
+        setSettingsLoaded(true);
       });
 
     if (isNew || isCopy) {
@@ -100,6 +159,14 @@ export default function SnapshotEdit() {
               const rawData = JSON.parse(s.data);
               setData(stripCommentsFromSnapshot(rawData));
             }
+            const savedDraft = localStorage.getItem(draftKey);
+            if (savedDraft) {
+              try {
+                setDraftToRestore(JSON.parse(savedDraft));
+              } catch (e) {
+                localStorage.removeItem(draftKey);
+              }
+            }
             setLoading(false);
           })
           .catch(e => {
@@ -112,6 +179,14 @@ export default function SnapshotEdit() {
           .then((snaps: Snapshot[]) => {
             if (snaps && snaps.length > 0) {
               setLatestSnapshot(JSON.parse(snaps[0].data));
+            }
+            const savedDraft = localStorage.getItem(draftKey);
+            if (savedDraft) {
+              try {
+                setDraftToRestore(JSON.parse(savedDraft));
+              } catch (e) {
+                localStorage.removeItem(draftKey);
+              }
             }
             setLoading(false);
           })
@@ -133,6 +208,14 @@ export default function SnapshotEdit() {
           if (s.duration_seconds) {
             setDurationSeconds(s.duration_seconds);
           }
+          const savedDraft = localStorage.getItem(draftKey);
+          if (savedDraft) {
+            try {
+              setDraftToRestore(JSON.parse(savedDraft));
+            } catch (e) {
+              localStorage.removeItem(draftKey);
+            }
+          }
           setLoading(false);
         })
         .catch(e => {
@@ -140,7 +223,17 @@ export default function SnapshotEdit() {
           setLoading(false);
         });
     }
-  }, [month, sourceMonth, isNew, isCopy]);
+  }, [month, sourceMonth, isNew, isCopy, draftKey]);
+
+  // Set the initial hash once data is loaded and settings are merged so we can track modifications
+  useEffect(() => {
+    if (!loading && settingsLoaded && !initialDataHash.current) {
+      const timer = setTimeout(() => {
+        initialDataHash.current = JSON.stringify({ data, currentMonth });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, settingsLoaded, data, currentMonth]);
 
   useEffect(() => {
     if (!loading && data.organizations.length > 0) {
@@ -178,6 +271,11 @@ export default function SnapshotEdit() {
       });
     }
   }, [settings.currencies, settings.baseCurrency]);
+
+  const completeSave = () => {
+    localStorage.removeItem(draftKey);
+    navigate('/');
+  };
 
   const handleSave = () => {
     const usedCurrencies = new Set<string>();
@@ -217,7 +315,7 @@ export default function SnapshotEdit() {
           body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
         })
           .then(res => {
-            if (res.ok) navigate('/');
+            if (res.ok) completeSave();
             else if (res.status === 409) {
               alert(`A snapshot for "${currentMonth}" already exists. Change the month or use Edit instead.`);
             } else {
@@ -252,7 +350,7 @@ export default function SnapshotEdit() {
           if (res.status === 409) {
             alert(`A snapshot for "${currentMonth}" already exists. Please choose a different month.`);
           } else if (res.ok) {
-            navigate('/');
+            completeSave();
           } else {
             alert('Failed to save');
           }
@@ -264,7 +362,7 @@ export default function SnapshotEdit() {
         body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
       })
         .then(res => {
-          if (res.ok) navigate('/');
+          if (res.ok) completeSave();
           else alert('Failed to save');
         });
     }
@@ -378,7 +476,7 @@ export default function SnapshotEdit() {
   const removeBalance = (orgId: string, index: number) => {
     const org = data.organizations.find(o => o.id === orgId);
     if (!org) return;
-    
+
     const balance = org.balances[index];
     if (balance && balance.amount !== 0 && balance.amount !== '') {
       if (!confirm('This balance is not empty. Are you sure you want to delete it?')) {
@@ -419,7 +517,7 @@ export default function SnapshotEdit() {
   const saveComment = () => {
     if (!activeComment) return;
     const { type, text, orgId, index } = activeComment;
-    
+
     if (type === 'month') {
       setData(prev => ({ ...prev, comment: text }));
     } else if (type === 'org' && orgId) {
@@ -450,10 +548,10 @@ export default function SnapshotEdit() {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    
+
     const mm = String(m).padStart(2, '0');
     const ss = String(s).padStart(2, '0');
-    
+
     if (h > 0) {
       return `${String(h).padStart(2, '0')}:${mm}:${ss}`;
     }
@@ -464,6 +562,20 @@ export default function SnapshotEdit() {
 
   return (
     <div>
+      {draftToRestore && (
+        <div className="glass-panel flex justify-between items-center" style={{ borderColor: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)', marginBottom: '32px' }}>
+          <div>
+            <h4 style={{ margin: 0, color: 'var(--accent)' }}>Unsaved Draft Detected</h4>
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              We found a draft from {new Date(draftToRestore.timestamp).toLocaleString()}. Would you like to resume editing?
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn btn-primary" onClick={handleRestoreDraft}>Restore</button>
+            <button className="btn btn-danger" onClick={handleDiscardDraft}>Discard Draft</button>
+          </div>
+        </div>
+      )}
       <style>{`
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button {
@@ -493,8 +605,8 @@ export default function SnapshotEdit() {
             <span>{formatTimer(durationSeconds)}</span>
           </div>
 
-          <button 
-            className="btn" 
+          <button
+            className="btn"
             style={{ ...getIconStyle(!!data.comment), padding: '6px' }}
             title="Add monthly note"
             onClick={() => setActiveComment({ type: 'month', text: data.comment || '', initialText: data.comment || '', title: 'Monthly Note' })}
@@ -537,7 +649,7 @@ export default function SnapshotEdit() {
               {fetchingRates ? 'Fetching...' : 'Fetch Rates'}
             </button>
           </div>
-          
+
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', flex: 1, alignContent: 'flex-start' }}>
             {Object.entries(data.rates).map(([curr, rate]) => (
               <div key={curr} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
@@ -555,12 +667,12 @@ export default function SnapshotEdit() {
                 />
               </div>
             ))}
-            
+
             <div style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-               <div className="text-xs mb-1 font-medium opacity-0"></div>
-               <button className="btn w-full justify-center" style={{ height: '42px' }} onClick={addRate}>
-                 <Plus size={16} className="mr-1" /> Add
-               </button>
+              <div className="text-xs mb-1 font-medium opacity-0"></div>
+              <button className="btn w-full justify-center" style={{ height: '42px' }} onClick={addRate}>
+                <Plus size={16} className="mr-1" /> Add
+              </button>
             </div>
           </div>
         </div>
@@ -668,9 +780,9 @@ export default function SnapshotEdit() {
                     </td>
                     <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0 }}>
                       <div className="flex justify-end gap-2">
-                        <button 
-                          className="btn" 
-                          style={getIconStyle(!!b.comment)} 
+                        <button
+                          className="btn"
+                          style={getIconStyle(!!b.comment)}
                           title="Balance Note"
                           onClick={() => setActiveComment({ type: 'balance', orgId: org.id, index: i, text: b.comment || '', initialText: b.comment || '', title: `${b.currency || 'Balance'} Note` })}
                         >
@@ -695,19 +807,19 @@ export default function SnapshotEdit() {
 
       {/* TELEPORTED COMMENT MODAL */}
       {activeComment && createPortal(
-        <div 
+        <div
           className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
         >
-          <div 
-            className="glass-panel flex flex-col" 
-            style={{ 
+          <div
+            className="glass-panel flex flex-col"
+            style={{
               width: '600px',
               minWidth: '300px',
               minHeight: '300px',
-              resize: 'both', 
-              overflow: 'hidden', 
-              padding: '24px', 
+              resize: 'both',
+              overflow: 'hidden',
+              padding: '24px',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
               position: 'relative'
             }}
@@ -718,7 +830,7 @@ export default function SnapshotEdit() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <textarea
               className="input w-full flex-1"
               style={{ resize: 'none', paddingTop: '12px', minHeight: '150px' }}
@@ -736,7 +848,7 @@ export default function SnapshotEdit() {
               }}
               autoFocus
             />
-            
+
             <div className="flex justify-end gap-2 mt-6">
               <button className="btn mt-2" onClick={handleCloseComment}>Cancel</button>
               <button className="btn btn-primary mt-2" onClick={saveComment}>Save Note</button>

@@ -121,9 +121,29 @@ func RunBackupJob(cfg *Config, db *sql.DB) {
 	}
 
 	dbPath := resolveDatabasePath(cfg.Database.Filename)
-	dbBytes, err := os.ReadFile(dbPath)
+	tempPath := dbPath + ".tmp_backup"
+
+	// Clean up any stale temp backup file first
+	_ = os.Remove(tempPath)
+
+	// Run SQLite VACUUM INTO to get a consistent backup snapshot safely
+	log.Println("💾 Backup: Running SQLite VACUUM INTO to create consistent snapshot...")
+	escapedPath := strings.ReplaceAll(tempPath, "'", "''")
+	if _, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", escapedPath)); err != nil {
+		log.Printf("❌ Backup: SQLite VACUUM INTO failed: %v\n", err)
+		return
+	}
+
+	// Clean up temp file after reading
+	defer func() {
+		if err := os.Remove(tempPath); err != nil && !os.IsNotExist(err) {
+			log.Printf("⚠️  Backup: Failed to clean up temporary backup file: %v\n", err)
+		}
+	}()
+
+	dbBytes, err := os.ReadFile(tempPath)
 	if err != nil {
-		log.Printf("⚠️  Backup: Failed to read primary database file: %v\n", err)
+		log.Printf("⚠️  Backup: Failed to read temporary backup file: %v\n", err)
 		return
 	}
 

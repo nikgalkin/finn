@@ -509,18 +509,17 @@ export default function GraphsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       
-      {/* ИСПРАВЛЕННЫЙ ИДЕАЛЬНО ПРОЗРАЧНЫЙ STICKY-КОНТЕЙНЕР ШАПКИ */}
       <div 
         className="flex justify-between items-center" 
         style={{ 
           position: 'sticky',
           top: 0,
           zIndex: 999,
-          background: 'transparent', // Полностью убрали темную плашку!
-          backdropFilter: 'blur(16px)', // Оставили только чистое матовое размытие контента
+          background: 'transparent',
+          backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           padding: '16px 4px',
-          borderBottom: '1px solid var(--glass-border)', // Тонкая интерактивная линия разделения
+          borderBottom: '1px solid var(--glass-border)',
           margin: '0 -4px'
         }}
       >
@@ -685,7 +684,7 @@ export default function GraphsPage() {
       {/* РАЗДЕЛ 3: HIGH-LEVEL EXECUTIVE INTEL */}
       <div>
         <h3 className="mb-4" style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' }}>
-          HIGH-LEVEL EXECUTIVE INTEL (ПО КРАЙНЕМУ СЛЕТУ: {latestSnapshot?.month})
+          HIGH-LEVEL EXECUTIVE INTEL (INSTANT FROM: {latestSnapshot?.month})
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '12px' }}>
           

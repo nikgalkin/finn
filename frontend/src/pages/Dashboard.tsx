@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, X, ArrowLeftRight, Clock, Folder, Coins } from 'lucide-react';
 import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Dot, PieChart, Pie, Cell } from 'recharts';
@@ -125,7 +125,7 @@ export default function Dashboard() {
     }
   };
 
-  const calculateTotals = (snap: ParsedSnapshot) => {
+  const calculateTotals = useCallback((snap: ParsedSnapshot) => {
     let totalBase = 0;
     let totalUsd = 0;
     const usdRate = Number(snap.data.rates['USD'] || 1);
@@ -157,9 +157,9 @@ export default function Dashboard() {
     });
 
     return { totalBase, totalUsd };
-  };
+  }, [baseCurrency]);
 
-  const calculateOrgTotalBase = (org: any, rates: Record<string, number | string>) => {
+  const calculateOrgTotalBase = useCallback((org: any, rates: Record<string, number | string>) => {
     let total = 0;
     org.balances.forEach((b: any) => {
       const amount = Number(b.amount || 0);
@@ -171,9 +171,9 @@ export default function Dashboard() {
       }
     });
     return total;
-  };
+  }, [baseCurrency]);
 
-  const calculateCurrencyTotals = (snap: ParsedSnapshot) => {
+  const calculateCurrencyTotals = useCallback((snap: ParsedSnapshot) => {
     const totals: Record<string, number> = {};
     snap.data.organizations.forEach(org => {
       org.balances.forEach(b => {
@@ -184,26 +184,28 @@ export default function Dashboard() {
       });
     });
     return totals;
-  };
+  }, []);
 
-  const hasAnyComments = (snap: ParsedSnapshot) => {
+  const hasAnyComments = useCallback((snap: ParsedSnapshot) => {
     if (snap.data.comment) return true;
     for (const org of snap.data.organizations) {
       if (org.comment) return true;
       if (org.balances.some(b => b.comment)) return true;
     }
     return false;
-  };
+  }, []);
 
-  const chartData = snapshots.map(s => {
-    const totals = calculateTotals(s);
-    return {
-      name: s.month,
-      BASE: Math.round(totals.totalBase),
-      USD: Math.round(totals.totalUsd),
-      hasComment: hasAnyComments(s)
-    };
-  });
+  const chartData = useMemo(() => {
+    return snapshots.map(s => {
+      const totals = calculateTotals(s);
+      return {
+        name: s.month,
+        BASE: Math.round(totals.totalBase),
+        USD: Math.round(totals.totalUsd),
+        hasComment: hasAnyComments(s)
+      };
+    });
+  }, [snapshots, calculateTotals, hasAnyComments]);
 
   const CustomDot = (props: any) => {
     const { cx, cy, payload } = props;
@@ -230,15 +232,18 @@ export default function Dashboard() {
 
   const CHART_COLORS = ['#eab308', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444', '#10b981'];
 
-  const latestSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
-  const latestTotals = latestSnapshot ? calculateTotals(latestSnapshot) : { totalBase: 0, totalUsd: 0 };
+  const latestSnapshot = useMemo(() => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null, [snapshots]);
+  const latestTotals = useMemo(() => latestSnapshot ? calculateTotals(latestSnapshot) : { totalBase: 0, totalUsd: 0 }, [latestSnapshot, calculateTotals]);
 
-  const pieData = latestSnapshot ? latestSnapshot.data.organizations.map(org => {
-    let orgTotalBase = calculateOrgTotalBase(org, latestSnapshot.data.rates);
-    return { name: org.name || 'Unnamed', value: Math.round(orgTotalBase) };
-  })
-    .filter(item => item.value > 0)
-    .sort((a, b) => b.value - a.value) : [];
+  const pieData = useMemo(() => {
+    if (!latestSnapshot) return [];
+    return latestSnapshot.data.organizations.map(org => {
+      let orgTotalBase = calculateOrgTotalBase(org, latestSnapshot.data.rates);
+      return { name: org.name || 'Unnamed', value: Math.round(orgTotalBase) };
+    })
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [latestSnapshot, calculateOrgTotalBase]);
 
   const renderDiff = (current: number, previous: number | undefined, isUsd: boolean = false) => {
     if (previous === undefined || previous === 0) return null;
@@ -272,16 +277,20 @@ export default function Dashboard() {
   };
 
   const currentYear = new Date().getFullYear().toString();
-  const groupsByYear: Record<string, ParsedSnapshot[]> = {};
-  const reversedSnapshots = [...snapshots].reverse();
 
-  reversedSnapshots.forEach(s => {
-    const year = s.month.split('-')[0];
-    if (!groupsByYear[year]) groupsByYear[year] = [];
-    groupsByYear[year].push(s);
-  });
+  const { groupsByYear, sortedYears, reversedSnapshots } = useMemo(() => {
+    const groups: Record<string, ParsedSnapshot[]> = {};
+    const reversed = [...snapshots].reverse();
 
-  const sortedYears = Object.keys(groupsByYear).sort((a, b) => b.localeCompare(a));
+    reversed.forEach(s => {
+      const year = s.month.split('-')[0];
+      if (!groups[year]) groups[year] = [];
+      groups[year].push(s);
+    });
+
+    const sorted = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+    return { groupsByYear: groups, sortedYears: sorted, reversedSnapshots: reversed };
+  }, [snapshots]);
 
   const formatCompactNumber = (number: number) => {
     return Intl.NumberFormat('en-US', {
