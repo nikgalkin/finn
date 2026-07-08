@@ -1,11 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, LineChart as LineChartIcon, Landmark, Layers, Coins, Clock, BarChart3, ArrowLeftRight, Eye, ChevronDown, Search, ShieldAlert, Grid, Compass } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Treemap } from 'recharts';
 import { API_URL, getCurrencyColor } from '../types';
 import type { ParsedSnapshot, Snapshot } from '../types';
 
-// Кастомный компактный выпадающий список с поиском
 function SearchableSelect({ 
   value, 
   onChange, 
@@ -136,7 +135,6 @@ function SearchableSelect({
   );
 }
 
-// Кастомный контент для плиток Treemap
 const CustomizedContentTreemap = (props: any) => {
   const { root, depth, x, y, width, height, index, name, value } = props;
   if (depth !== 1 || width < 40 || height < 30) return null;
@@ -232,6 +230,24 @@ export default function GraphsPage() {
   const [endMonth, setEndMonth] = useState('');
   const [lastClick, setLastClick] = useState<{ key: string; time: number } | null>(null);
 
+  /**
+   * Front-end currency cross-rate conversion function.
+   */
+  const convertAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number | string>) => {
+    if (fromCurrency === toCurrency) return amount;
+    
+    const rateToOriginalBase = fromCurrency === 'RUB' ? 1 : Number(rates[fromCurrency] || 0);
+    const targetRateToOriginalBase = toCurrency === 'RUB' ? 1 : Number(rates[toCurrency] || 0);
+    
+    if (targetRateToOriginalBase === 0) return 0;
+    
+    return (amount * rateToOriginalBase) / targetRateToOriginalBase;
+  }, []);
+
+  const getAmountInBase = useCallback((amount: number, currency: string, snapshot: ParsedSnapshot) => {
+    return convertAmount(amount, currency, baseCurrency, snapshot.data.rates);
+  }, [baseCurrency, convertAmount]);
+
   useEffect(() => {
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
@@ -269,13 +285,7 @@ export default function GraphsPage() {
     return startOk && endOk;
   });
 
-  const getAmountInBase = (amount: number, currency: string, snapshot: ParsedSnapshot) => {
-    if (currency === baseCurrency) return amount;
-    const rate = Number(snapshot.data.rates?.[currency] || 0);
-    return amount * rate;
-  };
-
-  // --- 1. Динамика курсов валют ---
+  // --- 1. Exchange Rates History (Normalized relative to the newly selected base currency) ---
   const allCurrenciesSet = new Set<string>();
   filteredSnapshots.forEach(s => {
     if (s.data.rates) {
@@ -284,24 +294,23 @@ export default function GraphsPage() {
       });
     }
   });
+  // Add original benchmark if it's not the current base
+  if (baseCurrency !== 'RUB') allCurrenciesSet.add('RUB');
   const activeCurrencies = Array.from(allCurrenciesSet);
-
-  const invertedCurrencies = new Set<string>();
-  activeCurrencies.forEach(c => {
-    const firstValidSnap = filteredSnapshots.find(s => Number(s.data.rates?.[c]) > 0);
-    if (firstValidSnap && Number(firstValidSnap.data.rates[c]) < 0.1) invertedCurrencies.add(c);
-  });
 
   const currencyRatesData = filteredSnapshots.map(s => {
     const point: any = { month: s.month };
     activeCurrencies.forEach(c => {
-      const rate = Number(s.data.rates?.[c] || 0);
-      if (rate > 0) point[c] = invertedCurrencies.has(c) ? (1 / rate) : rate;
+      // Re-index rate display to match currently configured base asset framework
+      const invertedRate = convertAmount(1, baseCurrency, c, s.data.rates);
+      if (invertedRate > 0) {
+        point[c] = invertedRate;
+      }
     });
     return point;
   });
 
-  // --- 2. Объемы валют ---
+  // --- 2. Absolute Currency Balances ---
   const usedCurrenciesSet = new Set<string>();
   filteredSnapshots.forEach(s => {
     s.data.organizations.forEach(org => {
@@ -313,17 +322,13 @@ export default function GraphsPage() {
   const usedCurrenciesData = filteredSnapshots.map(s => {
     const point: any = { month: s.month };
     allUsedCurrencies.forEach(c => point[c] = 0);
-    filteredSnapshots.forEach(snap => {
-      if (snap.month === s.month) {
-        snap.data.organizations.forEach(org => {
-          org.balances.forEach(b => { if (b.currency && Number(b.amount) > 0) point[b.currency] += Math.round(Number(b.amount)); });
-        });
-      }
+    s.data.organizations.forEach(org => {
+      org.balances.forEach(b => { if (b.currency && Number(b.amount) > 0) point[b.currency] += Math.round(Number(b.amount)); });
     });
     return point;
   });
 
-  // --- 3. Динамика капитала по Организациям ---
+  // --- 3. Capital Flow by Organization ---
   const allOrgsSet = new Set<string>();
   filteredSnapshots.forEach(s => s.data.organizations.forEach(o => o.name && allOrgsSet.add(o.name)));
   const allOrganizations = Array.from(allOrgsSet);
@@ -339,7 +344,7 @@ export default function GraphsPage() {
     return point;
   });
 
-  // --- 4. Доли валютного портфеля ---
+  // --- 4. Portfolio Allocation Structure ---
   const currencyDistributionData = filteredSnapshots.map(s => {
     const point: any = { month: s.month };
     allUsedCurrencies.forEach(c => point[c] = 0);
@@ -349,7 +354,7 @@ export default function GraphsPage() {
     return point;
   });
 
-  // --- ДАННЫЕ ДЛЯ НОВЫХ ПРОДВИНУТЫХ ГРАФИКОВ (по последнему snapshot) ---
+  // --- Executive Metrics (Latest snapshot context) ---
   const latestSnapshot = filteredSnapshots[filteredSnapshots.length - 1];
 
   const treemapData: any[] = [];
@@ -409,16 +414,16 @@ export default function GraphsPage() {
       const infraSafety = Math.round((cryptoPct * 0.9 + stablePct * 0.3 + localPct * 0.8) * 100);
 
       radarData.push(
-        { subject: 'Liquidity (Ликвидность)', A: liquidity, fullMark: 100 },
-        { subject: 'Inflation Protect (Защита)', A: inflationProtection, fullMark: 100 },
-        { subject: 'Asset Stability (Стабильность)', A: stability, fullMark: 100 },
-        { subject: 'Yield Potential (Доходность)', A: yieldPotential, fullMark: 100 },
-        { subject: 'Infra Safety (Безопасность)', A: infraSafety, fullMark: 100 }
+        { subject: 'Liquidity', A: liquidity, fullMark: 100 },
+        { subject: 'Inflation Protect', A: inflationProtection, fullMark: 100 },
+        { subject: 'Asset Stability', A: stability, fullMark: 100 },
+        { subject: 'Yield Potential', A: yieldPotential, fullMark: 100 },
+        { subject: 'Infra Safety', A: infraSafety, fullMark: 100 }
       );
     }
   }
 
-  // --- 5. МЕТРИКИ ДЕКОМПОЗИЦИИ ---
+  // --- 5. Decomposition Changes ---
   const decompositionData = filteredSnapshots.map((s) => {
     let organicDelta = 0;
     let fxImpactDelta = 0;
@@ -442,11 +447,12 @@ export default function GraphsPage() {
         const currentAmt = currentCurrencies[curr] || 0;
         const prevAmt = prevCurrencies[curr] || 0;
         const diff = currentAmt - prevAmt;
-        const currentRate = curr === baseCurrency ? 1 : Number(s.data.rates?.[curr] || 0);
-        const prevRate = curr === baseCurrency ? 1 : Number(prevSnapshot.data.rates?.[curr] || 0);
+        
+        const currentRateInBase = convertAmount(1, curr, baseCurrency, s.data.rates);
+        const prevRateInBase = convertAmount(1, curr, baseCurrency, prevSnapshot.data.rates);
 
-        organicDelta += (diff * currentRate);
-        fxImpactDelta += (prevAmt * (currentRate - prevRate));
+        organicDelta += (diff * currentRateInBase);
+        fxImpactDelta += (prevAmt * (currentRateInBase - prevRateInBase));
       });
     } else {
       s.data.organizations.forEach(org => {
@@ -456,7 +462,7 @@ export default function GraphsPage() {
     return { month: s.month, Deposits: Math.round(organicDelta), 'FX Impact': Math.round(fxImpactDelta) };
   });
 
-  // --- 6. UX-МЕТРИКИ ---
+  // --- 6. UX Operational Metrics ---
   const uxMetricsData = filteredSnapshots.map(s => {
     let totalAccountsCount = 0;
     s.data.organizations.forEach(org => { totalAccountsCount += org.balances.length; });
@@ -548,7 +554,6 @@ export default function GraphsPage() {
         </div>
       </div>
 
-      {/* РАЗДЕЛ 1: HISTORICAL FINANCIAL METRICS */}
       <div>
         <h3 className="mb-4" style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' }}>
           HISTORICAL FINANCIAL METRICS 
@@ -575,16 +580,16 @@ export default function GraphsPage() {
           </div>
 
           <div className="glass-panel" style={{ height: '350px', display: 'flex', flexDirection: 'column' }}>
-            <h4 className="flex items-center gap-2 mb-4" style={{ margin: 0, fontSize: '14px' }}><LineChartIcon size={16} className="text-secondary" /> Exchange Rates Dynamic History</h4>
+            <h4 className="flex items-center gap-2 mb-4" style={{ margin: 0, fontSize: '14px' }}><LineChartIcon size={16} className="text-secondary" /> Exchange Rates Dynamic History ({baseCurrency})</h4>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={currencyRatesData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
                 <YAxis stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
-                <Tooltip contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }} formatter={(val) => Number(val).toFixed(2)} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }} formatter={(val) => Number(val).toFixed(4)} />
                 <Legend onClick={(e) => handleLegendClickSmart(e, activeCurrencies)} wrapperStyle={LEGEND_STYLE} />
                 {activeCurrencies.map((c, idx) => (
-                  <Line key={c} type="monotone" dataKey={c} stroke={CHART_COLORS[idx % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} hide={hiddenBalances[c]} />
+                  <Line key={c} type="monotone" dataKey={c} stroke={c === 'RUB' ? '#94a3b8' : CHART_COLORS[idx % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} hide={hiddenBalances[c]} />
                 ))}
               </LineChart>
             </ResponsiveContainer>
@@ -640,7 +645,6 @@ export default function GraphsPage() {
         </div>
       </div>
 
-      {/* РАЗДЕЛ 2: UX & OPERATIONAL METRICS */}
       <div>
         <h3 className="mb-4" style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' }}>UX & OPERATIONAL METRICS</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
@@ -681,7 +685,6 @@ export default function GraphsPage() {
         </div>
       </div>
 
-      {/* РАЗДЕЛ 3: HIGH-LEVEL EXECUTIVE INTEL */}
       <div>
         <h3 className="mb-4" style={{ color: 'var(--accent)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' }}>
           HIGH-LEVEL EXECUTIVE INTEL (INSTANT FROM: {latestSnapshot?.month})

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Calendar } from 'lucide-react';
 import { API_URL, getCurrencyColor } from '../types';
@@ -52,17 +52,27 @@ export default function CommentFeed() {
       });
   }, []);
 
+  /**
+   * Cross-rate frontend converter to dynamically determine the value
+   * inside the current baseCurrency selection using local snapshot rates.
+   */
+  const convertAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number | string>) => {
+    if (fromCurrency === toCurrency) return amount;
+    
+    const rateToOriginalBase = fromCurrency === 'RUB' ? 1 : Number(rates[fromCurrency] || 0);
+    const targetRateToOriginalBase = toCurrency === 'RUB' ? 1 : Number(rates[toCurrency] || 0);
+    
+    if (targetRateToOriginalBase === 0) return 0;
+    
+    return (amount * rateToOriginalBase) / targetRateToOriginalBase;
+  }, []);
+
   const calculateTotalBase = (snap: ParsedSnapshot) => {
     let total = 0;
     snap.data.organizations.forEach(org => {
       org.balances.forEach(b => {
         const amount = Number(b.amount || 0);
-        if (b.currency === baseCurrency) {
-          total += amount;
-        } else {
-          const rate = Number(snap.data.rates[b.currency] || 0);
-          total += amount * rate;
-        }
+        total += convertAmount(amount, b.currency, baseCurrency, snap.data.rates);
       });
     });
     return Math.round(total);

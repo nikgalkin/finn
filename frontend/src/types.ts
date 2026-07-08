@@ -33,6 +33,7 @@ export type AppSettings = {
   currencies: string[];
   autoFetchCurrencies?: string[];
   baseCurrency?: string;
+  secondaryCurrency?: string;
 };
 
 export const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:8080/api';
