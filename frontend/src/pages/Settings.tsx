@@ -1,24 +1,10 @@
-import { useEffect, useState } from 'react';
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../types';
-import type { AppSettings } from '../types';
+import { useSettings } from '../hooks/useSettings';
 
 export default function Settings() {
-  const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [], tags: [] });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`${API_URL}/settings`)
-      .then(res => res.json())
-      .then(data => {
-        const parsed = JSON.parse(data.value);
-        // Защита на случай, если в базе еще нет массива tags
-        if (!parsed.tags) parsed.tags = [];
-        setSettings(parsed);
-        setLoading(false);
-      });
-  }, []);
+  const { settings, setSettings, loading } = useSettings();
 
   const handleSave = () => {
     fetch(`${API_URL}/settings`, {

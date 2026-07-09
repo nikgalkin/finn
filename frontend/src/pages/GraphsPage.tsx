@@ -1,9 +1,12 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, LineChart as LineChartIcon, Landmark, Layers, Coins, Clock, BarChart3, ArrowLeftRight, Eye, ChevronDown, Search, ShieldAlert, Grid, Compass } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Treemap } from 'recharts';
-import { API_URL, getCurrencyColor, getTagColor } from '../types';
-import type { ParsedSnapshot, Snapshot } from '../types';
+import { getCurrencyColor, getTagColor } from '../types';
+import type { ParsedSnapshot } from '../types';
+import { useSettings } from '../hooks/useSettings';
+import { useSnapshots } from '../hooks/useSnapshots';
+import { calculateFlowDecomposition, convertAmount } from '../lib/finance';
 
 function SearchableSelect({
   value,
@@ -221,9 +224,9 @@ const OrgCustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export default function GraphsPage() {
-  const [snapshots, setSnapshots] = useState<ParsedSnapshot[]>([]);
-  const [baseCurrency, setBaseCurrency] = useState('RUB');
-  const [loading, setLoading] = useState(true);
+  const { settings } = useSettings();
+  const { snapshots, loading } = useSnapshots({ sort: 'asc' });
+  const baseCurrency = settings.baseCurrency || 'RUB';
 
   const [hiddenBalances, setHiddenBalances] = useState<Record<string, boolean>>({
     untagged: true
@@ -233,47 +236,16 @@ export default function GraphsPage() {
   const [endMonth, setEndMonth] = useState('');
   const [lastClick, setLastClick] = useState<{ key: string; time: number } | null>(null);
 
-  const convertAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number | string>) => {
-    if (fromCurrency === toCurrency) return amount;
-
-    const rateToOriginalBase = fromCurrency === 'RUB' ? 1 : Number(rates[fromCurrency] || 0);
-    const targetRateToOriginalBase = toCurrency === 'RUB' ? 1 : Number(rates[toCurrency] || 0);
-
-    if (targetRateToOriginalBase === 0) return 0;
-
-    return (amount * rateToOriginalBase) / targetRateToOriginalBase;
-  }, []);
-
-  const getAmountInBase = useCallback((amount: number, currency: string, snapshot: ParsedSnapshot) => {
+  const getAmountInBase = (amount: number, currency: string, snapshot: ParsedSnapshot) => {
     return convertAmount(amount, currency, baseCurrency, snapshot.data.rates);
-  }, [baseCurrency, convertAmount]);
+  };
 
   useEffect(() => {
-    fetch(`${API_URL}/settings`)
-      .then(res => res.json())
-      .then(resData => {
-        const settings = JSON.parse(resData.value);
-        if (settings.baseCurrency) setBaseCurrency(settings.baseCurrency);
-      });
-
-    fetch(`${API_URL}/snapshots`)
-      .then(res => res.json())
-      .then((data: Snapshot[]) => {
-        const parsed = (data || []).map(s => ({
-          ...s,
-          data: JSON.parse(s.data)
-        }));
-        parsed.sort((a, b) => a.month.localeCompare(b.month));
-        setSnapshots(parsed);
-
-        if (parsed.length > 0) {
-          setStartMonth(parsed[0].month);
-          setEndMonth(parsed[parsed.length - 1].month);
-        }
-        setLoading(false);
-      })
-      .catch(console.error);
-  }, []);
+    if (snapshots.length > 0 && !startMonth && !endMonth) {
+      setStartMonth(snapshots[0].month);
+      setEndMonth(snapshots[snapshots.length - 1].month);
+    }
+  }, [snapshots, startMonth, endMonth]);
 
   const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
   const availableMonths = snapshots.map(s => s.month);
@@ -465,40 +437,10 @@ export default function GraphsPage() {
 
   // --- 5. Decomposition Changes ---
   const decompositionData = filteredSnapshots.map((s) => {
-    let organicDelta = 0;
-    let fxImpactDelta = 0;
     const globalIdx = snapshots.findIndex(snap => snap.month === s.month);
+    const prevSnapshot = globalIdx > 0 ? snapshots[globalIdx - 1] : null;
+    const { organicDelta, fxImpactDelta } = calculateFlowDecomposition(s, prevSnapshot, baseCurrency);
 
-    if (globalIdx > 0) {
-      const prevSnapshot = snapshots[globalIdx - 1];
-      const currentCurrencies: Record<string, number> = {};
-      s.data.organizations.forEach(org => {
-        org.balances.forEach(b => { if (Number(b.amount) > 0) currentCurrencies[b.currency] = (currentCurrencies[b.currency] || 0) + Number(b.amount); });
-      });
-
-      const prevCurrencies: Record<string, number> = {};
-      prevSnapshot.data.organizations.forEach(org => {
-        org.balances.forEach(b => { if (Number(b.amount) > 0) prevCurrencies[b.currency] = (prevCurrencies[b.currency] || 0) + Number(b.amount); });
-      });
-
-      const allCurrs = Array.from(new Set([...Object.keys(currentCurrencies), ...Object.keys(prevCurrencies)]));
-
-      allCurrs.forEach(curr => {
-        const currentAmt = currentCurrencies[curr] || 0;
-        const prevAmt = prevCurrencies[curr] || 0;
-        const diff = currentAmt - prevAmt;
-
-        const currentRateInBase = convertAmount(1, curr, baseCurrency, s.data.rates);
-        const prevRateInBase = convertAmount(1, curr, baseCurrency, prevSnapshot.data.rates);
-
-        organicDelta += (diff * currentRateInBase);
-        fxImpactDelta += (prevAmt * (currentRateInBase - prevRateInBase));
-      });
-    } else {
-      s.data.organizations.forEach(org => {
-        org.balances.forEach(b => { organicDelta += getAmountInBase(Number(b.amount || 0), b.currency, s); });
-      });
-    }
     return { month: s.month, Deposits: Math.round(organicDelta), 'FX Impact': Math.round(fxImpactDelta) };
   });
 

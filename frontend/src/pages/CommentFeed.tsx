@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Calendar } from 'lucide-react';
-import { API_URL, getCurrencyColor } from '../types';
-import type { ParsedSnapshot, Snapshot } from '../types';
+import { getCurrencyColor } from '../types';
+import { useSettings } from '../hooks/useSettings';
+import { useSnapshots } from '../hooks/useSnapshots';
+import { calculateTotals, extractComments } from '../lib/finance';
 
 const getOrgColor = (orgName: string) => {
   if (!orgName) return 'hsl(0, 0%, 50%)';
@@ -14,87 +16,21 @@ const getOrgColor = (orgName: string) => {
   return `hsl(${hue}, 65%, 75%)`;
 };
 
-type CommentItem = {
-  type: 'snapshot' | 'org' | 'balance';
-  orgName?: string;
-  currency?: string;
-  text: string;
-};
-
 export default function CommentFeed() {
-  const [snapshots, setSnapshots] = useState<ParsedSnapshot[]>([]);
-  const [baseCurrency, setBaseCurrency] = useState('RUB');
-  const [loading, setLoading] = useState(true);
+  const { settings } = useSettings();
+  const { snapshots, loading } = useSnapshots({ sort: 'desc' });
+  const baseCurrency = settings.baseCurrency || 'RUB';
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetch(`${API_URL}/settings`)
-      .then(res => res.json())
-      .then(resData => {
-        const settings = JSON.parse(resData.value);
-        if (settings.baseCurrency) setBaseCurrency(settings.baseCurrency);
-      });
-
-    fetch(`${API_URL}/snapshots`)
-      .then(res => res.json())
-      .then((data: Snapshot[]) => {
-        const parsed = (data || []).map(s => ({
-          ...s,
-          data: JSON.parse(s.data)
-        }));
-        parsed.sort((a, b) => b.month.localeCompare(a.month));
-        setSnapshots(parsed);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setLoading(false);
-      });
-  }, []);
-
-  /**
-   * Cross-rate frontend converter to dynamically determine the value
-   * inside the current baseCurrency selection using local snapshot rates.
-   */
-  const convertAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number | string>) => {
-    if (fromCurrency === toCurrency) return amount;
-    
-    const rateToOriginalBase = fromCurrency === 'RUB' ? 1 : Number(rates[fromCurrency] || 0);
-    const targetRateToOriginalBase = toCurrency === 'RUB' ? 1 : Number(rates[toCurrency] || 0);
-    
-    if (targetRateToOriginalBase === 0) return 0;
-    
-    return (amount * rateToOriginalBase) / targetRateToOriginalBase;
-  }, []);
-
-  const calculateTotalBase = (snap: ParsedSnapshot) => {
-    let total = 0;
-    snap.data.organizations.forEach(org => {
-      org.balances.forEach(b => {
-        const amount = Number(b.amount || 0);
-        total += convertAmount(amount, b.currency, baseCurrency, snap.data.rates);
-      });
-    });
-    return Math.round(total);
-  };
-
-  const extractComments = (snap: ParsedSnapshot): CommentItem[] => {
-    const items: CommentItem[] = [];
-    if (snap.data.comment) {
-      items.push({ type: 'snapshot', text: snap.data.comment });
-    }
-    snap.data.organizations.forEach(org => {
-      if (org.comment) {
-        items.push({ type: 'org', orgName: org.name, text: org.comment });
-      }
-      org.balances.forEach(b => {
-        if (b.comment) {
-          items.push({ type: 'balance', orgName: org.name, currency: b.currency, text: b.comment });
-        }
-      });
-    });
-    return items;
-  };
+  const snapshotsWithComments = useMemo(() => {
+    return snapshots
+      .map(snapshot => ({
+        snapshot,
+        comments: extractComments(snapshot),
+        totalBase: Math.round(calculateTotals(snapshot, baseCurrency).totalBase)
+      }))
+      .filter(item => item.comments.length > 0);
+  }, [snapshots, baseCurrency]);
 
   if (loading) return <div>Loading timeline...</div>;
 
@@ -106,12 +42,7 @@ export default function CommentFeed() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {snapshots.map(s => {
-          const comments = extractComments(s);
-          if (comments.length === 0) return null;
-
-          const totalBase = calculateTotalBase(s);
-
+        {snapshotsWithComments.map(({ snapshot: s, comments, totalBase }) => {
           return (
             <div key={s.month} className="glass-panel" style={{ padding: '16px' }}>
               <div className="flex justify-between items-center mb-4" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
