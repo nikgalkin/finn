@@ -9,6 +9,16 @@ import { GraphsAnalyticsSections } from './components/graphs/GraphsAnalyticsSect
 import { SearchableSelect } from './components/graphs/SearchableSelect';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
+const QUICK_PERIODS = [
+  ['2', '2M'],
+  ['3', '3M'],
+  ['6', '6M'],
+  ['ytd', 'YTD'],
+  ['12', '1Y'],
+  ['24', '2Y'],
+  ['all', 'ALL']
+] as const;
+const QUICK_PERIOD_LABELS = QUICK_PERIODS.map(([, label]) => label);
 
 export default function GraphsPage() {
   const { settings } = useSettings();
@@ -20,6 +30,7 @@ export default function GraphsPage() {
   });
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
+  const [quickPeriod, setQuickPeriod] = useState('all');
   const [lastClick, setLastClick] = useState<{ key: string; time: number } | null>(null);
 
   useEffect(() => {
@@ -309,24 +320,38 @@ export default function GraphsPage() {
     return Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(value);
   };
 
-  const handleQuickPeriod = (monthsCount: number | 'all') => {
+  const handleQuickPeriod = (period: string) => {
     if (availableMonths.length === 0) return;
 
     const latestMonth = availableMonths[availableMonths.length - 1];
+    setQuickPeriod(period);
     setEndMonth(latestMonth);
 
-    if (monthsCount === 'all') {
+    if (period === 'all') {
       setStartMonth(availableMonths[0]);
       return;
     }
 
     const [year, month] = latestMonth.split('-').map(Number);
-    const date = new Date(year, month - 1 - (monthsCount - 1), 1);
-    const targetYear = date.getFullYear();
-    const targetMonth = String(date.getMonth() + 1).padStart(2, '0');
-    const computedStart = `${targetYear}-${targetMonth}`;
-
+    const date = period === 'ytd' ? new Date(year, 0, 1) : new Date(year, month - Number(period), 1);
+    const computedStart = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     setStartMonth(computedStart < availableMonths[0] ? availableMonths[0] : computedStart);
+  };
+
+  const handleManualStartChange = (value: string) => {
+    setQuickPeriod('custom');
+    setStartMonth(value);
+  };
+
+  const handleManualEndChange = (value: string) => {
+    setQuickPeriod('custom');
+    setEndMonth(value);
+  };
+
+  const selectedQuickPeriodLabel = QUICK_PERIODS.find(([value]) => value === quickPeriod)?.[1] || 'Custom';
+  const handleQuickPeriodLabelChange = (label: string) => {
+    const period = QUICK_PERIODS.find(([, periodLabel]) => periodLabel === label)?.[0];
+    if (period) handleQuickPeriod(period);
   };
 
   const isAnythingHidden = useMemo(() => {
@@ -370,30 +395,6 @@ export default function GraphsPage() {
             </button>
           )}
 
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '2px' }}>
-            <button
-              onClick={() => handleQuickPeriod(6)}
-              className="btn"
-              style={{ border: 'none', padding: '6px 12px', fontSize: '12px', background: 'transparent', borderRadius: '6px' }}
-            >
-              6M
-            </button>
-            <button
-              onClick={() => handleQuickPeriod(12)}
-              className="btn"
-              style={{ border: 'none', padding: '6px 12px', fontSize: '12px', background: 'transparent', borderRadius: '6px' }}
-            >
-              1Y
-            </button>
-            <button
-              onClick={() => handleQuickPeriod('all')}
-              className="btn"
-              style={{ border: 'none', padding: '6px 12px', fontSize: '12px', background: 'transparent', borderRadius: '6px' }}
-            >
-              ALL
-            </button>
-          </div>
-
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -407,9 +408,10 @@ export default function GraphsPage() {
             height: '38px'
           }}>
             <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Timeframe:</span>
-            <SearchableSelect value={startMonth} onChange={setStartMonth} options={availableMonths} placeholder="Start" />
+            <SearchableSelect value={selectedQuickPeriodLabel} onChange={handleQuickPeriodLabelChange} options={QUICK_PERIOD_LABELS} placeholder="Period" showSearch={false} width="84px" dropdownWidth="96px" />
+            <SearchableSelect value={startMonth} onChange={handleManualStartChange} options={availableMonths} placeholder="Start" />
             <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: 'bold' }}>➔</span>
-            <SearchableSelect value={effectiveEndMonth} onChange={setEndMonth} options={availableMonths.filter(month => !startMonth || month >= startMonth)} placeholder="End" />
+            <SearchableSelect value={effectiveEndMonth} onChange={handleManualEndChange} options={availableMonths.filter(month => !startMonth || month >= startMonth)} placeholder="End" />
           </div>
         </div>
       </div>

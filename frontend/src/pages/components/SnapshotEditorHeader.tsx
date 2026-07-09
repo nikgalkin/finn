@@ -30,6 +30,18 @@ const getCommentButtonStyle = (hasComment: boolean) => ({
   transition: 'color 0.2s'
 });
 
+const headerStyle = {
+  position: 'sticky' as const,
+  top: 0,
+  zIndex: 999,
+  background: 'transparent',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
+  padding: '16px 4px',
+  borderBottom: '1px solid var(--glass-border)',
+  margin: '0 -4px 32px'
+};
+
 export function SnapshotEditorHeader({
   title,
   durationSeconds,
@@ -38,7 +50,7 @@ export function SnapshotEditorHeader({
   onSave
 }: SnapshotEditorHeaderProps) {
   return (
-    <div className="flex justify-between items-center mb-8">
+    <div className="flex justify-between items-center" style={headerStyle}>
       <div className="flex items-center gap-4">
         <Link to="/" className="btn" style={{ padding: '8px 12px' }}>
           <ArrowLeft size={20} />

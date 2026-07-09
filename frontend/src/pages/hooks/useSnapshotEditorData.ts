@@ -15,7 +15,7 @@ export const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotD
     balances: org.balances.map(balance => ({ ...balance, comment: '', tags: balance.tags || [] }))
   }))
 });
-//
+
 const withNormalizedTags = (snapshotData: SnapshotData): SnapshotData => ({
   ...snapshotData,
   organizations: (snapshotData.organizations || []).map(org => ({ ...org, balances: org.balances.map(balance => ({ ...balance, tags: balance.tags || [] })) }))
