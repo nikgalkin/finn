@@ -1,24 +1,15 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
-import { createPortal } from 'react-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Copy, List, MessageSquare, X, Clock } from 'lucide-react';
 import { API_URL } from '../types';
 import type { SnapshotData, Balance, Snapshot, AppSettings } from '../types';
-import { MultiTagSelect } from './components/MultiTagSelect';
+import { DraftRestoreBanner } from './components/DraftRestoreBanner';
+import { OrganizationsEditor } from './components/OrganizationsEditor';
+import { PeriodRatesPanel } from './components/PeriodRatesPanel';
+import { SnapshotCommentModal } from './components/SnapshotCommentModal';
+import type { ActiveSnapshotComment } from './components/SnapshotCommentModal';
+import { SnapshotEditorHeader } from './components/SnapshotEditorHeader';
 import { useSnapshotDraft } from './hooks/useSnapshotDraft';
-
-const evaluateMath = (expr: string | number): number => {
-  if (typeof expr === 'number') return expr;
-  try {
-    const sanitized = expr.replace(/[^-()\d/*+.]/g, '');
-    if (!sanitized) return 0;
-    const result = new Function(`return ${sanitized}`)();
-    return Number.isFinite(result) ? result : 0;
-  } catch (e) {
-    return 0;
-  }
-};
 
 const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => {
   return {
@@ -55,14 +46,7 @@ export default function SnapshotEdit() {
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [activeDropdownOrgId, setActiveDropdownOrgId] = useState<string | null>(null);
 
-  const [activeComment, setActiveComment] = useState<{
-    type: 'month' | 'org' | 'balance';
-    orgId?: string;
-    index?: number;
-    text: string;
-    initialText: string;
-    title: string;
-  } | null>(null);
+  const [activeComment, setActiveComment] = useState<ActiveSnapshotComment | null>(null);
 
   const [latestSnapshot, setLatestSnapshot] = useState<SnapshotData | null>(null);
   const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [], tags: [] });
@@ -515,43 +499,16 @@ export default function SnapshotEdit() {
     setActiveComment(null);
   };
 
-  const getIconStyle = (hasComment: boolean) => ({
-    padding: '8px',
-    color: hasComment ? '#3b82f6' : 'rgba(255, 255, 255, 0.6)',
-    transition: 'color 0.2s'
-  });
-
-  const formatTimer = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-
-    const mm = String(m).padStart(2, '0');
-    const ss = String(s).padStart(2, '0');
-
-    if (h > 0) {
-      return `${String(h).padStart(2, '0')}:${mm}:${ss}`;
-    }
-    return `${mm}:${ss}`;
-  };
-
   if (loading) return <div>Loading...</div>;
 
   return (
     <div>
       {draftToRestore && (
-        <div className="glass-panel flex justify-between items-center" style={{ borderColor: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)', marginBottom: '32px' }}>
-          <div>
-            <h4 style={{ margin: 0, color: 'var(--accent)' }}>Unsaved Draft Detected</h4>
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-              We found a draft from {new Date(draftToRestore.timestamp).toLocaleString()}. Would you like to resume editing?
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn btn-primary" onClick={handleRestoreDraft}>Restore</button>
-            <button className="btn btn-danger" onClick={handleDiscardDraft}>Discard Draft</button>
-          </div>
-        </div>
+        <DraftRestoreBanner
+          draftTimestamp={draftToRestore.timestamp}
+          onRestore={handleRestoreDraft}
+          onDiscard={handleDiscardDraft}
+        />
       )}
       <style>{`
         input[type="number"]::-webkit-outer-spin-button,
@@ -564,307 +521,51 @@ export default function SnapshotEdit() {
         }
       `}</style>
 
-      {/* HEADER SECTION */}
-      <div className="flex justify-between items-center mb-8">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="btn" style={{ padding: '8px 12px' }}>
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex items-center gap-3">
-            <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0, lineHeight: 1 }}>
-              {isNew ? 'New Snapshot' : isCopy ? `New Snapshot (copy of ${sourceMonth})` : `Edit Snapshot ${month}`}
-            </h2>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.04)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '14px', fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)' }}>
-            <Clock size={16} />
-            <span>{formatTimer(durationSeconds)}</span>
-          </div>
+      <SnapshotEditorHeader
+        title={isNew ? 'New Snapshot' : isCopy ? `New Snapshot (copy of ${sourceMonth})` : `Edit Snapshot ${month}`}
+        durationSeconds={durationSeconds}
+        hasMonthlyComment={!!data.comment}
+        onOpenMonthlyComment={() => setActiveComment({ type: 'month', text: data.comment || '', initialText: data.comment || '', title: 'Monthly Note' })}
+        onSave={handleSave}
+      />
 
-          <button
-            className="btn"
-            style={{ ...getIconStyle(!!data.comment), padding: '6px' }}
-            title="Add monthly note"
-            onClick={() => setActiveComment({ type: 'month', text: data.comment || '', initialText: data.comment || '', title: 'Monthly Note' })}
-          >
-            <MessageSquare size={18} />
-          </button>
-          <button className="btn btn-primary" onClick={handleSave}>
-            <Save size={18} className="mr-2" /> Save
-          </button>
-        </div>
-      </div>
+      <PeriodRatesPanel
+        currentMonth={currentMonth}
+        rates={data.rates}
+        settings={settings}
+        fetchingRates={fetchingRates}
+        onAddRate={addRate}
+        onFetchRates={fetchRates}
+        onMonthChange={setCurrentMonth}
+        onRateChange={updateRate}
+      />
 
-      {/* OVERVIEW SECTION */}
-      <div className="glass-panel mb-8 p-6" style={{ display: 'flex', gap: '32px', alignItems: 'stretch' }}>
-        <div style={{ flex: '0 0 180px', display: 'flex', flexDirection: 'column' }}>
-          <div className="flex items-center justify-center mb-4" style={{ height: '40px' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem' }}>Period</h3>
-          </div>
-          <div style={{ flex: 0.5, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-            <div className="text-xs text-[var(--text-secondary)] mb-2 font-medium text-center">Month (YYYY-MM)</div>
-            <input
-              className="input w-full text-center"
-              value={currentMonth}
-              onChange={e => setCurrentMonth(e.target.value)}
-              placeholder="YYYY-MM"
-              style={{ textAlign: 'center' }}
-            />
-          </div>
-        </div>
+      <OrganizationsEditor
+        activeDropdownOrgId={activeDropdownOrgId}
+        isNew={isNew}
+        latestSnapshotAvailable={!!latestSnapshot}
+        organizations={data.organizations}
+        orgRefs={orgRefs}
+        settings={settings}
+        onActiveDropdownChange={setActiveDropdownOrgId}
+        onAddBalance={addBalance}
+        onAddOrganization={addOrganization}
+        onCopyFromPrevious={copyFromPrevious}
+        onFillFromSettings={fillFromSettings}
+        onOpenComment={setActiveComment}
+        onRemoveBalance={removeBalance}
+        onRemoveOrganization={removeOrganization}
+        onUpdateBalance={updateBalance}
+        onUpdateOrganizationField={updateOrganizationField}
+      />
 
-        <div style={{ width: '1px', background: 'rgba(255,255,255,0.05)' }}></div>
-
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div className="flex justify-between items-center mb-4" style={{ height: '40px' }}>
-            <h3 style={{ margin: 0, fontSize: '1rem' }}>
-              Exchange Rates (to {settings.baseCurrency || 'RUB'})
-            </h3>
-            <button className="btn" onClick={fetchRates} disabled={fetchingRates}>
-              <RefreshCw size={16} className={`mr-2 ${fetchingRates ? 'animate-spin' : ''}`} />
-              {fetchingRates ? 'Fetching...' : 'Fetch Rates'}
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', flex: 1, alignContent: 'flex-start' }}>
-            {Object.entries(data.rates).map(([curr, rate]) => (
-              <div key={curr} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-                <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium">{curr}</div>
-                <input
-                  type="number"
-                  className="input w-full"
-                  value={rate === 0 ? '' : rate}
-                  placeholder="0"
-                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                  onChange={e => {
-                    const val = e.target.value;
-                    updateRate(curr, val === '' ? 0 : (val.endsWith('.') ? val : parseFloat(val)));
-                  }}
-                />
-              </div>
-            ))}
-
-            <div style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-              <div className="text-xs mb-1 font-medium opacity-0"></div>
-              <button className="btn w-full justify-center" style={{ height: '42px' }} onClick={addRate}>
-                <Plus size={16} className="mr-1" /> Add
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ORGANIZATIONS HEADER */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <h3>Organizations & Accounts</h3>
-          {isNew && data.organizations.length === 0 && (
-            <div className="flex gap-2 ml-4">
-              {latestSnapshot && (
-                <button className="btn" onClick={copyFromPrevious}>
-                  <Copy size={14} className="mr-1" /> Copy from previous
-                </button>
-              )}
-              <button className="btn" onClick={fillFromSettings}>
-                <List size={14} className="mr-1" /> Fill from Settings
-              </button>
-            </div>
-          )}
-        </div>
-        <button className="btn btn-primary" onClick={addOrganization}>
-          <Plus size={18} className="mr-1" /> Add Organization
-        </button>
-      </div>
-
-      {/* ORGANIZATIONS GRID */}
-      <div className="grid grid-cols-2 gap-4">
-        {data.organizations.map((org) => {
-          const isCurrentOrgDropdownOpen = activeDropdownOrgId === org.id;
-
-          return (
-            <div
-              key={org.id}
-              ref={el => { orgRefs.current[org.id] = el; }}
-              className="glass-panel"
-              style={{
-                zIndex: isCurrentOrgDropdownOpen ? 10 : 1,
-                position: 'relative'
-              }}
-            >
-              <div className="flex items-center mb-6 relative">
-                <div className="flex-1 flex justify-center">
-                  <select
-                    className="input"
-                    value={org.name}
-                    onChange={e => updateOrganizationField(org.id, 'name', e.target.value)}
-                    style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
-                  >
-                    <option value="" disabled>Select Organization</option>
-                    {settings.organizations.map(o => <option key={o} value={o}>{o}</option>)}
-                    {!settings.organizations.includes(org.name) && org.name && (
-                      <option value={org.name}>{org.name}</option>
-                    )}
-                  </select>
-                </div>
-                <div className="absolute right-0 flex gap-2">
-                  <button
-                    className="btn"
-                    style={getIconStyle(!!org.comment)}
-                    title="Organization Note"
-                    onClick={() => setActiveComment({ type: 'org', orgId: org.id, text: org.comment || '', initialText: org.comment || '', title: `${org.name || 'Organization'} Note` })}
-                  >
-                    <MessageSquare size={16} />
-                  </button>
-                  <button className="btn btn-danger" onClick={() => removeOrganization(org.id)}>
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-
-              <table className="table mb-4" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '20%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Currency</th>
-                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Tags</th>
-                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Amount</th>
-                    <th style={{ width: '10%', padding: '10px 0' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {org.balances.map((b, i) => (
-                    <tr key={i}>
-                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
-                        <select
-                          className="input"
-                          value={b.currency}
-                          onChange={e => updateBalance(org.id, i, 'currency', e.target.value)}
-                          style={{ width: '100%', paddingRight: '20px' }}
-                        >
-                          <option value="" disabled>Select</option>
-                          {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
-                          {!settings.currencies.includes(b.currency) && b.currency && (
-                            <option value={b.currency}>{b.currency}</option>
-                          )}
-                        </select>
-                      </td>
-                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
-                        <MultiTagSelect
-                          selectedTags={b.tags || []}
-                          availableTags={settings.tags || []}
-                          onChange={(newTags: string[]) => updateBalance(org.id, i, 'tags', newTags)}
-                          onOpen={() => setActiveDropdownOrgId(org.id)}
-                          onClose={() => setActiveDropdownOrgId(null)}
-                        />
-                      </td>
-                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
-                        <input
-                          type="text"
-                          className="input"
-                          value={b.amount === 0 ? '' : (typeof b.amount === 'number' ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(b.amount) : b.amount)}
-                          placeholder="0"
-                          onChange={e => updateBalance(org.id, i, 'amount', e.target.value)}
-                          onBlur={e => {
-                            const calculated = evaluateMath(e.target.value);
-                            updateBalance(org.id, i, 'amount', calculated);
-                          }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              const calculated = evaluateMath((e.target as HTMLInputElement).value);
-                              updateBalance(org.id, i, 'amount', calculated);
-                              (e.target as HTMLInputElement).blur();
-                            }
-                          }}
-                        />
-                      </td>
-                      <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0, paddingTop: 4, paddingBottom: 4 }}>
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            className="btn"
-                            style={{ ...getIconStyle(!!b.comment), padding: '6px' }}
-                            title="Balance Note"
-                            onClick={() => setActiveComment({ type: 'balance', orgId: org.id, index: i, text: b.comment || '', initialText: b.comment || '', title: `${b.currency || 'Balance'} Note` })}
-                          >
-                            <MessageSquare size={14} />
-                          </button>
-                          <button className="btn" style={{ padding: '6px' }} onClick={() => removeBalance(org.id, i)}>
-                            <Trash2 size={14} className="text-danger" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              <button className="btn" onClick={() => addBalance(org.id)}>
-                <Plus size={16} className="mr-1" /> Add Balance
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* TELEPORTED COMMENT MODAL */}
-      {/* TELEPORTED COMMENT MODAL */}
-      {activeComment && createPortal(
-        <div
-          className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            // Added absolute styling override to conquer the backdrop-filter stacking context
-            zIndex: 100000
-          }}
-        >
-          <div
-            className="glass-panel flex flex-col"
-            style={{
-              width: '600px',
-              minWidth: '300px',
-              minHeight: '300px',
-              resize: 'both',
-              overflow: 'hidden',
-              padding: '24px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-              position: 'relative'
-            }}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h3 style={{ margin: 0, fontSize: '18px' }}>{activeComment.title}</h3>
-              <button className="btn" style={{ padding: '4px' }} onClick={handleCloseComment}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <textarea
-              className="input w-full flex-1"
-              style={{ resize: 'none', paddingTop: '12px', minHeight: '150px' }}
-              placeholder="Type your notes here..."
-              value={activeComment.text}
-              onChange={e => setActiveComment({ ...activeComment, text: e.target.value })}
-              onKeyDown={e => {
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  handleCloseComment();
-                } else if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  saveComment();
-                }
-              }}
-              autoFocus
-            />
-
-            <div className="flex justify-end gap-2 mt-6">
-              <button className="btn mt-2" onClick={handleCloseComment}>Cancel</button>
-              <button className="btn btn-primary mt-2" onClick={saveComment}>Save Note</button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {activeComment && (
+        <SnapshotCommentModal
+          comment={activeComment}
+          onChange={setActiveComment}
+          onClose={handleCloseComment}
+          onSave={saveComment}
+        />
       )}
     </div>
   );
