@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar } from 'lucide-react';
 import { getCurrencyColor } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
+import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { calculateTotals, extractComments } from '../lib/finance';
 
 const getOrgColor = (orgName: string) => {
@@ -21,6 +22,7 @@ export default function CommentFeed() {
   const { snapshots, loading } = useSnapshots({ sort: 'desc' });
   const baseCurrency = settings.baseCurrency || 'RUB';
   const navigate = useNavigate();
+  useEscapeToDashboard();
 
   const snapshotsWithComments = useMemo(() => {
     return snapshots

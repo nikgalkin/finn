@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { API_URL } from '../types';
 import type { Balance } from '../types';
 import { DraftRestoreBanner } from './components/DraftRestoreBanner';
+import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { OrganizationsEditor } from './components/OrganizationsEditor';
 import { PeriodRatesPanel } from './components/PeriodRatesPanel';
 import { SnapshotCommentModal } from './components/SnapshotCommentModal';
@@ -11,6 +12,7 @@ import type { ActiveSnapshotComment } from './components/SnapshotCommentModal';
 import { SnapshotEditorHeader } from './components/SnapshotEditorHeader';
 import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
+import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 
 export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
@@ -39,6 +41,7 @@ export default function SnapshotEdit() {
   const [activeComment, setActiveComment] = useState<ActiveSnapshotComment | null>(null);
 
   const [fetchingRates, setFetchingRates] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const initialDataHash = useRef<string>('');
@@ -56,6 +59,13 @@ export default function SnapshotEdit() {
     currentMonth,
     durationSeconds,
     isNew
+  });
+
+  useEscapeToDashboard({
+    blocked: !!activeComment || showLeaveConfirm,
+    confirmWhen: isDirty,
+    confirmMessage: 'This snapshot has unsaved changes. Leave without saving?',
+    onConfirmRequired: () => setShowLeaveConfirm(true)
   });
 
   useEffect(() => {
@@ -488,6 +498,14 @@ export default function SnapshotEdit() {
           onChange={setActiveComment}
           onClose={handleCloseComment}
           onSave={saveComment}
+        />
+      )}
+
+      {showLeaveConfirm && (
+        <ConfirmLeaveModal
+          message="This snapshot has unsaved changes. Leave without saving?"
+          onCancel={() => setShowLeaveConfirm(false)}
+          onConfirm={() => navigate('/')}
         />
       )}
     </div>

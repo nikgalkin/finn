@@ -16,7 +16,9 @@ function App() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || isTextInputTarget(event.target)) return;
 
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && showHotkeysHelp) {
+        event.preventDefault();
+        event.stopPropagation();
         setShowHotkeysHelp(false);
       } else if (event.code === 'KeyH') {
         event.preventDefault();
@@ -24,9 +26,9 @@ function App() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [showHotkeysHelp]);
 
   return (
     <div className="container">

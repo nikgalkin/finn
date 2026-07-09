@@ -76,6 +76,8 @@ export default function Dashboard() {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isTextInputTarget(e.target)) return;
 
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
         setActiveViewNotes(null);
         setDiffModalData(null);
         return;
@@ -111,8 +113,8 @@ export default function Dashboard() {
         navigate(routes[e.code]);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [activeViewNotes, diffModalData, latestSnapshot, navigate]);
 
   const handleDelete = (month: string) => {

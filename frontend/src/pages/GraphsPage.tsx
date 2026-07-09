@@ -4,6 +4,7 @@ import { ArrowLeft, Eye } from 'lucide-react';
 import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
+import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { calculateFlowDecomposition, convertAmount } from '../lib/finance';
 import { GraphsAnalyticsSections } from './components/graphs/GraphsAnalyticsSections';
 import { SearchableSelect } from './components/graphs/SearchableSelect';
@@ -24,6 +25,7 @@ export default function GraphsPage() {
   const { settings } = useSettings();
   const { snapshots, loading } = useSnapshots({ sort: 'asc' });
   const baseCurrency = settings.baseCurrency || 'RUB';
+  useEscapeToDashboard();
 
   const [hiddenBalances, setHiddenBalances] = useState<Record<string, boolean>>({
     untagged: true
