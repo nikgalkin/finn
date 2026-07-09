@@ -20,7 +20,7 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
         <div className="flex justify-between items-center mb-6" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '12px' }}>
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Notes for {snapshot.month}</h3>
           <div className="flex items-center gap-2">
-            <Link to={`/snapshot/${snapshot.month}`} className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '13px' }}>
+            <Link to={`/snapshot/${snapshot.month}`} className="btn btn-primary" title="Edit snapshot (E)" style={{ padding: '6px 12px', fontSize: '13px' }}>
               <Edit size={14} /> Edit
             </Link>
             <button className="btn" style={{ padding: '4px' }} onClick={onClose}>

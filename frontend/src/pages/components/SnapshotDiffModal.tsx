@@ -131,9 +131,10 @@ export function SnapshotDiffModal({
             id="onlyChangesCheckbox"
             checked={onlyChanges}
             onChange={event => onOnlyChangesChange(event.target.checked)}
+            title="Toggle changes only (D)"
             style={{ cursor: 'pointer', width: '15px', height: '16px', accentColor: 'var(--accent)' }}
           />
-          <label htmlFor="onlyChangesCheckbox" style={{ fontSize: '14px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+          <label htmlFor="onlyChangesCheckbox" title="Toggle changes only (D)" style={{ fontSize: '14px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
             Show changes only (hide zero deltas)
           </label>
         </div>

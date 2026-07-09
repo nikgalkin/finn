@@ -8,6 +8,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
+import { isTextInputTarget } from '../lib/hotkeys';
 import {
   calculateCurrencyTotals,
   calculateFlowDecomposition,
@@ -68,17 +69,51 @@ export default function Dashboard() {
   const [onlyChanges, setOnlyChanges] = useState(true);
 
   const navigate = useNavigate();
+  const latestSnapshot = useMemo(() => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null, [snapshots]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || isTextInputTarget(e.target)) return;
+
       if (e.key === 'Escape') {
         setActiveViewNotes(null);
         setDiffModalData(null);
+        return;
+      }
+
+      if (activeViewNotes) {
+        if (e.code === 'KeyE') {
+          e.preventDefault();
+          navigate(`/snapshot/${activeViewNotes.month}`);
+        }
+        return;
+      }
+
+      if (diffModalData) {
+        if (e.code === 'KeyD') {
+          e.preventDefault();
+          setOnlyChanges(prev => !prev);
+        }
+        return;
+      }
+
+      const routes: Record<string, string> = {
+        KeyN: '/snapshot/new',
+        KeyG: '/graphs',
+        KeyF: '/feed',
+        KeyS: '/settings'
+      };
+      if (e.code === 'KeyC' && latestSnapshot) {
+        e.preventDefault();
+        navigate(`/snapshot/copy/${latestSnapshot.month}`);
+      } else if (routes[e.code]) {
+        e.preventDefault();
+        navigate(routes[e.code]);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeViewNotes, diffModalData, latestSnapshot, navigate]);
 
   const handleDelete = (month: string) => {
     const confirmText = prompt(`To delete this snapshot, type its name: ${month}`);
@@ -132,7 +167,6 @@ export default function Dashboard() {
 
   const CHART_COLORS = ['#eab308', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444', '#10b981'];
 
-  const latestSnapshot = useMemo(() => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null, [snapshots]);
   const latestTotals = useMemo(
     () => latestSnapshot ? calculateTotals(latestSnapshot, baseCurrency, secondaryCurrency) : { totalBase: 0, totalSecondary: 0 },
     [latestSnapshot, baseCurrency, secondaryCurrency]
@@ -216,7 +250,7 @@ export default function Dashboard() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 style={{ fontSize: 24, fontWeight: 'bold' }}>Overview</h2>
-        <Link to="/snapshot/new" className="btn btn-primary">
+        <Link to="/snapshot/new" className="btn btn-primary" title="New Snapshot (N)">
           New Snapshot
         </Link>
       </div>
@@ -456,7 +490,7 @@ export default function Dashboard() {
                             <td className="text-right align-top" style={{ paddingTop: '16px' }}>
                               <div className="flex justify-end gap-2">
                                 <Link to={`/snapshot/${s.month}`} className="btn btn-primary" title="Edit" style={{ padding: '8px' }}><Edit size={16} /></Link>
-                                <button className="btn" title="Copy as new snapshot" style={{ padding: '8px' }} onClick={() => navigate(`/snapshot/copy/${s.month}`)}><Copy size={16} /></button>
+                                <button className="btn" title={s.month === latestSnapshot?.month ? 'Copy as new snapshot (C)' : 'Copy as new snapshot'} style={{ padding: '8px' }} onClick={() => navigate(`/snapshot/copy/${s.month}`)}><Copy size={16} /></button>
                                 <button className="btn btn-danger" title="Delete snapshot" style={{ padding: '8px' }} onClick={() => handleDelete(s.month)}><Trash2 size={16} /></button>
                               </div>
                             </td>
