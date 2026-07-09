@@ -35,7 +35,7 @@ function App() {
           <Route path="/snapshot/:month" element={<SnapshotEdit />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/feed" element={<CommentFeed />} />
-          <Route path="/graphs" element={<GraphsPage />} /> {/* Новый роут */}
+          <Route path="/graphs" element={<GraphsPage />} />
         </Routes>
       </main>
     </div>

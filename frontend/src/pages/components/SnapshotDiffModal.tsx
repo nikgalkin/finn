@@ -29,6 +29,10 @@ type SnapshotDiffModalProps = {
   onClose: () => void;
 };
 
+const overlayStyle = { position: 'fixed', inset: 0 } as const;
+const panelStyle = { width: '740px', maxWidth: '95vw', maxHeight: '85vh', overflowY: 'auto' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
+const balanceRowStyle = { display: 'grid', gridTemplateColumns: '120px 1fr 1fr 150px', alignItems: 'center', fontSize: '13px', padding: '4px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)' };
+
 const buildTreeDiffData = (
   current: ParsedSnapshot,
   previous: ParsedSnapshot | null,
@@ -101,19 +105,12 @@ export function SnapshotDiffModal({
   return createPortal(
     <div
       className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
+      style={overlayStyle}
       onClick={onClose}
     >
       <div
         className="glass-panel flex flex-col"
-        style={{
-          width: '740px',
-          maxWidth: '95vw',
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          padding: '16px 20px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-        }}
+        style={panelStyle}
         onClick={event => event.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-3" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
@@ -173,14 +170,7 @@ export function SnapshotDiffModal({
                   return (
                     <div 
                       key={balanceIndex} 
-                      style={{ 
-                        display: 'grid',
-                        gridTemplateColumns: '120px 1fr 1fr 150px',
-                        alignItems: 'center',
-                        fontSize: '13px',
-                        padding: '4px 8px',
-                        borderBottom: '1px solid rgba(255,255,255,0.02)'
-                      }}
+                      style={balanceRowStyle}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Coins size={12} style={{ opacity: 0.4 }} />

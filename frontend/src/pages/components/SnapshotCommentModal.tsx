@@ -17,32 +17,13 @@ type SnapshotCommentModalProps = {
   onSave: () => void;
 };
 
+const overlayStyle = { position: 'fixed', inset: 0, zIndex: 100000 } as const;
+const panelStyle = { width: '600px', minWidth: '300px', minHeight: '300px', resize: 'both' as const, overflow: 'hidden', padding: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', position: 'relative' as const };
+
 export function SnapshotCommentModal({ comment, onChange, onClose, onSave }: SnapshotCommentModalProps) {
   return createPortal(
-    <div
-      className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      style={{
-        position: 'fixed',
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
-        zIndex: 100000
-      }}
-    >
-      <div
-        className="glass-panel flex flex-col"
-        style={{
-          width: '600px',
-          minWidth: '300px',
-          minHeight: '300px',
-          resize: 'both',
-          overflow: 'hidden',
-          padding: '24px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-          position: 'relative'
-        }}
-      >
+    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={overlayStyle}>
+      <div className="glass-panel flex flex-col" style={panelStyle}>
         <div className="flex justify-between items-center mb-4">
           <h3 style={{ margin: 0, fontSize: '18px' }}>{comment.title}</h3>
           <button className="btn" style={{ padding: '4px' }} onClick={onClose}>

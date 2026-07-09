@@ -8,6 +8,12 @@ type SearchableSelectProps = {
   placeholder: string;
 };
 
+const triggerStyle = { padding: '4px 8px', background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' as const, height: '28px' };
+const dropdownStyle = { position: 'absolute' as const, top: '36px', left: '50%', transform: 'translateX(-50%)', zIndex: 100, width: '140px', maxHeight: '200px', overflowY: 'auto' as const, padding: '4px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)', display: 'flex', flexDirection: 'column' as const, gap: '2px' };
+const searchIconStyle = { position: 'absolute' as const, left: '8px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 };
+const searchInputStyle = { width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '4px', padding: '2px 6px 2px 22px', fontSize: '12px', color: 'var(--text-primary)', outline: 'none' };
+const optionsStyle = { overflowY: 'auto' as const, flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '2px' };
+
 export function SearchableSelect({ value, onChange, options, placeholder }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -33,19 +39,7 @@ export function SearchableSelect({ value, onChange, options, placeholder }: Sear
       <div
         onClick={() => { setIsOpen(!isOpen); setSearch(''); }}
         className="input"
-        style={{
-          padding: '4px 8px',
-          background: 'var(--bg-color)',
-          border: '1px solid var(--glass-border)',
-          borderRadius: '6px',
-          fontSize: '13px',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          userSelect: 'none',
-          height: '28px'
-        }}
+        style={triggerStyle}
       >
         <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1, textAlign: 'center' }}>
           {value || placeholder}
@@ -56,44 +50,21 @@ export function SearchableSelect({ value, onChange, options, placeholder }: Sear
       {isOpen && (
         <div
           className="glass-panel"
-          style={{
-            position: 'absolute',
-            top: '36px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 100,
-            width: '140px',
-            maxHeight: '200px',
-            overflowY: 'auto',
-            padding: '4px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2px'
-          }}
+          style={dropdownStyle}
         >
           <div style={{ position: 'relative', padding: '2px', marginBottom: '4px' }}>
-            <Search size={12} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
+            <Search size={12} style={searchIconStyle} />
             <input
               type="text"
               value={search}
               onChange={event => setSearch(event.target.value)}
               placeholder="Search..."
               autoFocus
-              style={{
-                width: '100%',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid var(--glass-border)',
-                borderRadius: '4px',
-                padding: '2px 6px 2px 22px',
-                fontSize: '12px',
-                color: 'var(--text-primary)',
-                outline: 'none'
-              }}
+              style={searchInputStyle}
             />
           </div>
 
-          <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <div style={optionsStyle}>
             {filteredOptions.map(option => (
               <div
                 key={option}

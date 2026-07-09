@@ -43,6 +43,12 @@ const getIconStyle = (hasComment: boolean) => ({
   transition: 'color 0.2s'
 });
 
+const amountFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
+const cellStyle = { padding: '4px 6px 4px 0' };
+const headerStyle = { padding: '10px 5px', textTransform: 'uppercase' as const, fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' as const };
+const tableHeaders = [['20%', 'Currency'], ['35%', 'Tags'], ['35%', 'Amount'], ['10%', '']] as const;
+const formatAmount = (amount: Balance['amount']) => amount === 0 ? '' : typeof amount === 'number' ? amountFormatter.format(amount) : amount;
+
 export function OrganizationsEditor({
   activeDropdownOrgId,
   isNew,
@@ -131,16 +137,15 @@ export function OrganizationsEditor({
               <table className="table mb-4" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th style={{ width: '20%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Currency</th>
-                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Tags</th>
-                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Amount</th>
-                    <th style={{ width: '10%', padding: '10px 0' }}></th>
+                    {tableHeaders.map(([width, label]) => (
+                      <th key={label || 'actions'} style={{ ...headerStyle, width, padding: label ? headerStyle.padding : '10px 0' }}>{label}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {org.balances.map((balance, index) => (
                     <tr key={index}>
-                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                      <td style={cellStyle}>
                         <select
                           className="input"
                           value={balance.currency}
@@ -154,7 +159,7 @@ export function OrganizationsEditor({
                           )}
                         </select>
                       </td>
-                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                      <td style={cellStyle}>
                         <MultiTagSelect
                           selectedTags={balance.tags || []}
                           availableTags={settings.tags || []}
@@ -163,11 +168,11 @@ export function OrganizationsEditor({
                           onClose={() => onActiveDropdownChange(null)}
                         />
                       </td>
-                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                      <td style={cellStyle}>
                         <input
                           type="text"
                           className="input"
-                          value={balance.amount === 0 ? '' : (typeof balance.amount === 'number' ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(balance.amount) : balance.amount)}
+                          value={formatAmount(balance.amount)}
                           placeholder="0"
                           onChange={event => onUpdateBalance(org.id, index, 'amount', event.target.value)}
                           onBlur={event => {
@@ -183,7 +188,7 @@ export function OrganizationsEditor({
                           }}
                         />
                       </td>
-                      <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0, paddingTop: 4, paddingBottom: 4 }}>
+                      <td className="text-right" style={{ ...cellStyle, paddingRight: 0 }}>
                         <div className="flex justify-end gap-1.5">
                           <button
                             className="btn"

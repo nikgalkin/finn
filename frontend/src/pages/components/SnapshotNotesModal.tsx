@@ -9,10 +9,14 @@ type SnapshotNotesModalProps = {
   onClose: () => void;
 };
 
+const overlayStyle = { position: 'fixed', inset: 0 } as const;
+const panelStyle = { width: '500px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' as const, padding: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
+const noteCardStyle = { padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' };
+
 export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProps) {
   return createPortal(
-    <div className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }} onClick={onClose}>
-      <div className="glass-panel flex flex-col" style={{ width: '500px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto', padding: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={overlayStyle} onClick={onClose}>
+      <div className="glass-panel flex flex-col" style={panelStyle} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '12px' }}>
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Notes for {snapshot.month}</h3>
           <div className="flex items-center gap-2">
@@ -27,7 +31,7 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {snapshot.data.comment && (
-            <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+            <div style={noteCardStyle}>
               <div style={{ color: '#10b981', fontWeight: 600, fontSize: '0.9em', marginBottom: '6px', letterSpacing: '0.05em' }}>SNAPSHOT NOTE</div>
               <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95em' }}>{snapshot.data.comment}</div>
             </div>
@@ -38,7 +42,7 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
             if (!org.comment && balancesWithComments.length === 0) return null;
 
             return (
-              <div key={org.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+              <div key={org.id} style={noteCardStyle}>
                 <div style={{ color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '1.05em', marginBottom: '6px' }}>{org.name}</div>
                 {org.comment && (
                   <div style={{ fontStyle: 'italic', color: 'var(--text-secondary)', marginBottom: '8px', paddingLeft: '4px' }}>
