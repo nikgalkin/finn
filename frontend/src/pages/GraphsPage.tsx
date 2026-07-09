@@ -1,19 +1,19 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, LineChart as LineChartIcon, Landmark, Layers, Coins, Clock, BarChart3, ArrowLeftRight, Eye, ChevronDown, Search, ShieldAlert, Grid, Compass } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Treemap } from 'recharts';
-import { API_URL, getCurrencyColor } from '../types';
+import { API_URL, getCurrencyColor, getTagColor } from '../types';
 import type { ParsedSnapshot, Snapshot } from '../types';
 
-function SearchableSelect({ 
-  value, 
-  onChange, 
-  options, 
-  placeholder 
-}: { 
-  value: string; 
-  onChange: (val: string) => void; 
-  options: string[]; 
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
   placeholder: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,25 +30,25 @@ function SearchableSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredOptions = options.filter(opt => 
+  const filteredOptions = options.filter(opt =>
     opt.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100px' }}>
-      <div 
+      <div
         onClick={() => { setIsOpen(!isOpen); setSearch(''); }}
         className="input"
-        style={{ 
-          padding: '4px 8px', 
-          background: 'var(--bg-color)', 
-          border: '1px solid var(--glass-border)', 
-          borderRadius: '6px', 
-          fontSize: '13px', 
+        style={{
+          padding: '4px 8px',
+          background: 'var(--bg-color)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '6px',
+          fontSize: '13px',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'between',
+          justifyContent: 'space-between',
           userSelect: 'none',
           height: '28px'
         }}
@@ -60,16 +60,16 @@ function SearchableSelect({
       </div>
 
       {isOpen && (
-        <div 
+        <div
           className="glass-panel"
-          style={{ 
-            position: 'absolute', 
-            top: '32px', 
+          style={{
+            position: 'absolute',
+            top: '36px',
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 100, 
-            width: '140px', 
-            maxHeight: '200px', 
+            zIndex: 100,
+            width: '140px',
+            maxHeight: '200px',
             overflowY: 'auto',
             padding: '4px',
             boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
@@ -80,7 +80,7 @@ function SearchableSelect({
         >
           <div style={{ position: 'relative', padding: '2px', marginBottom: '4px' }}>
             <Search size={12} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
-            <input 
+            <input
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -181,8 +181,8 @@ const OrgCustomTooltip = ({ active, payload, label }: any) => {
   const sortedPayload = [...payload].sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
 
   return (
-    <div 
-      className="custom-tooltip shadow-2xl" 
+    <div
+      className="custom-tooltip shadow-2xl"
       style={{
         backgroundColor: 'var(--bg-color)',
         border: '1px solid var(--glass-border)',
@@ -224,23 +224,23 @@ export default function GraphsPage() {
   const [snapshots, setSnapshots] = useState<ParsedSnapshot[]>([]);
   const [baseCurrency, setBaseCurrency] = useState('RUB');
   const [loading, setLoading] = useState(true);
-  const [hiddenBalances, setHiddenBalances] = useState<Record<string, boolean>>({});
+
+  const [hiddenBalances, setHiddenBalances] = useState<Record<string, boolean>>({
+    untagged: true
+  });
 
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
   const [lastClick, setLastClick] = useState<{ key: string; time: number } | null>(null);
 
-  /**
-   * Front-end currency cross-rate conversion function.
-   */
   const convertAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number | string>) => {
     if (fromCurrency === toCurrency) return amount;
-    
+
     const rateToOriginalBase = fromCurrency === 'RUB' ? 1 : Number(rates[fromCurrency] || 0);
     const targetRateToOriginalBase = toCurrency === 'RUB' ? 1 : Number(rates[toCurrency] || 0);
-    
+
     if (targetRateToOriginalBase === 0) return 0;
-    
+
     return (amount * rateToOriginalBase) / targetRateToOriginalBase;
   }, []);
 
@@ -265,7 +265,7 @@ export default function GraphsPage() {
         }));
         parsed.sort((a, b) => a.month.localeCompare(b.month));
         setSnapshots(parsed);
-        
+
         if (parsed.length > 0) {
           setStartMonth(parsed[0].month);
           setEndMonth(parsed[parsed.length - 1].month);
@@ -285,7 +285,7 @@ export default function GraphsPage() {
     return startOk && endOk;
   });
 
-  // --- 1. Exchange Rates History (Normalized relative to the newly selected base currency) ---
+  // --- 1. Exchange Rates History (Smart Cross-Rate Formatting adaptive to baseCurrency) ---
   const allCurrenciesSet = new Set<string>();
   filteredSnapshots.forEach(s => {
     if (s.data.rates) {
@@ -294,17 +294,21 @@ export default function GraphsPage() {
       });
     }
   });
-  // Add original benchmark if it's not the current base
-  if (baseCurrency !== 'RUB') allCurrenciesSet.add('RUB');
   const activeCurrencies = Array.from(allCurrenciesSet);
 
   const currencyRatesData = filteredSnapshots.map(s => {
     const point: any = { month: s.month };
     activeCurrencies.forEach(c => {
-      // Re-index rate display to match currently configured base asset framework
-      const invertedRate = convertAmount(1, baseCurrency, c, s.data.rates);
-      if (invertedRate > 0) {
-        point[c] = invertedRate;
+      const directRate = convertAmount(1, c, baseCurrency, s.data.rates);
+      if (directRate > 0) {
+        if (directRate < 1.0) {
+          // Adaptive conversion framework for low nominal weights relative to custom base asset
+          point[c] = parseFloat((1 / directRate).toFixed(2));
+          point[`${c}_isInverted`] = true;
+        } else {
+          point[c] = parseFloat(directRate.toFixed(4));
+          point[`${c}_isInverted`] = false;
+        }
       }
     });
     return point;
@@ -350,6 +354,42 @@ export default function GraphsPage() {
     allUsedCurrencies.forEach(c => point[c] = 0);
     s.data.organizations.forEach(org => {
       org.balances.forEach(b => { point[b.currency] += Math.round(getAmountInBase(Number(b.amount || 0), b.currency, s)); });
+    });
+    return point;
+  });
+
+  // --- 4.5. Dynamic Segmentation by Purpose & Asset Tags ---
+  const allTagsSet = new Set<string>();
+  filteredSnapshots.forEach(s => {
+    s.data.organizations.forEach(org => {
+      org.balances.forEach(b => {
+        if (b.tags && b.tags.length > 0) {
+          b.tags.forEach(t => allTagsSet.add(t));
+        } else {
+          allTagsSet.add('untagged');
+        }
+      });
+    });
+  });
+  const allUsedTags = Array.from(allTagsSet);
+
+  const tagDistributionData = filteredSnapshots.map(s => {
+    const point: any = { month: s.month };
+    allUsedTags.forEach(t => point[t] = 0);
+
+    s.data.organizations.forEach(org => {
+      org.balances.forEach(b => {
+        const amountInBase = Math.round(getAmountInBase(Number(b.amount || 0), b.currency, s));
+        const currentTags = b.tags;
+
+        if (currentTags && currentTags.length > 0) {
+          currentTags.forEach(t => {
+            point[t] += Math.round(amountInBase / currentTags.length);
+          });
+        } else {
+          point['untagged'] += amountInBase;
+        }
+      });
     });
     return point;
   });
@@ -447,7 +487,7 @@ export default function GraphsPage() {
         const currentAmt = currentCurrencies[curr] || 0;
         const prevAmt = prevCurrencies[curr] || 0;
         const diff = currentAmt - prevAmt;
-        
+
         const currentRateInBase = convertAmount(1, curr, baseCurrency, s.data.rates);
         const prevRateInBase = convertAmount(1, curr, baseCurrency, prevSnapshot.data.rates);
 
@@ -507,17 +547,47 @@ export default function GraphsPage() {
     return Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(val);
   };
 
+  const handleQuickPeriod = (monthsCount: number | 'all') => {
+    if (availableMonths.length === 0) return;
+
+    const latestMonth = availableMonths[availableMonths.length - 1];
+    setEndMonth(latestMonth);
+
+    if (monthsCount === 'all') {
+      setStartMonth(availableMonths[0]);
+    } else {
+      const [year, month] = latestMonth.split('-').map(Number);
+      const date = new Date(year, month - 1 - (monthsCount - 1), 1);
+
+      const targetYear = date.getFullYear();
+      const targetMonth = String(date.getMonth() + 1).padStart(2, '0');
+      const computedStart = `${targetYear}-${targetMonth}`;
+
+      if (computedStart < availableMonths[0]) {
+        setStartMonth(availableMonths[0]);
+      } else {
+        setStartMonth(computedStart);
+      }
+    }
+  };
+
+  const isAnythingHidden = useMemo(() => {
+    return Object.entries(hiddenBalances).some(([key, value]) => {
+      if (key === 'untagged') return false;
+      return value === true;
+    });
+  }, [hiddenBalances]);
+
   const LEGEND_STYLE = { cursor: 'pointer', fontSize: '12px', userSelect: 'none' as const };
-  const isAnythingHidden = Object.values(hiddenBalances).some(v => v === true);
 
   if (loading) return <div>Analyzing datasets & generating visuals...</div>;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
-      <div 
-        className="flex justify-between items-center" 
-        style={{ 
+
+      <div
+        className="flex justify-between items-center"
+        style={{
           position: 'sticky',
           top: 0,
           zIndex: 999,
@@ -533,19 +603,56 @@ export default function GraphsPage() {
           <Link to="/" className="btn"><ArrowLeft size={18} /> Dashboard</Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Advanced Asset Analytics</h2>
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {isAnythingHidden && (
-            <button 
-              onClick={() => setHiddenBalances({})} 
+            <button
+              onClick={() => setHiddenBalances({ untagged: true })}
               className="btn flex items-center gap-1.5"
-              style={{ padding: '4px 10px', fontSize: '13px', height: '28px', borderColor: 'var(--accent)', color: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)' }}
+              style={{ padding: '8px 16px', fontSize: '14px', borderColor: 'var(--accent)', color: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)' }}
             >
               <Eye size={14} /> Show Hidden
             </button>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '4px 10px', borderRadius: '10px', border: '1px solid var(--glass-border)', fontSize: '13px', height: '28px' }}>
+          {/* Quick Relative Time Pickers */}
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '2px' }}>
+            <button
+              onClick={() => handleQuickPeriod(6)}
+              className="btn"
+              style={{ border: 'none', padding: '6px 12px', fontSize: '12px', background: 'transparent', borderRadius: '6px' }}
+            >
+              6M
+            </button>
+            <button
+              onClick={() => handleQuickPeriod(12)}
+              className="btn"
+              style={{ border: 'none', padding: '6px 12px', fontSize: '12px', background: 'transparent', borderRadius: '6px' }}
+            >
+              1Y
+            </button>
+            <button
+              onClick={() => handleQuickPeriod('all')}
+              className="btn"
+              style={{ border: 'none', padding: '6px 12px', fontSize: '12px', background: 'transparent', borderRadius: '6px' }}
+            >
+              ALL
+            </button>
+          </div>
+
+          {/* Absolute Timeframe Picker Container */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(255,255,255,0.03)',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: '1px solid var(--glass-border)',
+            fontSize: '14px',
+            boxSizing: 'border-box',
+            height: '38px'
+          }}>
             <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Timeframe:</span>
             <SearchableSelect value={startMonth} onChange={setStartMonth} options={availableMonths} placeholder="Start" />
             <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: 'bold' }}>➔</span>
@@ -556,13 +663,13 @@ export default function GraphsPage() {
 
       <div>
         <h3 className="mb-4" style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' }}>
-          HISTORICAL FINANCIAL METRICS 
+          HISTORICAL FINANCIAL METRICS
           <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: 400, marginLeft: '8px' }}>
             (Double Click to isolate metrics / Single Click to toggle)
           </span>
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-          
+
           <div className="glass-panel" style={{ height: '350px', display: 'flex', flexDirection: 'column' }}>
             <h4 className="flex items-center gap-2 mb-4" style={{ margin: 0, fontSize: '14px' }}><Coins size={16} className="text-secondary" /> Absolute Currency Balances Dynamics</h4>
             <ResponsiveContainer width="100%" height="100%">
@@ -585,12 +692,45 @@ export default function GraphsPage() {
               <LineChart data={currencyRatesData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
-                <YAxis stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
-                <Tooltip contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }} formatter={(val) => Number(val).toFixed(4)} />
+
+                {/* Left Y-Axis for standard fiat/crypto weights (USD, EUR, BTC) */}
+                <YAxis yAxisId="left" stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
+
+                {/* Right Y-Axis strictly for high nominal scales like UZS with a muted, refined tone */}
+                <YAxis yAxisId="right" orientation="right" stroke="#64748b" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
+
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }}
+                  formatter={(value, name, props) => {
+                    const isInverted = props.payload[`${name}_isInverted`];
+                    const num = Number(value).toLocaleString('en-US');
+                    if (isInverted) {
+                      return [`${num} per ${baseCurrency}`, name];
+                    }
+                    return [`${num} ${baseCurrency}`, name];
+                  }}
+                />
                 <Legend onClick={(e) => handleLegendClickSmart(e, activeCurrencies)} wrapperStyle={LEGEND_STYLE} />
-                {activeCurrencies.map((c, idx) => (
-                  <Line key={c} type="monotone" dataKey={c} stroke={c === 'RUB' ? '#94a3b8' : CHART_COLORS[idx % CHART_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} hide={hiddenBalances[c]} />
-                ))}
+
+                {activeCurrencies.map((c) => {
+                  const samplePoint = currencyRatesData[0];
+                  const isHighNominal = samplePoint && samplePoint[`${c}_isInverted`] === true;
+                  const yAxisId = isHighNominal ? 'right' : 'left';
+                  const color = getCurrencyColor(c);
+
+                  return (
+                    <Line
+                      key={c}
+                      yAxisId={yAxisId}
+                      type="monotone"
+                      dataKey={c}
+                      stroke={color}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      hide={hiddenBalances[c]}
+                    />
+                  );
+                })}
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -638,6 +778,38 @@ export default function GraphsPage() {
                 {allUsedCurrencies.map((currency) => (
                   <Bar key={currency} dataKey={currency} stackId="a" fill={getCurrencyColor(currency)} hide={hiddenBalances[currency]} />
                 ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Asset Structure Breakdown by Tags */}
+          <div className="glass-panel" style={{ height: '350px', display: 'flex', flexDirection: 'column', gridColumn: 'span 2' }}>
+            <h4 className="flex items-center gap-2 mb-4" style={{ margin: 0, fontSize: '14px' }}>
+              <Layers size={16} style={{ color: 'var(--accent)' }} /> Asset Structure Breakdown by Tags ({baseCurrency})
+            </h4>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={tagDistributionData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
+                <YAxis stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }}
+                  formatter={(val) => Math.round(Number(val)).toLocaleString('en-US')}
+                />
+                <Legend onClick={(e) => handleLegendClickSmart(e, allUsedTags)} wrapperStyle={LEGEND_STYLE} />
+                {allUsedTags.map((tag) => {
+                  const color = tag === 'untagged' ? '#475569' : getTagColor(tag);
+
+                  return (
+                    <Bar
+                      key={tag}
+                      dataKey={tag}
+                      stackId="tags_stack"
+                      fill={color}
+                      hide={hiddenBalances[tag]}
+                    />
+                  );
+                })}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -690,7 +862,7 @@ export default function GraphsPage() {
           HIGH-LEVEL EXECUTIVE INTEL (INSTANT FROM: {latestSnapshot?.month})
         </h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '12px' }}>
-          
+
           <div className="glass-panel" style={{ height: '380px', display: 'flex', flexDirection: 'column' }}>
             <h4 className="flex items-center gap-2 mb-4" style={{ margin: 0, fontSize: '14px' }}><Grid size={16} style={{ color: 'var(--accent)' }} /> Capital Allocation Heatmap (Net Worth Treemap)</h4>
             <ResponsiveContainer width="100%" height="100%">

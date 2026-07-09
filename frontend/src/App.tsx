@@ -14,8 +14,7 @@ function App() {
           <Wallet size={32} color="var(--accent)" />
           <h1 className="app-title">Finn Tracker</h1>
         </Link>
-        <div className="flex items-center gap-4">
-          {/* Кнопка перехода на страницу графиков */}
+        <div className="flex items-center gap-2">
           <Link to="/graphs" className="btn" style={{ color: 'var(--text-secondary)' }}>
             <BarChart3 size={18} /> Graphs
           </Link>
@@ -27,7 +26,6 @@ function App() {
           </Link>
         </div>
       </header>
-      
       <main>
         <Routes>
           <Route path="/" element={<Dashboard />} />
