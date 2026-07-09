@@ -5,7 +5,7 @@ import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
-import { calculateFlowDecomposition, convertAmount } from '../lib/finance';
+import { calculateFlowDecomposition, calculateTotals, convertAmount } from '../lib/finance';
 import { GraphsAnalyticsSections } from './components/graphs/GraphsAnalyticsSections';
 import { SearchableSelect } from './components/graphs/SearchableSelect';
 
@@ -20,6 +20,11 @@ const QUICK_PERIODS = [
   ['all', 'ALL']
 ] as const;
 const QUICK_PERIOD_LABELS = QUICK_PERIODS.map(([, label]) => label);
+
+const getSignedPercent = (current: number, previous: number) => {
+  if (previous === 0) return 0;
+  return ((current - previous) / previous) * 100;
+};
 
 export default function GraphsPage() {
   const { settings } = useSettings();
@@ -53,6 +58,10 @@ export default function GraphsPage() {
 
   const getAmountInBase = (amount: number, currency: string, snapshot: ParsedSnapshot) => {
     return convertAmount(amount, currency, baseCurrency, snapshot.data.rates);
+  };
+
+  const getSnapshotTotalBase = (snapshot: ParsedSnapshot) => {
+    return calculateTotals(snapshot, baseCurrency).totalBase;
   };
 
   const activeCurrencies = useMemo(() => {
@@ -103,21 +112,6 @@ export default function GraphsPage() {
 
     return Array.from(currencies);
   }, [filteredSnapshots]);
-
-  const usedCurrenciesData = filteredSnapshots.map(snapshot => {
-    const point: any = { month: snapshot.month };
-    allUsedCurrencies.forEach(currency => point[currency] = 0);
-
-    snapshot.data.organizations.forEach(org => {
-      org.balances.forEach(balance => {
-        if (balance.currency && Number(balance.amount) > 0) {
-          point[balance.currency] += Math.round(Number(balance.amount));
-        }
-      });
-    });
-
-    return point;
-  });
 
   const allOrganizations = useMemo(() => {
     const organizations = new Set<string>();
@@ -196,6 +190,20 @@ export default function GraphsPage() {
   });
 
   const latestSnapshot = filteredSnapshots[filteredSnapshots.length - 1];
+  const firstSnapshot = filteredSnapshots[0];
+
+  const netWorthData = filteredSnapshots.map(snapshot => {
+    const globalIndex = snapshots.findIndex(s => s.month === snapshot.month);
+    const previousSnapshot = globalIndex > 0 ? snapshots[globalIndex - 1] : null;
+    const total = getSnapshotTotalBase(snapshot);
+    const previousTotal = previousSnapshot ? getSnapshotTotalBase(previousSnapshot) : total;
+
+    return {
+      month: snapshot.month,
+      total: Math.round(total),
+      delta: Math.round(total - previousTotal)
+    };
+  });
 
   const treemapData: any[] = [];
   if (latestSnapshot) {
@@ -230,46 +238,135 @@ export default function GraphsPage() {
     });
   }
 
-  const radarData: any[] = [];
-  if (latestSnapshot) {
-    let totalNetWorth = 0;
-    let cryptoValue = 0;
-    let fiatStableValue = 0;
-    let localFiatValue = 0;
-
-    latestSnapshot.data.organizations.forEach(org => {
-      org.balances.forEach(balance => {
-        const value = getAmountInBase(Number(balance.amount || 0), balance.currency, latestSnapshot);
-        totalNetWorth += value;
-
-        if (['USDT', 'BTC', 'ETH', 'USDC'].includes(balance.currency.toUpperCase())) cryptoValue += value;
-        else if (['USD', 'EUR', 'AED'].includes(balance.currency.toUpperCase())) fiatStableValue += value;
-        else localFiatValue += value;
-      });
-    });
-
-    if (totalNetWorth > 0) {
-      const cryptoPct = cryptoValue / totalNetWorth;
-      const stablePct = fiatStableValue / totalNetWorth;
-      const localPct = localFiatValue / totalNetWorth;
-
-      radarData.push(
-        { subject: 'Liquidity', A: Math.round((cryptoPct * 0.9 + stablePct * 0.8 + localPct * 0.95) * 100), fullMark: 100 },
-        { subject: 'Inflation Protect', A: Math.round((cryptoPct * 0.95 + stablePct * 0.6 + localPct * 0.15) * 100), fullMark: 100 },
-        { subject: 'Asset Stability', A: Math.round((stablePct * 0.95 + localPct * 0.5 + (1 - cryptoPct) * 0.4) * 100), fullMark: 100 },
-        { subject: 'Yield Potential', A: Math.round((cryptoPct * 0.85 + localPct * 0.4 + stablePct * 0.2) * 100), fullMark: 100 },
-        { subject: 'Infra Safety', A: Math.round((cryptoPct * 0.9 + stablePct * 0.3 + localPct * 0.8) * 100), fullMark: 100 }
-      );
-    }
-  }
-
   const decompositionData = filteredSnapshots.map(snapshot => {
     const globalIndex = snapshots.findIndex(s => s.month === snapshot.month);
     const previousSnapshot = globalIndex > 0 ? snapshots[globalIndex - 1] : null;
-    const { organicDelta, fxImpactDelta } = calculateFlowDecomposition(snapshot, previousSnapshot, baseCurrency);
+    const { organicDelta, fxImpactDelta } = previousSnapshot
+      ? calculateFlowDecomposition(snapshot, previousSnapshot, baseCurrency)
+      : { organicDelta: 0, fxImpactDelta: 0 };
 
     return { month: snapshot.month, Deposits: Math.round(organicDelta), 'FX Impact': Math.round(fxImpactDelta) };
   });
+
+  const buildOrgValues = (snapshot?: ParsedSnapshot) => {
+    const values: Record<string, number> = {};
+    if (!snapshot) return values;
+
+    snapshot.data.organizations.forEach(org => {
+      if (!org.name) return;
+      values[org.name] = org.balances.reduce((total, balance) => {
+        return total + getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot);
+      }, 0);
+    });
+
+    return values;
+  };
+
+  const buildCurrencyValues = (snapshot?: ParsedSnapshot) => {
+    const values: Record<string, number> = {};
+    if (!snapshot) return values;
+
+    snapshot.data.organizations.forEach(org => {
+      org.balances.forEach(balance => {
+        if (!balance.currency) return;
+        values[balance.currency] = (values[balance.currency] || 0) + getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot);
+      });
+    });
+
+    return values;
+  };
+
+  const buildTagValues = (snapshot?: ParsedSnapshot) => {
+    const values: Record<string, number> = {};
+    if (!snapshot) return values;
+
+    snapshot.data.organizations.forEach(org => {
+      org.balances.forEach(balance => {
+        const amountInBase = getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot);
+        const currentTags = balance.tags && balance.tags.length > 0 ? balance.tags : ['untagged'];
+        currentTags.forEach(tag => {
+          values[tag] = (values[tag] || 0) + (amountInBase / currentTags.length);
+        });
+      });
+    });
+
+    return values;
+  };
+
+  const buildMovers = (startValues: Record<string, number>, endValues: Record<string, number>) => {
+    return Array.from(new Set([...Object.keys(startValues), ...Object.keys(endValues)]))
+      .map(name => {
+        const start = startValues[name] || 0;
+        const end = endValues[name] || 0;
+        return {
+          name,
+          value: Math.round(end),
+          delta: Math.round(end - start),
+          percent: getSignedPercent(end, start)
+        };
+      })
+      .filter(item => Math.abs(item.delta) >= 1 || item.value > 0)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+      .slice(0, 6);
+  };
+
+  const latestOrgValues = buildOrgValues(latestSnapshot);
+  const latestCurrencyValues = buildCurrencyValues(latestSnapshot);
+  const latestTagValues = buildTagValues(latestSnapshot);
+  const topOrganizationMovers = buildMovers(buildOrgValues(firstSnapshot), latestOrgValues);
+  const topCurrencyMovers = buildMovers(buildCurrencyValues(firstSnapshot), latestCurrencyValues);
+  const topTagMovers = buildMovers(buildTagValues(firstSnapshot), latestTagValues);
+
+  const currentTotal = latestSnapshot ? getSnapshotTotalBase(latestSnapshot) : 0;
+  const startTotal = firstSnapshot ? getSnapshotTotalBase(firstSnapshot) : 0;
+  const periodDelta = latestSnapshot && firstSnapshot ? currentTotal - startTotal : 0;
+  const periodOrganicDelta = decompositionData.reduce((total, point) => total + Number(point.Deposits || 0), 0);
+  const periodFxImpactDelta = decompositionData.reduce((total, point) => total + Number(point['FX Impact'] || 0), 0);
+  const summaryStats = [
+    {
+      label: 'Net worth',
+      value: Math.round(currentTotal),
+      suffix: baseCurrency,
+      help: `Total value of the latest selected snapshot. Every balance is converted to ${baseCurrency} using the exchange rates stored in that snapshot.`
+    },
+    {
+      label: 'Period change',
+      value: Math.round(periodDelta),
+      suffix: baseCurrency,
+      percent: getSignedPercent(currentTotal, startTotal),
+      help: `Difference between the latest and first snapshots in the selected range. Percent is this change divided by the first snapshot total.`
+    },
+    {
+      label: 'Organic flow',
+      value: Math.round(periodOrganicDelta),
+      suffix: baseCurrency,
+      help: `Sum of balance amount changes across the selected range, valued in ${baseCurrency} at each current snapshot's rates. This is deposits, withdrawals, and manual balance changes.`
+    },
+    {
+      label: 'FX impact',
+      value: Math.round(periodFxImpactDelta),
+      suffix: baseCurrency,
+      help: `Estimated change caused by exchange-rate movement. Previous currency balances are revalued with current rates and compared with their previous-rate value.`
+    }
+  ];
+
+  const buildConcentrationStat = (label: string, values: Record<string, number>) => {
+    const top = Object.entries(values).sort((a, b) => b[1] - a[1])[0];
+    const total = Object.values(values).reduce((sum, value) => sum + value, 0);
+
+    return {
+      label,
+      name: top?.[0] || 'N/A',
+      value: Math.round(top?.[1] || 0),
+      percent: total > 0 ? ((top?.[1] || 0) / total) * 100 : 0
+    };
+  };
+
+  const concentrationStats = [
+    buildConcentrationStat('Top organization', latestOrgValues),
+    buildConcentrationStat('Top currency', latestCurrencyValues),
+    buildConcentrationStat('Top tag', latestTagValues)
+  ];
 
   const uxMetricsData = filteredSnapshots.map(snapshot => {
     const totalAccountsCount = snapshot.data.organizations.reduce((total, org) => total + org.balances.length, 0);
@@ -383,7 +480,7 @@ export default function GraphsPage() {
       >
         <div className="flex items-center gap-4">
           <Link to="/" title="Back to dashboard" className="btn"><ArrowLeft size={18} /></Link>
-          <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Advanced Asset Analytics</h2>
+          <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -425,17 +522,21 @@ export default function GraphsPage() {
         allUsedCurrencies={allUsedCurrencies}
         allUsedTags={allUsedTags}
         chartColors={CHART_COLORS}
+        concentrationStats={concentrationStats}
         currencyDistributionData={currencyDistributionData}
         currencyRatesData={currencyRatesData}
         decompositionData={decompositionData}
         flowChartData={flowChartData}
         hiddenBalances={hiddenBalances}
         latestSnapshotMonth={latestSnapshot?.month}
+        netWorthData={netWorthData}
         orgTrendData={orgTrendData}
-        radarData={radarData}
+        summaryStats={summaryStats}
         tagDistributionData={tagDistributionData}
+        topCurrencyMovers={topCurrencyMovers}
+        topOrganizationMovers={topOrganizationMovers}
+        topTagMovers={topTagMovers}
         treemapData={treemapData}
-        usedCurrenciesData={usedCurrenciesData}
         uxMetricsData={uxMetricsData}
         formatCompact={formatCompact}
         formatFriendlyTime={formatFriendlyTime}
