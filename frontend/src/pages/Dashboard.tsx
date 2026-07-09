@@ -126,20 +126,14 @@ export default function Dashboard() {
     }
   };
 
-  /**
-   * Universal front-end converter utilizing snapshot rates.
-   * Converts any amount to target currency via cross-rate logic.
-   */
   const convertAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number | string>) => {
     if (fromCurrency === toCurrency) return amount;
     
-    // Get absolute rate relative to the original snapshot reference base currency
     const rateToOriginalBase = fromCurrency === 'RUB' ? 1 : Number(rates[fromCurrency] || 0);
     const targetRateToOriginalBase = toCurrency === 'RUB' ? 1 : Number(rates[toCurrency] || 0);
     
     if (targetRateToOriginalBase === 0) return 0;
     
-    // Convert to original snapshot base first, then convert to target currency
     const valueInOriginalBase = amount * rateToOriginalBase;
     return valueInOriginalBase / targetRateToOriginalBase;
   }, []);
@@ -249,7 +243,12 @@ export default function Dashboard() {
     const diff = current - previous;
     if (Math.abs(diff) < 1) return null;
     const percent = (diff / previous) * 100;
-    const color = diff > 0 ? '#22c55e' : '#ef4444';
+    
+    // Используем CSS-переменные с безопасным фоллбэком на пастель
+    const color = diff > 0 
+      ? 'var(--diff-positive, hsl(142, 45%, 55%))' 
+      : 'var(--diff-negative, hsl(0, 45%, 60%))';
+      
     const sign = diff > 0 ? '+' : '';
     const formattedDiff = Math.round(diff).toLocaleString('en-US');
     const formattedPercent = percent.toFixed(1);
@@ -532,7 +531,6 @@ export default function Dashboard() {
                           const diff = prevSnapshot ? currentAmt - prevAmt : 0;
 
                           if (prevSnapshot) {
-                            // Calculate organic change and fx fluctuations inside the dynamically defined base currency setup
                             const currentRateInBase = convertAmount(1, curr, baseCurrency, s.data.rates);
                             const prevRateInBase = convertAmount(1, curr, baseCurrency, prevSnapshot.data.rates);
 
@@ -561,7 +559,9 @@ export default function Dashboard() {
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                 <span style={{ fontSize: '0.95em', fontWeight: 500, color: amt === 0 ? 'var(--text-secondary)' : 'inherit' }}>{Math.round(amt).toLocaleString('en-US')}</span>
                                 {Math.abs(diff) >= 1 && (
-                                  <span style={{ fontSize: '0.75em', color: diff > 0 ? '#22c55e' : '#ef4444', fontWeight: 500, marginTop: '1px' }}>{diff > 0 ? '+' : ''}{Math.round(diff).toLocaleString('en-US')}{prevAmt > 0 && ` (${diff > 0 ? '+' : ''}${diffPercent.toFixed(1)}%)`}</span>
+                                  <span style={{ fontSize: '0.75em', color: diff > 0 ? 'var(--diff-positive, hsl(142, 45%, 55%))' : 'var(--diff-negative, hsl(0, 45%, 60%))', fontWeight: 500, marginTop: '1px' }}>
+                                    {diff > 0 ? '+' : ''}{Math.round(diff).toLocaleString('en-US')}{prevAmt > 0 && ` (${diff > 0 ? '+' : ''}${diffPercent.toFixed(1)}%)`}
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -586,13 +586,13 @@ export default function Dashboard() {
                                 <div style={{ fontSize: '0.75em', marginTop: '8px', padding: '6px 10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '6px', display: 'inline-block', minWidth: '135px' }}>
                                   <div style={{ marginBottom: '2px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>Deposits:</span>
-                                    <span style={{ fontWeight: 600, color: organicBase > 0 ? '#22c55e' : organicBase < 0 ? '#ef4444' : 'inherit' }}>
+                                    <span style={{ fontWeight: 600, color: organicBase > 0 ? 'var(--diff-positive, hsl(142, 45%, 55%))' : organicBase < 0 ? 'var(--diff-negative, hsl(0, 45%, 60%))' : 'inherit' }}>
                                       {organicBase > 0 ? '+' : ''}{Math.round(organicBase).toLocaleString('en-US')}
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>FX Impact:</span>
-                                    <span style={{ fontWeight: 600, color: fxImpactBase > 0 ? '#22c55e' : fxImpactBase < 0 ? '#ef4444' : 'inherit' }}>
+                                    <span style={{ fontWeight: 600, color: fxImpactBase > 0 ? 'var(--diff-positive, hsl(142, 45%, 55%))' : fxImpactBase < 0 ? 'var(--diff-negative, hsl(0, 45%, 60%))' : 'inherit' }}>
                                       {fxImpactBase > 0 ? '+' : ''}{Math.round(fxImpactBase).toLocaleString('en-US')}
                                     </span>
                                   </div>
@@ -763,8 +763,13 @@ export default function Dashboard() {
                       let deltaColor = 'var(--text-secondary)';
                       let deltaSign = '';
                       
-                      if (b.status === 'up' || b.status === 'new') { deltaColor = '#22c55e'; deltaSign = '+'; }
-                      else if (b.status === 'down' || b.status === 'deleted') { deltaColor = '#ef4444'; }
+                      if (b.status === 'up' || b.status === 'new') { 
+                        deltaColor = 'var(--diff-positive, hsl(142, 45%, 55%))'; 
+                        deltaSign = '+'; 
+                      }
+                      else if (b.status === 'down' || b.status === 'deleted') { 
+                        deltaColor = 'var(--diff-negative, hsl(0, 45%, 60%))'; 
+                      }
 
                       return (
                         <div 
@@ -787,8 +792,8 @@ export default function Dashboard() {
                             }}>
                               {b.currency}
                             </span>
-                            {b.status === 'new' && <span style={{ fontSize: '9px', color: '#22c55e', fontWeight: 600 }}>[NEW]</span>}
-                            {b.status === 'deleted' && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 600 }}>[RMV]</span>}
+                            {b.status === 'new' && <span style={{ fontSize: '9px', color: 'var(--diff-positive, hsl(142, 45%, 55%))', fontWeight: 600 }}>[NEW]</span>}
+                            {b.status === 'deleted' && <span style={{ fontSize: '9px', color: 'var(--diff-negative, hsl(0, 45%, 60%))', fontWeight: 600 }}>[RMV]</span>}
                           </div>
 
                           <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>

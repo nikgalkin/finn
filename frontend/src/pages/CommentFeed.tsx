@@ -101,9 +101,7 @@ export default function CommentFeed() {
   return (
     <div>
       <div className="flex items-center gap-4 mb-8">
-        <Link to="/" className="btn" title="Back to dashboard">
-          <ArrowLeft size={18} />Dashboard
-        </Link>
+        <Link to="/" className="btn" title="Back to dashboard"><ArrowLeft size={18} /></Link>
         <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Financial Retrospective Feed</h2>
       </div>
 

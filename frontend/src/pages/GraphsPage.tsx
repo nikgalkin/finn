@@ -600,7 +600,7 @@ export default function GraphsPage() {
         }}
       >
         <div className="flex items-center gap-4">
-          <Link to="/" className="btn"><ArrowLeft size={18} /> Dashboard</Link>
+          <Link to="/" title="Back to dashboard" className="btn"><ArrowLeft size={18} /></Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Advanced Asset Analytics</h2>
         </div>
 
