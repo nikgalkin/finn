@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, X, ArrowLeftRight, Clock, Folder, Coins } from 'lucide-react';
 import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Dot, PieChart, Pie, Cell } from 'recharts';
@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { API_URL, getCurrencyColor } from '../types';
 import type { ParsedSnapshot, Snapshot } from '../types';
 
-const CustomTooltip = ({ active, payload, label, baseCurrency }: any) => {
+const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency }: any) => {
   if (!active || !payload || !payload.length) return null;
 
   const hasComment = payload[0]?.payload?.hasComment;
@@ -33,12 +33,11 @@ const CustomTooltip = ({ active, payload, label, baseCurrency }: any) => {
           const formattedValue = numValue.toLocaleString('en-US');
 
           const color = isBase ? '#10b981' : '#6366f1';
-          const title = isBase ? `Total ${baseCurrency}` : 'Total USD';
-          const valueString = isBase ? formattedValue : `$${formattedValue}`;
+          const title = isBase ? `Total ${baseCurrency}` : `Total ${secondaryCurrency}`;
 
           return (
             <li key={item.name} style={{ color, padding: '2px 0', fontWeight: 500 }}>
-              {title} : {valueString}
+              {title} : {formattedValue}
             </li>
           );
         })}
@@ -65,6 +64,7 @@ type DiffOrgNode = {
 export default function Dashboard() {
   const [snapshots, setSnapshots] = useState<ParsedSnapshot[]>([]);
   const [baseCurrency, setBaseCurrency] = useState('RUB');
+  const [secondaryCurrency, setSecondaryCurrency] = useState('USD');
   const [loading, setLoading] = useState(true);
 
   const [activeViewNotes, setActiveViewNotes] = useState<ParsedSnapshot | null>(null);
@@ -90,6 +90,7 @@ export default function Dashboard() {
       .then(resData => {
         const settings = JSON.parse(resData.value);
         if (settings.baseCurrency) setBaseCurrency(settings.baseCurrency);
+        setSecondaryCurrency(settings.secondaryCurrency ?? 'USD');
       })
       .catch(console.error);
 
@@ -102,11 +103,11 @@ export default function Dashboard() {
         }));
         parsed.sort((a, b) => a.month.localeCompare(b.month));
         setSnapshots(parsed);
-        setLoading(false);
+        loading && setLoading(false);
       })
       .catch(e => {
         console.error(e);
-        setLoading(false);
+        loading && setLoading(false);
       });
   }, []);
 
@@ -125,55 +126,53 @@ export default function Dashboard() {
     }
   };
 
-  const calculateTotals = (snap: ParsedSnapshot) => {
+  /**
+   * Universal front-end converter utilizing snapshot rates.
+   * Converts any amount to target currency via cross-rate logic.
+   */
+  const convertAmount = useCallback((amount: number, fromCurrency: string, toCurrency: string, rates: Record<string, number | string>) => {
+    if (fromCurrency === toCurrency) return amount;
+    
+    // Get absolute rate relative to the original snapshot reference base currency
+    const rateToOriginalBase = fromCurrency === 'RUB' ? 1 : Number(rates[fromCurrency] || 0);
+    const targetRateToOriginalBase = toCurrency === 'RUB' ? 1 : Number(rates[toCurrency] || 0);
+    
+    if (targetRateToOriginalBase === 0) return 0;
+    
+    // Convert to original snapshot base first, then convert to target currency
+    const valueInOriginalBase = amount * rateToOriginalBase;
+    return valueInOriginalBase / targetRateToOriginalBase;
+  }, []);
+
+  const calculateTotals = useCallback((snap: ParsedSnapshot) => {
     let totalBase = 0;
-    let totalUsd = 0;
-    const usdRate = Number(snap.data.rates['USD'] || 1);
+    let totalSecondary = 0;
 
     snap.data.organizations.forEach(org => {
       org.balances.forEach(b => {
         const amount = Number(b.amount || 0);
         if (amount === 0) return;
 
-        let valueBase = 0;
-        if (b.currency === baseCurrency) {
-          valueBase = amount;
-        } else {
-          const rateToBase = Number(snap.data.rates[b.currency] || 0);
-          valueBase = amount * rateToBase;
+        totalBase += convertAmount(amount, b.currency, baseCurrency, snap.data.rates);
+        if (secondaryCurrency) {
+          totalSecondary += convertAmount(amount, b.currency, secondaryCurrency, snap.data.rates);
         }
-        totalBase += valueBase;
-
-        let valueUsd = 0;
-        if (b.currency === 'USD') {
-          valueUsd = amount;
-        } else if (b.currency === baseCurrency) {
-          valueUsd = usdRate > 0 ? (amount / usdRate) : 0;
-        } else {
-          valueUsd = usdRate > 0 ? (valueBase / usdRate) : 0;
-        }
-        totalUsd += valueUsd;
       });
     });
 
-    return { totalBase, totalUsd };
-  };
+    return { totalBase, totalSecondary };
+  }, [baseCurrency, secondaryCurrency, convertAmount]);
 
-  const calculateOrgTotalBase = (org: any, rates: Record<string, number | string>) => {
+  const calculateOrgTotalBase = useCallback((org: any, rates: Record<string, number | string>) => {
     let total = 0;
     org.balances.forEach((b: any) => {
       const amount = Number(b.amount || 0);
-      if (b.currency === baseCurrency) {
-        total += amount;
-      } else {
-        const rate = Number(rates[b.currency] || 0);
-        total += amount * rate;
-      }
+      total += convertAmount(amount, b.currency, baseCurrency, rates);
     });
     return total;
-  };
+  }, [baseCurrency, convertAmount]);
 
-  const calculateCurrencyTotals = (snap: ParsedSnapshot) => {
+  const calculateCurrencyTotals = useCallback((snap: ParsedSnapshot) => {
     const totals: Record<string, number> = {};
     snap.data.organizations.forEach(org => {
       org.balances.forEach(b => {
@@ -184,26 +183,28 @@ export default function Dashboard() {
       });
     });
     return totals;
-  };
+  }, []);
 
-  const hasAnyComments = (snap: ParsedSnapshot) => {
+  const hasAnyComments = useCallback((snap: ParsedSnapshot) => {
     if (snap.data.comment) return true;
     for (const org of snap.data.organizations) {
       if (org.comment) return true;
       if (org.balances.some(b => b.comment)) return true;
     }
     return false;
-  };
+  }, []);
 
-  const chartData = snapshots.map(s => {
-    const totals = calculateTotals(s);
-    return {
-      name: s.month,
-      BASE: Math.round(totals.totalBase),
-      USD: Math.round(totals.totalUsd),
-      hasComment: hasAnyComments(s)
-    };
-  });
+  const chartData = useMemo(() => {
+    return snapshots.map(s => {
+      const totals = calculateTotals(s);
+      return {
+        name: s.month,
+        BASE: Math.round(totals.totalBase),
+        SECONDARY: Math.round(totals.totalSecondary),
+        hasComment: hasAnyComments(s)
+      };
+    });
+  }, [snapshots, calculateTotals, hasAnyComments]);
 
   const CustomDot = (props: any) => {
     const { cx, cy, payload } = props;
@@ -230,30 +231,32 @@ export default function Dashboard() {
 
   const CHART_COLORS = ['#eab308', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444', '#10b981'];
 
-  const latestSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
-  const latestTotals = latestSnapshot ? calculateTotals(latestSnapshot) : { totalBase: 0, totalUsd: 0 };
+  const latestSnapshot = useMemo(() => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null, [snapshots]);
+  const latestTotals = useMemo(() => latestSnapshot ? calculateTotals(latestSnapshot) : { totalBase: 0, totalSecondary: 0 }, [latestSnapshot, calculateTotals]);
 
-  const pieData = latestSnapshot ? latestSnapshot.data.organizations.map(org => {
-    let orgTotalBase = calculateOrgTotalBase(org, latestSnapshot.data.rates);
-    return { name: org.name || 'Unnamed', value: Math.round(orgTotalBase) };
-  })
-    .filter(item => item.value > 0)
-    .sort((a, b) => b.value - a.value) : [];
+  const pieData = useMemo(() => {
+    if (!latestSnapshot) return [];
+    return latestSnapshot.data.organizations.map(org => {
+      let orgTotalBase = calculateOrgTotalBase(org, latestSnapshot.data.rates);
+      return { name: org.name || 'Unnamed', value: Math.round(orgTotalBase) };
+    })
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [latestSnapshot, calculateOrgTotalBase]);
 
-  const renderDiff = (current: number, previous: number | undefined, isUsd: boolean = false) => {
+  const renderDiff = (current: number, previous: number | undefined) => {
     if (previous === undefined || previous === 0) return null;
     const diff = current - previous;
     if (Math.abs(diff) < 1) return null;
     const percent = (diff / previous) * 100;
     const color = diff > 0 ? '#22c55e' : '#ef4444';
     const sign = diff > 0 ? '+' : '';
-    const prefix = isUsd ? '$' : '';
     const formattedDiff = Math.round(diff).toLocaleString('en-US');
     const formattedPercent = percent.toFixed(1);
 
     return (
       <div style={{ color, fontSize: '0.85em', marginTop: '2px', fontWeight: 500 }}>
-        {sign}{prefix}{formattedDiff} ({sign}{formattedPercent}%)
+        {sign}{formattedDiff} ({sign}{formattedPercent}%)
       </div>
     );
   };
@@ -272,16 +275,20 @@ export default function Dashboard() {
   };
 
   const currentYear = new Date().getFullYear().toString();
-  const groupsByYear: Record<string, ParsedSnapshot[]> = {};
-  const reversedSnapshots = [...snapshots].reverse();
 
-  reversedSnapshots.forEach(s => {
-    const year = s.month.split('-')[0];
-    if (!groupsByYear[year]) groupsByYear[year] = [];
-    groupsByYear[year].push(s);
-  });
+  const { groupsByYear, sortedYears, reversedSnapshots } = useMemo(() => {
+    const groups: Record<string, ParsedSnapshot[]> = {};
+    const reversed = [...snapshots].reverse();
 
-  const sortedYears = Object.keys(groupsByYear).sort((a, b) => b.localeCompare(a));
+    reversed.forEach(s => {
+      const year = s.month.split('-')[0];
+      if (!groups[year]) groups[year] = [];
+      groups[year].push(s);
+    });
+
+    const sorted = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+    return { groupsByYear: groups, sortedYears: sorted, reversedSnapshots: reversed };
+  }, [snapshots]);
 
   const formatCompactNumber = (number: number) => {
     return Intl.NumberFormat('en-US', {
@@ -372,7 +379,6 @@ export default function Dashboard() {
         <p>Loading data...</p>
       ) : (
         <>
-          {/* TWO COLUMN GRID HEADER */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="glass-panel flex items-center justify-between" style={{ padding: '20px 24px', minHeight: 'auto', flex: 1 }}>
@@ -384,15 +390,17 @@ export default function Dashboard() {
                   {Math.round(latestTotals.totalBase).toLocaleString('en-US')}
                 </div>
               </div>
-              <div className="glass-panel flex items-center justify-between" style={{ padding: '20px 24px', minHeight: 'auto', flex: 1 }}>
-                <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.95rem' }}>
-                  <DollarSign size={20} />
-                  <span>Total Net Worth (USD)</span>
+              {secondaryCurrency && secondaryCurrency !== baseCurrency && (
+                <div className="glass-panel flex items-center justify-between" style={{ padding: '20px 24px', minHeight: 'auto', flex: 1 }}>
+                  <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.95rem' }}>
+                    <DollarSign size={20} />
+                    <span>Total Net Worth ({secondaryCurrency})</span>
+                  </div>
+                  <div style={{ fontSize: '1.6rem', fontWeight: 'bold', lineHeight: '1' }}>
+                    {Math.round(latestTotals.totalSecondary).toLocaleString('en-US')}
+                  </div>
                 </div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 'bold', lineHeight: '1' }}>
-                  ${Math.round(latestTotals.totalUsd).toLocaleString('en-US')}
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="glass-panel" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '24px' }}>
@@ -432,7 +440,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* TREND CHART */}
           {snapshots.length > 0 && (
             <div className="glass-panel" style={chartStyles.panel}>
               <h3 className="mb-4" style={chartStyles.title}>Net Worth Trend</h3>
@@ -448,17 +455,20 @@ export default function Dashboard() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="name" stroke="var(--text-secondary)" tickMargin={10} />
                     <YAxis yAxisId="left" stroke="var(--text-secondary)" tickFormatter={(val) => formatCompactNumber(val)} />
-                    <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => '$' + formatCompactNumber(val)} />
-                    <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} />} />
+                    {secondaryCurrency && secondaryCurrency !== baseCurrency && (
+                      <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => formatCompactNumber(val)} />
+                    )}
+                    <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} secondaryCurrency={secondaryCurrency} />} />
                     <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" />
-                    <Line yAxisId="right" type="monotone" dataKey="USD" name="USD" stroke="#6366f1" strokeWidth={3} dot={<CustomDot />} activeDot={{ r: 6 }} />
+                    {secondaryCurrency && secondaryCurrency !== baseCurrency && (
+                      <Line yAxisId="right" type="monotone" dataKey="SECONDARY" name="SECONDARY" stroke="#6366f1" strokeWidth={3} dot={<CustomDot />} activeDot={{ r: 6 }} />
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
           )}
 
-          {/* HISTORY TABLES */}
           <h3 className="mb-4" style={{ marginTop: 0 }}>History</h3>
           {sortedYears.map(year => {
             const yearSnaps = groupsByYear[year];
@@ -478,12 +488,14 @@ export default function Dashboard() {
                   <div style={{ display: 'flex', gap: '32px', fontSize: '14px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Total: <b style={{ color: 'var(--text-primary)' }}>{Math.round(yearLatestTotals.totalBase).toLocaleString('en-US')} {baseCurrency}</b></span>
-                      {renderDiff(yearLatestTotals.totalBase, prevYearTotals?.totalBase, false)}
+                      {renderDiff(yearLatestTotals.totalBase, prevYearTotals?.totalBase)}
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}><b style={{ color: 'var(--text-primary)' }}>${Math.round(yearLatestTotals.totalUsd).toLocaleString('en-US')}</b></span>
-                      {renderDiff(yearLatestTotals.totalUsd, prevYearTotals?.totalUsd, true)}
-                    </div>
+                    {secondaryCurrency && secondaryCurrency !== baseCurrency && (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}><b style={{ color: 'var(--text-primary)' }}>{Math.round(yearLatestTotals.totalSecondary).toLocaleString('en-US')} {secondaryCurrency}</b></span>
+                        {renderDiff(yearLatestTotals.totalSecondary, prevYearTotals?.totalSecondary)}
+                      </div>
+                    )}
                   </div>
                 </summary>
                 <div style={{ padding: '0 24px 24px 24px', borderTop: '1px solid var(--glass-border)' }}>
@@ -491,8 +503,10 @@ export default function Dashboard() {
                     <thead>
                       <tr>
                         <th style={{ width: '15%' }}>Month</th>
-                        <th style={{ width: '25%' }}>Total {baseCurrency}</th>
-                        <th style={{ width: '25%' }}>Total USD</th>
+                        <th style={{ width: secondaryCurrency && secondaryCurrency !== baseCurrency ? '20%' : '25%' }}>Total {baseCurrency}</th>
+                        {secondaryCurrency && secondaryCurrency !== baseCurrency && (
+                          <th style={{ width: '20%' }}>Total {secondaryCurrency}</th>
+                        )}
                         <th style={{ width: '25%' }}>Breakdown by Currency</th>
                         <th style={{ width: '10%' }} className="text-right">Actions</th>
                       </tr>
@@ -509,7 +523,6 @@ export default function Dashboard() {
                         const changedCurrencies: { curr: string, amt: number, diff: number }[] = [];
                         const unchangedCurrencies: { curr: string, amt: number, diff: number }[] = [];
 
-                        // ВОССТАНОВЛЕННАЯ МАТЕМАТИКА ДЛЯ ДЕПОЗИТОВ И ВАЛЮТНОЙ ПЕРЕОЦЕНКИ
                         let fxImpactBase = 0;
                         let organicBase = 0;
 
@@ -519,10 +532,12 @@ export default function Dashboard() {
                           const diff = prevSnapshot ? currentAmt - prevAmt : 0;
 
                           if (prevSnapshot) {
-                            const currentRate = curr === baseCurrency ? 1 : Number(s.data.rates?.[curr] || 0);
-                            const prevRate = curr === baseCurrency ? 1 : Number(prevSnapshot.data.rates?.[curr] || 0);
-                            organicBase += (diff * currentRate);
-                            fxImpactBase += (prevAmt * (currentRate - prevRate));
+                            // Calculate organic change and fx fluctuations inside the dynamically defined base currency setup
+                            const currentRateInBase = convertAmount(1, curr, baseCurrency, s.data.rates);
+                            const prevRateInBase = convertAmount(1, curr, baseCurrency, prevSnapshot.data.rates);
+
+                            organicBase += (diff * currentRateInBase);
+                            fxImpactBase += (prevAmt * (currentRateInBase - prevRateInBase));
                           }
 
                           if (Math.abs(diff) >= 1) changedCurrencies.push({ curr, amt: currentAmt, diff });
@@ -532,8 +547,7 @@ export default function Dashboard() {
                         unchangedCurrencies.sort((a, b) => a.curr.localeCompare(b.curr));
 
                         const renderCurrencyRow = ({ curr, amt, diff }: { curr: string, amt: number, diff: number }) => {
-                          const currentRate = curr === baseCurrency ? 1 : Number(s.data.rates?.[curr] || 0);
-                          const amtInBase = amt * currentRate;
+                          const amtInBase = convertAmount(amt, curr, baseCurrency, s.data.rates);
                           const percentOfTotal = totals.totalBase > 0 ? (amtInBase / totals.totalBase) * 100 : 0;
                           const prevAmt = (prevCurrencyTotals[curr] || 0);
                           const diffPercent = prevAmt > 0 ? (diff / prevAmt) * 100 : 0;
@@ -566,9 +580,8 @@ export default function Dashboard() {
                             </td>
                             <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
                               <div style={{ fontWeight: 500 }}>{Math.round(totals.totalBase).toLocaleString('en-US')}</div>
-                              {renderDiff(totals.totalBase, prevTotals?.totalBase, false)}
+                              {renderDiff(totals.totalBase, prevTotals?.totalBase)}
 
-                              {/* ВОССТАНОВЛЕННОЕ ОКОШКО ИЗ СКРИНШОТА: Deposits и FX Impact */}
                               {prevSnapshot && (Math.abs(organicBase) > 1 || Math.abs(fxImpactBase) > 1) && (
                                 <div style={{ fontSize: '0.75em', marginTop: '8px', padding: '6px 10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '6px', display: 'inline-block', minWidth: '135px' }}>
                                   <div style={{ marginBottom: '2px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
@@ -586,10 +599,12 @@ export default function Dashboard() {
                                 </div>
                               )}
                             </td>
-                            <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
-                              <div style={{ fontWeight: 500 }}>${Math.round(totals.totalUsd).toLocaleString('en-US')}</div>
-                              {renderDiff(totals.totalUsd, prevTotals?.totalUsd, true)}
-                            </td>
+                            {secondaryCurrency && secondaryCurrency !== baseCurrency && (
+                              <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
+                                <div style={{ fontWeight: 500 }}>{Math.round(totals.totalSecondary).toLocaleString('en-US')}</div>
+                                {renderDiff(totals.totalSecondary, prevTotals?.totalSecondary)}
+                              </td>
+                            )}
                             <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px', minWidth: '180px' }}>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {changedCurrencies.map(renderCurrencyRow)}
@@ -620,7 +635,6 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* --- TELEPORTED VIEW NOTES POPUP --- */}
       {activeViewNotes && createPortal(
         <div className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }} onClick={() => setActiveViewNotes(null)}>
           <div className="glass-panel flex flex-col" style={{ width: '500px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto', padding: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }} onClick={e => e.stopPropagation()}>
@@ -685,7 +699,6 @@ export default function Dashboard() {
         document.body
       )}
 
-      {/* --- TELEPORTED CURRENCY-LEVEL DIFF MODAL --- */}
       {diffModalData && createPortal(
         <div
           className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"

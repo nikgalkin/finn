@@ -1,10 +1,12 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { Save, ArrowLeft, Plus, Trash2, RefreshCw, Copy, List, MessageSquare, X, Clock } from 'lucide-react';
 import { API_URL } from '../types';
 import type { SnapshotData, Balance, Snapshot, AppSettings } from '../types';
+import { MultiTagSelect } from './components/MultiTagSelect';
+import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 
 const evaluateMath = (expr: string | number): number => {
   if (typeof expr === 'number') return expr;
@@ -14,7 +16,7 @@ const evaluateMath = (expr: string | number): number => {
     const result = new Function(`return ${sanitized}`)();
     return Number.isFinite(result) ? result : 0;
   } catch (e) {
-    return 0; 
+    return 0;
   }
 };
 
@@ -27,7 +29,8 @@ const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => 
       comment: '',
       balances: org.balances.map(b => ({
         ...b,
-        comment: ''
+        comment: '',
+        tags: b.tags || []
       }))
     }))
   };
@@ -37,7 +40,7 @@ export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const isNew = !month && !sourceMonth;
   const isCopy = !!sourceMonth;
 
@@ -50,7 +53,8 @@ export default function SnapshotEdit() {
   });
 
   const [durationSeconds, setDurationSeconds] = useState(0);
-  
+  const [activeDropdownOrgId, setActiveDropdownOrgId] = useState<string | null>(null);
+
   const [activeComment, setActiveComment] = useState<{
     type: 'month' | 'org' | 'balance';
     orgId?: string;
@@ -61,11 +65,55 @@ export default function SnapshotEdit() {
   } | null>(null);
 
   const [latestSnapshot, setLatestSnapshot] = useState<SnapshotData | null>(null);
-  const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [] });
+  const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [], tags: [] });
   const [loading, setLoading] = useState(true);
   const [fetchingRates, setFetchingRates] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const initialDataHash = useRef<string>('');
+  const draftKey = `finn_draft_${month || 'new'}`;
+
+  const isDirty = useMemo(() => {
+    if (!initialDataHash.current) return false;
+    return initialDataHash.current !== JSON.stringify({ data, currentMonth });
+  }, [data, currentMonth]);
+
+  // Hook into draft management system
+  const { draftToRestore, setDraftToRestore, discardDraft } = useSnapshotDraft({
+    draftKey,
+    isDirty,
+    data,
+    currentMonth,
+    durationSeconds,
+    isNew
+  });
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  const handleRestoreDraft = () => {
+    if (draftToRestore) {
+      setData(draftToRestore.data);
+      setCurrentMonth(draftToRestore.currentMonth);
+      setDurationSeconds(draftToRestore.durationSeconds || 0);
+      setDraftToRestore(null);
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    if (confirm('Are you sure you want to discard this draft? This cannot be undone.')) {
+      discardDraft();
+    }
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -83,7 +131,10 @@ export default function SnapshotEdit() {
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
       .then(resData => {
-        setSettings(JSON.parse(resData.value));
+        const parsed = JSON.parse(resData.value);
+        if (!parsed.tags) parsed.tags = [];
+        setSettings(parsed);
+        setSettingsLoaded(true);
       });
 
     if (isNew || isCopy) {
@@ -128,7 +179,17 @@ export default function SnapshotEdit() {
         .then(res => res.json())
         .then((s: any) => {
           if (s.data) {
-            setData(JSON.parse(s.data));
+            const parsedData = JSON.parse(s.data);
+            if (parsedData.organizations) {
+              parsedData.organizations = parsedData.organizations.map((org: any) => ({
+                ...org,
+                balances: org.balances.map((b: any) => ({
+                  ...b,
+                  tags: b.tags || []
+                }))
+              }));
+            }
+            setData(parsedData);
           }
           if (s.duration_seconds) {
             setDurationSeconds(s.duration_seconds);
@@ -141,6 +202,15 @@ export default function SnapshotEdit() {
         });
     }
   }, [month, sourceMonth, isNew, isCopy]);
+
+  useEffect(() => {
+    if (!loading && settingsLoaded && !initialDataHash.current) {
+      const timer = setTimeout(() => {
+        initialDataHash.current = JSON.stringify({ data, currentMonth });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, settingsLoaded, data, currentMonth]);
 
   useEffect(() => {
     if (!loading && data.organizations.length > 0) {
@@ -178,6 +248,11 @@ export default function SnapshotEdit() {
       });
     }
   }, [settings.currencies, settings.baseCurrency]);
+
+  const completeSave = () => {
+    localStorage.removeItem(draftKey);
+    navigate('/');
+  };
 
   const handleSave = () => {
     const usedCurrencies = new Set<string>();
@@ -217,7 +292,7 @@ export default function SnapshotEdit() {
           body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
         })
           .then(res => {
-            if (res.ok) navigate('/');
+            if (res.ok) completeSave();
             else if (res.status === 409) {
               alert(`A snapshot for "${currentMonth}" already exists. Change the month or use Edit instead.`);
             } else {
@@ -252,7 +327,7 @@ export default function SnapshotEdit() {
           if (res.status === 409) {
             alert(`A snapshot for "${currentMonth}" already exists. Please choose a different month.`);
           } else if (res.ok) {
-            navigate('/');
+            completeSave();
           } else {
             alert('Failed to save');
           }
@@ -264,7 +339,7 @@ export default function SnapshotEdit() {
         body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
       })
         .then(res => {
-          if (res.ok) navigate('/');
+          if (res.ok) completeSave();
           else alert('Failed to save');
         });
     }
@@ -315,7 +390,7 @@ export default function SnapshotEdit() {
       organizations: settings.organizations.map(name => ({
         id: uuidv4(),
         name,
-        balances: [{ currency: settings.baseCurrency || 'RUB', amount: 0 }]
+        balances: [{ currency: settings.baseCurrency || 'RUB', amount: 0, comment: '', tags: [] }]
       }))
     });
   };
@@ -353,7 +428,7 @@ export default function SnapshotEdit() {
         if (o.id === orgId) {
           return {
             ...o,
-            balances: [...o.balances, { currency: settings.baseCurrency || 'RUB', amount: 0, comment: '' }]
+            balances: [...o.balances, { currency: settings.baseCurrency || 'RUB', amount: 0, comment: '', tags: [] }]
           };
         }
         return o;
@@ -361,7 +436,7 @@ export default function SnapshotEdit() {
     });
   };
 
-  const updateBalance = (orgId: string, index: number, field: keyof Balance, value: string | number) => {
+  const updateBalance = (orgId: string, index: number, field: keyof Balance, value: any) => {
     setData({
       ...data,
       organizations: data.organizations.map(o => {
@@ -378,7 +453,7 @@ export default function SnapshotEdit() {
   const removeBalance = (orgId: string, index: number) => {
     const org = data.organizations.find(o => o.id === orgId);
     if (!org) return;
-    
+
     const balance = org.balances[index];
     if (balance && balance.amount !== 0 && balance.amount !== '') {
       if (!confirm('This balance is not empty. Are you sure you want to delete it?')) {
@@ -419,7 +494,7 @@ export default function SnapshotEdit() {
   const saveComment = () => {
     if (!activeComment) return;
     const { type, text, orgId, index } = activeComment;
-    
+
     if (type === 'month') {
       setData(prev => ({ ...prev, comment: text }));
     } else if (type === 'org' && orgId) {
@@ -450,10 +525,10 @@ export default function SnapshotEdit() {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    
+
     const mm = String(m).padStart(2, '0');
     const ss = String(s).padStart(2, '0');
-    
+
     if (h > 0) {
       return `${String(h).padStart(2, '0')}:${mm}:${ss}`;
     }
@@ -464,6 +539,20 @@ export default function SnapshotEdit() {
 
   return (
     <div>
+      {draftToRestore && (
+        <div className="glass-panel flex justify-between items-center" style={{ borderColor: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)', marginBottom: '32px' }}>
+          <div>
+            <h4 style={{ margin: 0, color: 'var(--accent)' }}>Unsaved Draft Detected</h4>
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+              We found a draft from {new Date(draftToRestore.timestamp).toLocaleString()}. Would you like to resume editing?
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button className="btn btn-primary" onClick={handleRestoreDraft}>Restore</button>
+            <button className="btn btn-danger" onClick={handleDiscardDraft}>Discard Draft</button>
+          </div>
+        </div>
+      )}
       <style>{`
         input[type="number"]::-webkit-outer-spin-button,
         input[type="number"]::-webkit-inner-spin-button {
@@ -493,8 +582,8 @@ export default function SnapshotEdit() {
             <span>{formatTimer(durationSeconds)}</span>
           </div>
 
-          <button 
-            className="btn" 
+          <button
+            className="btn"
             style={{ ...getIconStyle(!!data.comment), padding: '6px' }}
             title="Add monthly note"
             onClick={() => setActiveComment({ type: 'month', text: data.comment || '', initialText: data.comment || '', title: 'Monthly Note' })}
@@ -537,7 +626,7 @@ export default function SnapshotEdit() {
               {fetchingRates ? 'Fetching...' : 'Fetch Rates'}
             </button>
           </div>
-          
+
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', flex: 1, alignContent: 'flex-start' }}>
             {Object.entries(data.rates).map(([curr, rate]) => (
               <div key={curr} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
@@ -555,12 +644,12 @@ export default function SnapshotEdit() {
                 />
               </div>
             ))}
-            
+
             <div style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-               <div className="text-xs mb-1 font-medium opacity-0"></div>
-               <button className="btn w-full justify-center" style={{ height: '42px' }} onClick={addRate}>
-                 <Plus size={16} className="mr-1" /> Add
-               </button>
+              <div className="text-xs mb-1 font-medium opacity-0"></div>
+              <button className="btn w-full justify-center" style={{ height: '42px' }} onClick={addRate}>
+                <Plus size={16} className="mr-1" /> Add
+              </button>
             </div>
           </div>
         </div>
@@ -590,124 +679,156 @@ export default function SnapshotEdit() {
 
       {/* ORGANIZATIONS GRID */}
       <div className="grid grid-cols-2 gap-4">
-        {data.organizations.map((org) => (
-          <div key={org.id} ref={el => { orgRefs.current[org.id] = el; }} className="glass-panel">
-            <div className="flex items-center mb-6 relative">
-              <div className="flex-1 flex justify-center">
-                <select
-                  className="input"
-                  value={org.name}
-                  onChange={e => updateOrganizationField(org.id, 'name', e.target.value)}
-                  style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
-                >
-                  <option value="" disabled>Select Organization</option>
-                  {settings.organizations.map(o => <option key={o} value={o}>{o}</option>)}
-                  {!settings.organizations.includes(org.name) && org.name && (
-                    <option value={org.name}>{org.name}</option>
-                  )}
-                </select>
-              </div>
-              <div className="absolute right-0 flex gap-2">
-                <button
-                  className="btn"
-                  style={getIconStyle(!!org.comment)}
-                  title="Organization Note"
-                  onClick={() => setActiveComment({ type: 'org', orgId: org.id, text: org.comment || '', initialText: org.comment || '', title: `${org.name || 'Organization'} Note` })}
-                >
-                  <MessageSquare size={16} />
-                </button>
-                <button className="btn btn-danger" onClick={() => removeOrganization(org.id)}>
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
+        {data.organizations.map((org) => {
+          const isCurrentOrgDropdownOpen = activeDropdownOrgId === org.id;
 
-            <table className="table mb-4">
-              <thead>
-                <tr>
-                  <th style={{ width: '30%' }}>Currency</th>
-                  <th style={{ width: '45%' }}>Amount</th>
-                  <th style={{ width: '25%' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {org.balances.map((b, i) => (
-                  <tr key={i}>
-                    <td style={{ paddingLeft: 0, paddingRight: 8 }}>
-                      <select
-                        className="input"
-                        value={b.currency}
-                        onChange={e => updateBalance(org.id, i, 'currency', e.target.value)}
-                      >
-                        <option value="" disabled>Select</option>
-                        {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
-                        {!settings.currencies.includes(b.currency) && b.currency && (
-                          <option value={b.currency}>{b.currency}</option>
-                        )}
-                      </select>
-                    </td>
-                    <td style={{ paddingLeft: 0, paddingRight: 8 }}>
-                      <input
-                        type="text"
-                        className="input"
-                        value={b.amount === 0 ? '' : (typeof b.amount === 'number' ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(b.amount) : b.amount)}
-                        placeholder="0"
-                        onChange={e => updateBalance(org.id, i, 'amount', e.target.value)}
-                        onBlur={e => {
-                          const calculated = evaluateMath(e.target.value);
-                          updateBalance(org.id, i, 'amount', calculated);
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            const calculated = evaluateMath((e.target as HTMLInputElement).value);
-                            updateBalance(org.id, i, 'amount', calculated);
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                      />
-                    </td>
-                    <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0 }}>
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          className="btn" 
-                          style={getIconStyle(!!b.comment)} 
-                          title="Balance Note"
-                          onClick={() => setActiveComment({ type: 'balance', orgId: org.id, index: i, text: b.comment || '', initialText: b.comment || '', title: `${b.currency || 'Balance'} Note` })}
-                        >
-                          <MessageSquare size={14} />
-                        </button>
-                        <button className="btn" style={{ padding: '8px' }} onClick={() => removeBalance(org.id, i)}>
-                          <Trash2 size={14} className="text-danger" />
-                        </button>
-                      </div>
-                    </td>
+          return (
+            <div
+              key={org.id}
+              ref={el => { orgRefs.current[org.id] = el; }}
+              className="glass-panel"
+              style={{
+                zIndex: isCurrentOrgDropdownOpen ? 10 : 1,
+                position: 'relative'
+              }}
+            >
+              <div className="flex items-center mb-6 relative">
+                <div className="flex-1 flex justify-center">
+                  <select
+                    className="input"
+                    value={org.name}
+                    onChange={e => updateOrganizationField(org.id, 'name', e.target.value)}
+                    style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
+                  >
+                    <option value="" disabled>Select Organization</option>
+                    {settings.organizations.map(o => <option key={o} value={o}>{o}</option>)}
+                    {!settings.organizations.includes(org.name) && org.name && (
+                      <option value={org.name}>{org.name}</option>
+                    )}
+                  </select>
+                </div>
+                <div className="absolute right-0 flex gap-2">
+                  <button
+                    className="btn"
+                    style={getIconStyle(!!org.comment)}
+                    title="Organization Note"
+                    onClick={() => setActiveComment({ type: 'org', orgId: org.id, text: org.comment || '', initialText: org.comment || '', title: `${org.name || 'Organization'} Note` })}
+                  >
+                    <MessageSquare size={16} />
+                  </button>
+                  <button className="btn btn-danger" onClick={() => removeOrganization(org.id)}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <table className="table mb-4" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '20%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Currency</th>
+                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Tags</th>
+                    <th style={{ width: '35%', padding: '10px 5px', textTransform: 'uppercase', fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>Amount</th>
+                    <th style={{ width: '10%', padding: '10px 0' }}></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {org.balances.map((b, i) => (
+                    <tr key={i}>
+                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                        <select
+                          className="input"
+                          value={b.currency}
+                          onChange={e => updateBalance(org.id, i, 'currency', e.target.value)}
+                          style={{ width: '100%', paddingRight: '20px' }}
+                        >
+                          <option value="" disabled>Select</option>
+                          {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
+                          {!settings.currencies.includes(b.currency) && b.currency && (
+                            <option value={b.currency}>{b.currency}</option>
+                          )}
+                        </select>
+                      </td>
+                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                        <MultiTagSelect
+                          selectedTags={b.tags || []}
+                          availableTags={settings.tags || []}
+                          onChange={(newTags: string[]) => updateBalance(org.id, i, 'tags', newTags)}
+                          onOpen={() => setActiveDropdownOrgId(org.id)}
+                          onClose={() => setActiveDropdownOrgId(null)}
+                        />
+                      </td>
+                      <td style={{ paddingLeft: 0, paddingRight: 6, paddingTop: 4, paddingBottom: 4 }}>
+                        <input
+                          type="text"
+                          className="input"
+                          value={b.amount === 0 ? '' : (typeof b.amount === 'number' ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(b.amount) : b.amount)}
+                          placeholder="0"
+                          onChange={e => updateBalance(org.id, i, 'amount', e.target.value)}
+                          onBlur={e => {
+                            const calculated = evaluateMath(e.target.value);
+                            updateBalance(org.id, i, 'amount', calculated);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              const calculated = evaluateMath((e.target as HTMLInputElement).value);
+                              updateBalance(org.id, i, 'amount', calculated);
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                        />
+                      </td>
+                      <td className="text-right" style={{ paddingLeft: 0, paddingRight: 0, paddingTop: 4, paddingBottom: 4 }}>
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            className="btn"
+                            style={{ ...getIconStyle(!!b.comment), padding: '6px' }}
+                            title="Balance Note"
+                            onClick={() => setActiveComment({ type: 'balance', orgId: org.id, index: i, text: b.comment || '', initialText: b.comment || '', title: `${b.currency || 'Balance'} Note` })}
+                          >
+                            <MessageSquare size={14} />
+                          </button>
+                          <button className="btn" style={{ padding: '6px' }} onClick={() => removeBalance(org.id, i)}>
+                            <Trash2 size={14} className="text-danger" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            <button className="btn" onClick={() => addBalance(org.id)}>
-              <Plus size={16} className="mr-1" /> Add Balance
-            </button>
-          </div>
-        ))}
+              <button className="btn" onClick={() => addBalance(org.id)}>
+                <Plus size={16} className="mr-1" /> Add Balance
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       {/* TELEPORTED COMMENT MODAL */}
+      {/* TELEPORTED COMMENT MODAL */}
       {activeComment && createPortal(
-        <div 
-          className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0 }}
+        <div
+          className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            // Added absolute styling override to conquer the backdrop-filter stacking context
+            zIndex: 100000
+          }}
         >
-          <div 
-            className="glass-panel flex flex-col" 
-            style={{ 
+          <div
+            className="glass-panel flex flex-col"
+            style={{
               width: '600px',
               minWidth: '300px',
               minHeight: '300px',
-              resize: 'both', 
-              overflow: 'hidden', 
-              padding: '24px', 
+              resize: 'both',
+              overflow: 'hidden',
+              padding: '24px',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
               position: 'relative'
             }}
@@ -718,7 +839,7 @@ export default function SnapshotEdit() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <textarea
               className="input w-full flex-1"
               style={{ resize: 'none', paddingTop: '12px', minHeight: '150px' }}
@@ -736,7 +857,7 @@ export default function SnapshotEdit() {
               }}
               autoFocus
             />
-            
+
             <div className="flex justify-end gap-2 mt-6">
               <button className="btn mt-2" onClick={handleCloseComment}>Cancel</button>
               <button className="btn btn-primary mt-2" onClick={saveComment}>Save Note</button>

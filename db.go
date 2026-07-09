@@ -59,6 +59,11 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 
 	db.SetMaxOpenConns(1)
 
+	// Enable WAL mode and set a busy timeout to prevent 'database is locked' errors
+	if _, err := db.Exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;"); err != nil {
+		log.Printf("⚠️  DB: Failed to set PRAGMAs (WAL/busy_timeout): %v\n", err)
+	}
+
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS snapshots (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
