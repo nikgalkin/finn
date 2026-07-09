@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { API_URL } from '../types';
-import type { SnapshotData, Balance, Snapshot, AppSettings } from '../types';
+import type { Balance } from '../types';
 import { DraftRestoreBanner } from './components/DraftRestoreBanner';
 import { OrganizationsEditor } from './components/OrganizationsEditor';
 import { PeriodRatesPanel } from './components/PeriodRatesPanel';
@@ -10,22 +10,7 @@ import { SnapshotCommentModal } from './components/SnapshotCommentModal';
 import type { ActiveSnapshotComment } from './components/SnapshotCommentModal';
 import { SnapshotEditorHeader } from './components/SnapshotEditorHeader';
 import { useSnapshotDraft } from './hooks/useSnapshotDraft';
-
-const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => {
-  return {
-    ...snapshotData,
-    comment: '',
-    organizations: snapshotData.organizations.map(org => ({
-      ...org,
-      comment: '',
-      balances: org.balances.map(b => ({
-        ...b,
-        comment: '',
-        tags: b.tags || []
-      }))
-    }))
-  };
-};
+import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 
 export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
@@ -35,24 +20,25 @@ export default function SnapshotEdit() {
   const isNew = !month && !sourceMonth;
   const isCopy = !!sourceMonth;
 
-  const [currentMonth, setCurrentMonth] = useState('');
-  const [originalMonth, setOriginalMonth] = useState('');
-  const [data, setData] = useState<SnapshotData>({
-    comment: '',
-    rates: { USD: 90, EUR: 100 },
-    organizations: []
-  });
+  const {
+    currentMonth,
+    data,
+    durationSeconds,
+    latestSnapshot,
+    loading,
+    originalMonth,
+    settings,
+    settingsLoaded,
+    setCurrentMonth,
+    setData,
+    setDurationSeconds
+  } = useSnapshotEditorData({ isCopy, isNew, month, sourceMonth });
 
-  const [durationSeconds, setDurationSeconds] = useState(0);
   const [activeDropdownOrgId, setActiveDropdownOrgId] = useState<string | null>(null);
 
   const [activeComment, setActiveComment] = useState<ActiveSnapshotComment | null>(null);
 
-  const [latestSnapshot, setLatestSnapshot] = useState<SnapshotData | null>(null);
-  const [settings, setSettings] = useState<AppSettings>({ organizations: [], currencies: [], tags: [] });
-  const [loading, setLoading] = useState(true);
   const [fetchingRates, setFetchingRates] = useState(false);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const initialDataHash = useRef<string>('');
@@ -63,7 +49,6 @@ export default function SnapshotEdit() {
     return initialDataHash.current !== JSON.stringify({ data, currentMonth });
   }, [data, currentMonth]);
 
-  // Hook into draft management system
   const { draftToRestore, setDraftToRestore, discardDraft } = useSnapshotDraft({
     draftKey,
     isDirty,
@@ -110,82 +95,6 @@ export default function SnapshotEdit() {
 
     return () => clearInterval(interval);
   }, [loading]);
-
-  useEffect(() => {
-    fetch(`${API_URL}/settings`)
-      .then(res => res.json())
-      .then(resData => {
-        const parsed = JSON.parse(resData.value);
-        if (!parsed.tags) parsed.tags = [];
-        setSettings(parsed);
-        setSettingsLoaded(true);
-      });
-
-    if (isNew || isCopy) {
-      const now = new Date();
-      setCurrentMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
-      setOriginalMonth('');
-
-      const copyFrom = sourceMonth || null;
-      if (copyFrom) {
-        fetch(`${API_URL}/snapshots/${copyFrom}`)
-          .then(res => res.json())
-          .then((s: any) => {
-            if (s.data) {
-              const rawData = JSON.parse(s.data);
-              setData(stripCommentsFromSnapshot(rawData));
-            }
-            setLoading(false);
-          })
-          .catch(e => {
-            console.error(e);
-            setLoading(false);
-          });
-      } else {
-        fetch(`${API_URL}/snapshots`)
-          .then(res => res.json())
-          .then((snaps: Snapshot[]) => {
-            if (snaps && snaps.length > 0) {
-              setLatestSnapshot(JSON.parse(snaps[0].data));
-            }
-            setLoading(false);
-          })
-          .catch(e => {
-            console.error(e);
-            setLoading(false);
-          });
-      }
-    } else {
-      setCurrentMonth(month || '');
-      setOriginalMonth(month || '');
-
-      fetch(`${API_URL}/snapshots/${month}`)
-        .then(res => res.json())
-        .then((s: any) => {
-          if (s.data) {
-            const parsedData = JSON.parse(s.data);
-            if (parsedData.organizations) {
-              parsedData.organizations = parsedData.organizations.map((org: any) => ({
-                ...org,
-                balances: org.balances.map((b: any) => ({
-                  ...b,
-                  tags: b.tags || []
-                }))
-              }));
-            }
-            setData(parsedData);
-          }
-          if (s.duration_seconds) {
-            setDurationSeconds(s.duration_seconds);
-          }
-          setLoading(false);
-        })
-        .catch(e => {
-          console.error(e);
-          setLoading(false);
-        });
-    }
-  }, [month, sourceMonth, isNew, isCopy]);
 
   useEffect(() => {
     if (!loading && settingsLoaded && !initialDataHash.current) {
@@ -268,12 +177,14 @@ export default function SnapshotEdit() {
 
     const isEditing = !isNew && !isCopy;
 
+    const requestBody = JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds });
+
     if (!isEditing) {
-      const doSave = () => {
+      const createSnapshot = () => {
         fetch(`${API_URL}/snapshots`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
+          body: requestBody
         })
           .then(res => {
             if (res.ok) completeSave();
@@ -285,19 +196,31 @@ export default function SnapshotEdit() {
           });
       };
 
+      const overwriteSnapshot = () => {
+        fetch(`${API_URL}/snapshots/${currentMonth}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: requestBody
+        })
+          .then(res => {
+            if (res.ok) completeSave();
+            else alert('Failed to overwrite snapshot');
+          });
+      };
+
       fetch(`${API_URL}/snapshots/${currentMonth}`)
         .then(res => {
           if (res.ok) {
             const typed = window.prompt(
               `A snapshot for "${currentMonth}" already exists.\n\nTo overwrite it, type the month name (${currentMonth}):`
             );
-            if (typed === currentMonth) doSave();
+            if (typed === currentMonth) overwriteSnapshot();
             else if (typed !== null) alert('Month name did not match. Overwrite cancelled.');
           } else {
-            doSave();
+            createSnapshot();
           }
         })
-        .catch(() => doSave());
+        .catch(() => createSnapshot());
       return;
     }
 
@@ -305,7 +228,7 @@ export default function SnapshotEdit() {
       fetch(`${API_URL}/snapshots/${originalMonth}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
+        body: requestBody
       })
         .then(res => {
           if (res.status === 409) {
@@ -320,7 +243,7 @@ export default function SnapshotEdit() {
       fetch(`${API_URL}/snapshots/${originalMonth}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds })
+        body: requestBody
       })
         .then(res => {
           if (res.ok) completeSave();
