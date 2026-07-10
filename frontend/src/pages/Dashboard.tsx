@@ -510,6 +510,7 @@ export default function Dashboard() {
         <SnapshotDiffModal
           current={diffModalData.current}
           previous={diffModalData.previous}
+          snapshots={snapshots}
           onlyChanges={onlyChanges}
           onOnlyChangesChange={setOnlyChanges}
           onClose={() => setDiffModalData(null)}

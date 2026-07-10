@@ -10,6 +10,7 @@ import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
+import { StickyPageHeader } from './components/StickyPageHeader';
 
 type FeedMode = 'all' | 'comments';
 
@@ -60,18 +61,6 @@ const HIGHLIGHT_RULES = {
 
 const HIGHLIGHT_BADGE_COLOR = '#f59e0b';
 const HIGHLIGHT_BADGE_BORDER = 'rgba(245, 158, 11, 0.35)';
-
-const headerStyle = {
-  position: 'sticky' as const,
-  top: 0,
-  zIndex: 999,
-  background: 'transparent',
-  backdropFilter: 'blur(16px)',
-  WebkitBackdropFilter: 'blur(16px)',
-  padding: '16px 4px',
-  borderBottom: '1px solid var(--glass-border)',
-  margin: '0 -4px 24px'
-};
 
 const getOrgColor = (orgName: string) => {
   if (!orgName) return 'hsl(0, 0%, 50%)';
@@ -617,7 +606,7 @@ export default function CommentFeed() {
 
   return (
     <div>
-      <div className="flex justify-between items-center" style={headerStyle}>
+      <StickyPageHeader>
         <div className="flex items-center gap-4">
           <Link to="/" className="btn" title="Back to dashboard"><ArrowLeft size={18} /></Link>
           <div>
@@ -654,7 +643,7 @@ export default function CommentFeed() {
             <MessageSquare size={15} /> Only comments
           </button>
         </div>
-      </div>
+      </StickyPageHeader>
 
       {visiblePeriods.length === 0 ? (
         <div className="glass-panel" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
@@ -685,8 +674,10 @@ export default function CommentFeed() {
                 <button
                   className="btn"
                   style={{ padding: '7px 10px', fontSize: '13px' }}
-                  title={period.previousSnapshot ? `Compare with ${period.previousSnapshot.month}` : 'No previous snapshot'}
-                  disabled={!period.previousSnapshot}
+                  title={period.previousSnapshot
+                    ? `Compare with ${period.previousSnapshot.month}`
+                    : snapshots.length > 1 ? 'Choose a comparison period' : 'Not enough snapshots to compare'}
+                  disabled={snapshots.length < 2}
                   onClick={() => setDiffModalData({ current: period.snapshot, previous: period.previousSnapshot })}
                 >
                   <ArrowLeftRight size={15} /> Diff
@@ -704,6 +695,7 @@ export default function CommentFeed() {
         <SnapshotDiffModal
           current={diffModalData.current}
           previous={diffModalData.previous}
+          snapshots={snapshots}
           onlyChanges={onlyChanges}
           onOnlyChangesChange={setOnlyChanges}
           onClose={() => setDiffModalData(null)}

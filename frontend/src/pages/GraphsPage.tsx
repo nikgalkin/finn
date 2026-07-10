@@ -8,6 +8,7 @@ import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { calculateFlowDecomposition, calculateTotals, convertAmount } from '../lib/finance';
 import { GraphsAnalyticsSections } from './components/graphs/GraphsAnalyticsSections';
 import { SearchableSelect } from './components/graphs/SearchableSelect';
+import { StickyPageHeader } from './components/StickyPageHeader';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
 const QUICK_PERIODS = [
@@ -464,20 +465,7 @@ export default function GraphsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      <div
-        className="flex justify-between items-center"
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 999,
-          background: 'transparent',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          padding: '16px 4px',
-          borderBottom: '1px solid var(--glass-border)',
-          margin: '0 -4px'
-        }}
-      >
+      <StickyPageHeader marginBottom="0">
         <div className="flex items-center gap-4">
           <Link to="/" title="Back to dashboard" className="btn"><ArrowLeft size={18} /></Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>
@@ -513,7 +501,7 @@ export default function GraphsPage() {
             <SearchableSelect value={effectiveEndMonth} onChange={handleManualEndChange} options={availableMonths.filter(month => !startMonth || month >= startMonth)} placeholder="End" />
           </div>
         </div>
-      </div>
+      </StickyPageHeader>
 
       <GraphsAnalyticsSections
         baseCurrency={baseCurrency}

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Clock, MessageSquare, Save } from 'lucide-react';
+import { StickyPageHeader } from './StickyPageHeader';
 
 type SnapshotEditorHeaderProps = {
   title: string;
@@ -30,18 +31,6 @@ const getCommentButtonStyle = (hasComment: boolean) => ({
   transition: 'color 0.2s'
 });
 
-const headerStyle = {
-  position: 'sticky' as const,
-  top: 0,
-  zIndex: 999,
-  background: 'transparent',
-  backdropFilter: 'blur(16px)',
-  WebkitBackdropFilter: 'blur(16px)',
-  padding: '16px 4px',
-  borderBottom: '1px solid var(--glass-border)',
-  margin: '0 -4px 32px'
-};
-
 export function SnapshotEditorHeader({
   title,
   durationSeconds,
@@ -50,7 +39,7 @@ export function SnapshotEditorHeader({
   onSave
 }: SnapshotEditorHeaderProps) {
   return (
-    <div className="flex justify-between items-center" style={headerStyle}>
+    <StickyPageHeader marginBottom="32px">
       <div className="flex items-center gap-4">
         <Link to="/" className="btn" style={{ padding: '8px 12px' }}>
           <ArrowLeft size={20} />
@@ -79,6 +68,6 @@ export function SnapshotEditorHeader({
           <Save size={18} className="mr-2" /> Save
         </button>
       </div>
-    </div>
+    </StickyPageHeader>
   );
 }

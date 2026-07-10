@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Coins, Folder, MessageSquare, X } from 'lucide-react';
 import { getCurrencyColor, getTagColor } from '../../types';
 import type { ParsedSnapshot } from '../../types';
+import { SearchableSelect } from './graphs/SearchableSelect';
 
 type DiffStatus = 'new' | 'deleted' | 'up' | 'down' | 'stable';
 
@@ -30,13 +31,14 @@ type DiffOrgNode = {
 type SnapshotDiffModalProps = {
   current: ParsedSnapshot;
   previous: ParsedSnapshot | null;
+  snapshots: ParsedSnapshot[];
   onlyChanges: boolean;
   onOnlyChangesChange: (value: boolean) => void;
   onClose: () => void;
 };
 
 const overlayStyle = { position: 'fixed', inset: 0, zIndex: 10_000 } as const;
-const panelStyle = { width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflowY: 'auto' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
+const panelStyle = { width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflow: 'visible' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const balanceRowStyle = { display: 'grid', gridTemplateColumns: '68px minmax(130px, 1fr) 1fr 1fr 150px', alignItems: 'center', position: 'relative' as const, fontSize: '13px', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)', columnGap: '2px' };
 
 const normalizeTags = (tags?: string[]) => {
@@ -233,14 +235,29 @@ const buildTreeDiffData = (
 export function SnapshotDiffModal({
   current,
   previous,
+  snapshots,
   onlyChanges,
   onOnlyChangesChange,
   onClose
 }: SnapshotDiffModalProps) {
+  const [currentMonth, setCurrentMonth] = useState(current.month);
+  const [previousMonth, setPreviousMonth] = useState(previous?.month || '');
+  const selectedCurrent = snapshots.find(snapshot => snapshot.month === currentMonth) || current;
+  const selectedPrevious = snapshots.find(snapshot => snapshot.month === previousMonth) || null;
+  const availableMonths = snapshots.map(snapshot => snapshot.month);
+  const toOptions = availableMonths.filter(month => !selectedPrevious || month >= selectedPrevious.month);
+
   const treeDiffData = useMemo(
-    () => buildTreeDiffData(current, previous, onlyChanges),
-    [current, previous, onlyChanges]
+    () => buildTreeDiffData(selectedCurrent, selectedPrevious, onlyChanges),
+    [selectedCurrent, selectedPrevious, onlyChanges]
   );
+
+  const handlePreviousMonthChange = (month: string) => {
+    setPreviousMonth(month);
+    if (selectedCurrent.month < month) {
+      setCurrentMonth(month);
+    }
+  };
 
   return createPortal(
     <div
@@ -258,37 +275,58 @@ export function SnapshotDiffModal({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Granular Hierarchy Diff</h3>
-              {(current.data.comment || previous?.data.comment) && (
+              {(selectedCurrent.data.comment || selectedPrevious?.data.comment) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CommentMarker comment={current.data.comment} label="Current comment" />
-                  <CommentMarker comment={previous?.data.comment} label="Previous comment" />
+                  <CommentMarker comment={selectedCurrent.data.comment} label="To comment" />
+                  <CommentMarker comment={selectedPrevious?.data.comment} label="From comment" />
                 </div>
               )}
             </div>
-            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Comparing <b>{current.month}</b> with {previous ? <b>{previous.month}</b> : 'previous (none)'}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '6px', color: 'var(--text-secondary)', fontSize: '12px' }}>
+              <span>From</span>
+              <SearchableSelect
+                value={selectedPrevious?.month || ''}
+                onChange={handlePreviousMonthChange}
+                options={availableMonths}
+                placeholder="Select"
+                width="98px"
+                dropdownWidth="126px"
+                height="24px"
+              />
+              <span aria-hidden="true" style={{ opacity: 0.45 }}>→</span>
+              <span>To</span>
+              <SearchableSelect
+                value={selectedCurrent.month}
+                onChange={setCurrentMonth}
+                options={toOptions}
+                placeholder="Select"
+                width="98px"
+                dropdownWidth="126px"
+                height="24px"
+              />
+            </div>
           </div>
           <button className="btn" style={{ padding: '4px' }} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
 
-        <div className="mb-3 flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="onlyChangesCheckbox"
-            checked={onlyChanges}
-            onChange={event => onOnlyChangesChange(event.target.checked)}
-            title="Toggle changes only (D)"
-            style={{ cursor: 'pointer', width: '15px', height: '16px', accentColor: 'var(--accent)' }}
-          />
-          <label htmlFor="onlyChangesCheckbox" title="Toggle changes only (D)" style={{ fontSize: '14px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-            Show changes only (hide zero deltas)
-          </label>
-        </div>
+        <div style={{ overflowY: 'auto', minHeight: 0, paddingRight: '2px' }}>
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="onlyChangesCheckbox"
+              checked={onlyChanges}
+              onChange={event => onOnlyChangesChange(event.target.checked)}
+              title="Toggle changes only (D)"
+              style={{ cursor: 'pointer', width: '15px', height: '16px', accentColor: 'var(--accent)' }}
+            />
+            <label htmlFor="onlyChangesCheckbox" title="Toggle changes only (D)" style={{ fontSize: '14px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+              Show changes only (hide zero deltas)
+            </label>
+          </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {treeDiffData.map((org, orgIndex) => (
             <div
               key={orgIndex}
@@ -375,11 +413,11 @@ export function SnapshotDiffModal({
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        prev: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{Math.round(balance.previousAmt).toLocaleString('en-US')}</span>
+                        from: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{Math.round(balance.previousAmt).toLocaleString('en-US')}</span>
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        curr: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{Math.round(balance.currentAmt).toLocaleString('en-US')}</span>
+                        to: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{Math.round(balance.currentAmt).toLocaleString('en-US')}</span>
                       </div>
 
                       <div style={{ color: deltaColor, fontWeight: 700, textAlign: 'right' }}>
@@ -397,11 +435,12 @@ export function SnapshotDiffModal({
             </div>
           ))}
 
-          {treeDiffData.length === 0 && (
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px', fontSize: '13px' }}>
-              No historical changes detected in this period.
-            </div>
-          )}
+            {treeDiffData.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px', fontSize: '13px' }}>
+                No historical changes detected in this period.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>,

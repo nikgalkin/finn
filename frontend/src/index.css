@@ -160,6 +160,19 @@ a {
   margin: 0;
 }
 
+.sticky-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  margin-left: -4px;
+  margin-right: -4px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--glass-border);
+  background-color: rgba(15, 23, 42, 0.45);
+  background-image: radial-gradient(circle at 50% -20%, rgba(30, 58, 138, 0.82) 0%, rgba(15, 23, 42, 0.82) 40%);
+  background-attachment: fixed;
+}
+
 @keyframes organization-card-added {
   0%, 100% { border-color: var(--glass-border); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
   35% { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 4px 30px rgba(0, 0, 0, 0.1); }
