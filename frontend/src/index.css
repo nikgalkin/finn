@@ -10,6 +10,7 @@
   --success: #22c55e;
   --diff-positive: rgba(18, 192, 82, 0.85);
   --diff-negative: rgba(214, 60, 60, 0.925);
+  --page-background-image: radial-gradient(circle at 50% -20%, #1e3a8a 0%, var(--bg-color) 40%);
 }
 
 body {
@@ -17,7 +18,7 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-primary);
-  background-image: radial-gradient(circle at 50% -20%, #1e3a8a 0%, var(--bg-color) 40%);
+  background-image: var(--page-background-image);
   background-attachment: fixed;
   min-height: 100vh;
 }
@@ -167,10 +168,34 @@ a {
   margin-left: -4px;
   margin-right: -4px;
   padding: 16px 4px;
-  border-bottom: 1px solid var(--glass-border);
-  background-color: rgba(15, 23, 42, 0.45);
-  background-image: radial-gradient(circle at 50% -20%, rgba(30, 58, 138, 0.82) 0%, rgba(15, 23, 42, 0.82) 40%);
+  border-bottom: 0;
+  background: transparent;
+  isolation: isolate;
+}
+
+.sticky-page-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--bg-color);
+  background-image: var(--page-background-image);
   background-attachment: fixed;
+  opacity: 0.95;
+}
+
+.sticky-page-header::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: -10px;
+  height: 10px;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09) 12%, rgba(255, 255, 255, 0.09) 88%, transparent) top / 100% 1px no-repeat,
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.14), transparent);
 }
 
 @keyframes organization-card-added {
