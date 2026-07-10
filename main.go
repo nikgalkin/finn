@@ -141,6 +141,14 @@ func main() {
 	}
 
 	r := gin.Default()
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	requestShutdown := func() {
+		select {
+		case quit <- syscall.SIGTERM:
+		default:
+		}
+	}
 
 	// CORS configuration
 	corsConfig := cors.DefaultConfig()
@@ -148,7 +156,7 @@ func main() {
 	r.Use(cors.New(corsConfig))
 
 	// Register API endpoints from api.go
-	setupAPI(r, db)
+	setupAPI(r, db, requestShutdown)
 
 	// Inject the SPA frontend into the routing tree
 	dist, err := fs.Sub(frontendFS, "frontend/dist")
@@ -196,9 +204,6 @@ func main() {
 	}
 
 	// === GRACEFUL SHUTDOWN ENGINE ===
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	<-quit
 	log.Println("\n🛑 Shutdown: Received termination signal. Initiating graceful wrap-up...")
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Keyboard } from 'lucide-react';
+import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Keyboard, Power } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import SnapshotEdit from './pages/SnapshotEdit';
 import CommentFeed from './pages/CommentFeed';
@@ -9,9 +9,12 @@ import Settings from './pages/Settings';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { isTextInputTarget } from './lib/hotkeys';
 import { AppFooter } from './pages/components/AppFooter';
+import { API_URL } from './types';
 
 function App() {
   const [showHotkeysHelp, setShowHotkeysHelp] = useState(false);
+  const [shuttingDown, setShuttingDown] = useState(false);
+  const [shutdownComplete, setShutdownComplete] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -46,6 +49,33 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [location.pathname, navigate, showHotkeysHelp]);
 
+  const handleShutdown = async () => {
+    if (!window.confirm('Shut down Finn Tracker? Any unsaved changes will be lost.')) return;
+
+    setShuttingDown(true);
+    try {
+      const response = await fetch(`${API_URL}/shutdown`, { method: 'POST' });
+      if (!response.ok) throw new Error(`Shutdown request failed with status ${response.status}`);
+
+      setShutdownComplete(true);
+      window.close();
+    } catch (error) {
+      console.error(error);
+      setShuttingDown(false);
+      alert('Failed to shut down the server.');
+    }
+  };
+
+  if (shutdownComplete) {
+    return (
+      <div className="shutdown-screen">
+        <Power size={36} />
+        <h2>Finn Tracker stopped</h2>
+        <p>You can close this tab.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <header className="app-header">
@@ -57,6 +87,16 @@ function App() {
           <div style={{ width: '1px', height: '24px', background: 'var(--glass-border)', margin: '0 4px' }} />
           <button className="btn" title="Keyboard shortcuts (H)" aria-label="Keyboard shortcuts" style={{ padding: '8px' }} onClick={() => setShowHotkeysHelp(true)}>
             <Keyboard size={18} />
+          </button>
+          <button
+            className="btn btn-danger"
+            title="Shut down Finn Tracker"
+            aria-label="Shut down Finn Tracker"
+            onClick={handleShutdown}
+            disabled={shuttingDown}
+            style={{ padding: '8px' }}
+          >
+            <Power size={18} />
           </button>
         </div>
         <div className="flex items-center gap-2">
