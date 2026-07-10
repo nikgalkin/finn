@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ArrowLeftRight, Calendar, MessageSquare, TrendingUp } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, Calendar, Edit, MessageSquare, TrendingUp } from 'lucide-react';
 import { getCurrencyColor } from '../types';
 import type { CommentItem, FlowDecomposition } from '../lib/finance';
 import type { ParsedSnapshot } from '../types';
@@ -520,11 +520,11 @@ export default function CommentFeed() {
 
           <button
             className="btn"
-            title={item.targetOrgName ? 'Open focused snapshot' : 'Open snapshot'}
-            style={{ padding: '8px', flexShrink: 0 }}
+            title={item.targetOrgName ? 'Edit focused snapshot' : 'Edit'}
+            style={{ padding: '8px', flexShrink: 0, color: 'var(--text-secondary)' }}
             onClick={() => openSnapshot(item)}
           >
-            <ArrowLeftRight size={16} />
+            <Edit size={16} />
           </button>
         </div>
       </article>

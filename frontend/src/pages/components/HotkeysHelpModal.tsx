@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -22,6 +23,20 @@ const sections = [
 ];
 
 export function HotkeysHelpModal({ onClose }: HotkeysHelpModalProps) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onClose]);
+
   return createPortal(
     <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-escape-guard="true" style={overlayStyle} onClick={onClose}>
       <div className="glass-panel" style={panelStyle} onClick={event => event.stopPropagation()}>
