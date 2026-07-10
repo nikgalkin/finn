@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, ArrowLeftRight, Calendar, Edit, MessageSquare, TrendingUp } from 'lucide-react';
-import { getCurrencyColor } from '../types';
+import { getCurrencyColor, getTagColor } from '../types';
 import type { CommentItem, FlowDecomposition } from '../lib/finance';
 import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
@@ -9,10 +9,17 @@ import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments } from '../lib/finance';
+import { isTextInputTarget } from '../lib/hotkeys';
+import { StickyPageHeader } from './components/StickyPageHeader';
 
 type FeedMode = 'all' | 'comments';
 
 type FeedItemTone = 'comment' | 'positive' | 'negative' | 'neutral';
+
+type FeedEntity = {
+  kind: 'organization' | 'currency' | 'tag';
+  name: string;
+};
 
 type FeedItem = {
   id: string;
@@ -25,6 +32,7 @@ type FeedItem = {
   tone: FeedItemTone;
   comment?: CommentItem;
   targetOrgName?: string;
+  entities?: FeedEntity[];
 };
 
 type FeedPeriod = {
@@ -53,18 +61,6 @@ const HIGHLIGHT_RULES = {
 
 const HIGHLIGHT_BADGE_COLOR = '#f59e0b';
 const HIGHLIGHT_BADGE_BORDER = 'rgba(245, 158, 11, 0.35)';
-
-const headerStyle = {
-  position: 'sticky' as const,
-  top: 0,
-  zIndex: 999,
-  background: 'transparent',
-  backdropFilter: 'blur(16px)',
-  WebkitBackdropFilter: 'blur(16px)',
-  padding: '16px 4px',
-  borderBottom: '1px solid var(--glass-border)',
-  margin: '0 -4px 24px'
-};
 
 const getOrgColor = (orgName: string) => {
   if (!orgName) return 'hsl(0, 0%, 50%)';
@@ -149,6 +145,53 @@ const renderItemTitle = (item: FeedItem) => {
       )}
     </>
   );
+};
+
+const getEntityColor = (entity: FeedEntity) => {
+  if (entity.kind === 'organization') return getOrgColor(entity.name);
+  if (entity.kind === 'currency') return getCurrencyColor(entity.name);
+  return getTagColor(entity.name);
+};
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const renderColoredEntities = (text: string, entities?: FeedEntity[]) => {
+  const uniqueEntities = Array.from(
+    new Map((entities || []).filter(entity => entity.name).map(entity => [`${entity.kind}:${entity.name}`, entity])).values()
+  ).sort((a, b) => b.name.length - a.name.length);
+  if (uniqueEntities.length === 0) return text;
+
+  const byName = new Map(uniqueEntities.map(entity => [entity.name, entity]));
+  const matcher = new RegExp(`(${uniqueEntities.map(entity => escapeRegExp(entity.name)).join('|')})`, 'g');
+
+  return text.split(matcher).map((part, index) => {
+    const entity = byName.get(part);
+    return entity
+      ? <span key={`${part}-${index}`} style={{ color: getEntityColor(entity), fontWeight: 700 }}>{part}</span>
+      : part;
+  });
+};
+
+const renderCommentTags = (comment?: CommentItem) => {
+  if (comment?.type !== 'balance' || !comment.tags?.length) return null;
+
+  return comment.tags.map(tag => (
+    <span
+      key={tag}
+      style={{
+        color: getTagColor(tag),
+        border: `1px solid ${getTagColor(tag)}55`,
+        background: 'rgba(255,255,255,0.025)',
+        borderRadius: '4px',
+        padding: '1px 5px',
+        fontSize: '10px',
+        fontWeight: 700,
+        lineHeight: 1.4
+      }}
+    >
+      {tag}
+    </span>
+  ));
 };
 
 const buildOrganizationValues = (snapshot: ParsedSnapshot, baseCurrency: string) => {
@@ -341,7 +384,8 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       text: `${newOrg[0]} now holds ${formatMoney(newOrg[1], baseCurrency).replace('+', '')}.`,
       score: 620 + (newOrg[1] / absoluteTotal) * 100,
       tone: 'neutral',
-      targetOrgName: newOrg[0]
+      targetOrgName: newOrg[0],
+      entities: [{ kind: 'organization', name: newOrg[0] }]
     } : null);
 
     const orgMover = getLargestMover(previousOrgValues, currentOrgValues);
@@ -359,7 +403,8 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       meta: orgMover.previous > 0 ? `${formatPercent(orgMover.percent)} for this organization` : 'New or reactivated balance',
       score: 520 + (Math.abs(orgMover.delta) / orgThreshold) * 70,
       tone: getToneForValue(orgMover.delta),
-      targetOrgName: orgMover.name
+      targetOrgName: orgMover.name,
+      entities: [{ kind: 'organization', name: orgMover.name }]
     } : null);
 
     const previousCurrencyValues = buildCurrencyValues(previous, baseCurrency);
@@ -372,7 +417,8 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       title: 'New currency exposure',
       text: `${newCurrency[0]} appeared with ${formatMoney(newCurrency[1], baseCurrency).replace('+', '')} equivalent.`,
       score: 590 + (newCurrency[1] / absoluteTotal) * 100,
-      tone: 'neutral'
+      tone: 'neutral',
+      entities: [{ kind: 'currency', name: newCurrency[0] }]
     } : null);
 
     const previousTagValues = buildTagValues(previous, baseCurrency);
@@ -389,8 +435,13 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       text: `${tagShift.previousShare.toFixed(1)}% -> ${tagShift.currentShare.toFixed(1)}% of portfolio.`,
       meta: `${formatMoney(tagShift.valueDelta, baseCurrency)} value change`,
       score: 530 + Math.abs(tagShift.shareDelta) * 8,
-      tone: getToneForValue(tagShift.valueDelta)
+      tone: getToneForValue(tagShift.valueDelta),
+      entities: [{ kind: 'tag', name: tagShift.name }]
     } : null);
+
+    monthlyCandidates.forEach(item => {
+      item.entities = [...(item.entities || []), { kind: 'currency', name: baseCurrency }];
+    });
 
     monthlyCandidates
       .sort((a, b) => b.score - a.score)
@@ -462,11 +513,16 @@ export default function CommentFeed() {
     if (!diffModalData) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.key !== 'Escape') return;
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || isTextInputTarget(event.target)) return;
 
-      event.preventDefault();
-      event.stopPropagation();
-      setDiffModalData(null);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setDiffModalData(null);
+      } else if (event.code === 'KeyD') {
+        event.preventDefault();
+        setOnlyChanges(previous => !previous);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
@@ -492,7 +548,8 @@ export default function CommentFeed() {
           <div style={{ minWidth: 0 }}>
             <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px', fontSize: '15px', margin: 0, marginBottom: '6px' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                {renderItemTitle(item)}
+                {isHighlight ? renderColoredEntities(item.title, item.entities) : renderItemTitle(item)}
+                {!isHighlight && renderCommentTags(item.comment)}
               </span>
               <span style={{
                 fontSize: '11px',
@@ -500,20 +557,34 @@ export default function CommentFeed() {
                 color: badgeColor,
                 background: 'rgba(255,255,255,0.03)',
                 border: `1px solid ${badgeBorderColor}`,
+                borderLeftWidth: '1px',
                 padding: '2px 6px',
                 borderRadius: '4px',
-                lineHeight: 1.2
+                lineHeight: 1.2,
+                marginLeft: '3px',
+                position: 'relative'
               }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: '-8px',
+                    top: '-1px',
+                    bottom: '-1px',
+                    width: '1px',
+                    background: 'var(--glass-border)'
+                  }}
+                />
                 {isHighlight ? 'HIGHLIGHT' : 'COMMENT'}
               </span>
             </h3>
 
             <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.5 }}>
-              {item.text}
+              {isHighlight ? renderColoredEntities(item.text, item.entities) : item.text}
             </div>
             {item.meta && (
               <div style={{ marginTop: '6px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                {item.meta}
+                {isHighlight ? renderColoredEntities(item.meta, item.entities) : item.meta}
               </div>
             )}
           </div>
@@ -535,7 +606,7 @@ export default function CommentFeed() {
 
   return (
     <div>
-      <div className="flex justify-between items-center" style={headerStyle}>
+      <StickyPageHeader>
         <div className="flex items-center gap-4">
           <Link to="/" className="btn" title="Back to dashboard"><ArrowLeft size={18} /></Link>
           <div>
@@ -572,14 +643,14 @@ export default function CommentFeed() {
             <MessageSquare size={15} /> Only comments
           </button>
         </div>
-      </div>
+      </StickyPageHeader>
 
       {visiblePeriods.length === 0 ? (
         <div className="glass-panel" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
           {mode === 'comments' ? 'No comments yet.' : 'No feed events yet.'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {visiblePeriods.map(period => (
             <section key={period.month} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div
@@ -603,8 +674,10 @@ export default function CommentFeed() {
                 <button
                   className="btn"
                   style={{ padding: '7px 10px', fontSize: '13px' }}
-                  title={period.previousSnapshot ? `Compare with ${period.previousSnapshot.month}` : 'No previous snapshot'}
-                  disabled={!period.previousSnapshot}
+                  title={period.previousSnapshot
+                    ? `Compare with ${period.previousSnapshot.month}`
+                    : snapshots.length > 1 ? 'Choose a comparison period' : 'Not enough snapshots to compare'}
+                  disabled={snapshots.length < 2}
                   onClick={() => setDiffModalData({ current: period.snapshot, previous: period.previousSnapshot })}
                 >
                   <ArrowLeftRight size={15} /> Diff
@@ -618,12 +691,11 @@ export default function CommentFeed() {
         </div>
       )}
 
-      <div style={{ height: '56px' }} />
-
       {diffModalData && (
         <SnapshotDiffModal
           current={diffModalData.current}
           previous={diffModalData.previous}
+          snapshots={snapshots}
           onlyChanges={onlyChanges}
           onOnlyChangesChange={setOnlyChanges}
           onClose={() => setDiffModalData(null)}

@@ -15,7 +15,7 @@ const noteCardStyle = { padding: '12px', background: 'rgba(255,255,255,0.02)', b
 
 export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProps) {
   return createPortal(
-    <div className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={overlayStyle} onClick={onClose}>
+    <div className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-hotkeys-guard="true" style={overlayStyle} onClick={onClose}>
       <div className="glass-panel flex flex-col" style={panelStyle} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '12px' }}>
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Notes for {snapshot.month}</h3>

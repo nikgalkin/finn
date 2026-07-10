@@ -2,7 +2,11 @@ package main
 
 import (
 	"database/sql"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,12 +17,52 @@ type SnapshotRequest struct {
 	DurationSeconds int    `json:"duration_seconds"`
 }
 
-func setupAPI(r *gin.Engine, db *sql.DB) {
+func isLocalShutdownRequest(r *http.Request) bool {
+	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !net.ParseIP(remoteHost).IsLoopback() {
+		return false
+	}
+
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+
+	parsedOrigin, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+
+	originHost := strings.ToLower(parsedOrigin.Hostname())
+	if originHost == "localhost" {
+		return true
+	}
+
+	originIP := net.ParseIP(originHost)
+	return originIP != nil && originIP.IsLoopback()
+}
+
+func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func()) {
 	r.GET("/api/version", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"version": version})
 	})
 
 	api := r.Group("/api")
+
+	api.POST("/shutdown", func(c *gin.Context) {
+		if !isLocalShutdownRequest(c.Request) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "shutdown is only available locally"})
+			return
+		}
+
+		c.JSON(http.StatusAccepted, gin.H{"status": "shutting_down"})
+		c.Writer.Flush()
+
+		go func() {
+			time.Sleep(200 * time.Millisecond)
+			requestShutdown()
+		}()
+	})
 
 	api.GET("/snapshots", func(c *gin.Context) {
 		rows, err := db.Query("SELECT id, month, data, duration_seconds FROM snapshots ORDER BY month DESC")

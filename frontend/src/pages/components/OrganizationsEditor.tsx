@@ -10,6 +10,7 @@ type OrganizationsEditorProps = {
   activeDropdownOrgId: string | null;
   isNew: boolean;
   latestSnapshotAvailable: boolean;
+  recentlyAddedOrgId: string | null;
   organizations: Organization[];
   orgRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
   settings: AppSettings;
@@ -62,6 +63,7 @@ export function OrganizationsEditor({
   activeDropdownOrgId,
   isNew,
   latestSnapshotAvailable,
+  recentlyAddedOrgId,
   organizations,
   orgRefs,
   settings,
@@ -76,6 +78,18 @@ export function OrganizationsEditor({
   onUpdateBalance,
   onUpdateOrganizationField
 }: OrganizationsEditorProps) {
+  const uniqueConfiguredOrganizations = settings.organizations.filter((name, index, names) => (
+    names.findIndex(candidate => candidate.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()) === index
+  ));
+  const selectedOrganizationNames = new Set(
+    organizations.map(org => org.name.trim().toLocaleLowerCase()).filter(Boolean)
+  );
+  const allOrganizationsUsed = uniqueConfiguredOrganizations.every(name => (
+    selectedOrganizationNames.has(name.trim().toLocaleLowerCase())
+  ));
+  const organizationLimitReached = organizations.length >= uniqueConfiguredOrganizations.length;
+  const addOrganizationDisabled = allOrganizationsUsed || organizationLimitReached;
+
   return (
     <>
       <div className="flex justify-between items-center mb-4">
@@ -97,7 +111,12 @@ export function OrganizationsEditor({
             </div>
           )}
         </div>
-        <button className="btn btn-primary" onClick={onAddOrganization}>
+        <button
+          className="btn btn-primary"
+          onClick={onAddOrganization}
+          disabled={addOrganizationDisabled}
+          title={addOrganizationDisabled ? 'All configured organizations have already been added' : 'Add organization'}
+        >
           <Plus size={18} className="mr-1" /> Add Organization
         </button>
       </div>
@@ -105,12 +124,18 @@ export function OrganizationsEditor({
       <div className="grid grid-cols-2 gap-4">
         {organizations.map(org => {
           const isCurrentOrgDropdownOpen = activeDropdownOrgId === org.id;
+          const selectedOrganizationNames = new Set(
+            organizations
+              .filter(item => item.id !== org.id)
+              .map(item => item.name.trim().toLocaleLowerCase())
+              .filter(Boolean)
+          );
 
           return (
             <div
               key={org.id}
               ref={el => { orgRefs.current[org.id] = el; }}
-              className="glass-panel"
+              className={`glass-panel${recentlyAddedOrgId === org.id ? ' organization-card-new' : ''}`}
               style={{
                 zIndex: isCurrentOrgDropdownOpen ? 10 : 1,
                 position: 'relative'
@@ -125,7 +150,15 @@ export function OrganizationsEditor({
                     style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
                   >
                     <option value="" disabled>Select Organization</option>
-                    {settings.organizations.map(name => <option key={name} value={name}>{name}</option>)}
+                    {uniqueConfiguredOrganizations.map(name => (
+                      <option
+                        key={name}
+                        value={name}
+                        disabled={selectedOrganizationNames.has(name.trim().toLocaleLowerCase())}
+                      >
+                        {name}
+                      </option>
+                    ))}
                     {!settings.organizations.includes(org.name) && org.name && (
                       <option value={org.name}>{org.name}</option>
                     )}

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Coins, Folder, MessageSquare, X } from 'lucide-react';
 import { getCurrencyColor, getTagColor } from '../../types';
 import type { ParsedSnapshot } from '../../types';
+import { SearchableSelect } from './graphs/SearchableSelect';
 
 type DiffStatus = 'new' | 'deleted' | 'up' | 'down' | 'stable';
 
@@ -30,14 +31,15 @@ type DiffOrgNode = {
 type SnapshotDiffModalProps = {
   current: ParsedSnapshot;
   previous: ParsedSnapshot | null;
+  snapshots: ParsedSnapshot[];
   onlyChanges: boolean;
   onOnlyChangesChange: (value: boolean) => void;
   onClose: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0 } as const;
-const panelStyle = { width: '740px', maxWidth: '95vw', maxHeight: '85vh', overflowY: 'auto' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
-const balanceRowStyle = { display: 'grid', gridTemplateColumns: '210px 1fr 1fr 150px', alignItems: 'center', fontSize: '13px', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)', gap: '8px' };
+const overlayStyle = { position: 'fixed', inset: 0, zIndex: 10_000 } as const;
+const panelStyle = { width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflow: 'visible' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
+const balanceRowStyle = { display: 'grid', gridTemplateColumns: '68px minmax(130px, 1fr) 1fr 1fr 150px', alignItems: 'center', position: 'relative' as const, fontSize: '13px', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)', columnGap: '2px' };
 
 const normalizeTags = (tags?: string[]) => {
   return (tags && tags.length > 0 ? tags : ['untagged']).filter(Boolean);
@@ -50,7 +52,7 @@ const areTagsEqual = (left: string[], right: string[]) => {
   return leftSorted.every((tag, index) => tag === rightSorted[index]);
 };
 
-const renderTagPill = (tag: string, changed: boolean) => {
+const renderTagPill = (tag: string, changed: boolean, removed = false) => {
   const color = tag === 'untagged' ? 'var(--text-secondary)' : getTagColor(tag);
   const borderColor = tag === 'untagged' ? 'rgba(148,163,184,0.2)' : `${getTagColor(tag)}55`;
 
@@ -65,7 +67,9 @@ const renderTagPill = (tag: string, changed: boolean) => {
         padding: '1px 5px',
         fontSize: '10px',
         fontWeight: 700,
-        lineHeight: 1.4
+        lineHeight: 1.4,
+        opacity: removed ? 0.6 : 1,
+        textDecoration: removed ? 'line-through' : 'none'
       }}
     >
       {tag}
@@ -83,7 +87,7 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
 
-function CommentMarker({ comment }: { comment?: string }) {
+function CommentMarker({ comment, label }: { comment?: string; label?: string }) {
   const [position, setPosition] = useState<TooltipPosition | null>(null);
   if (!comment) return null;
 
@@ -99,6 +103,13 @@ function CommentMarker({ comment }: { comment?: string }) {
 
   const handleMouseEnter = (event: MouseEvent<HTMLSpanElement>) => showTooltip(event.currentTarget);
   const handleFocus = (event: FocusEvent<HTMLSpanElement>) => showTooltip(event.currentTarget);
+  const handleClick = (event: MouseEvent<HTMLSpanElement>) => {
+    if (position) {
+      setPosition(null);
+      return;
+    }
+    showTooltip(event.currentTarget);
+  };
 
   return (
     <span
@@ -108,9 +119,26 @@ function CommentMarker({ comment }: { comment?: string }) {
       onMouseLeave={() => setPosition(null)}
       onFocus={handleFocus}
       onBlur={() => setPosition(null)}
-      style={{ display: 'inline-flex', color: '#3b82f6', opacity: 0.85, position: 'relative', cursor: 'help' }}
+      onClick={handleClick}
+      aria-label={label ? `View ${label.toLowerCase()}` : 'View comment'}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        color: '#60a5fa',
+        opacity: 0.9,
+        position: 'relative',
+        cursor: 'help',
+        padding: label ? '2px 6px' : 0,
+        border: label ? '1px solid rgba(59, 130, 246, 0.28)' : 'none',
+        borderRadius: label ? '4px' : 0,
+        background: label ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+        fontSize: '10px',
+        fontWeight: 700
+      }}
     >
       <MessageSquare size={12} />
+      {label}
       {position && createPortal(
         <div
           role="tooltip"
@@ -207,18 +235,34 @@ const buildTreeDiffData = (
 export function SnapshotDiffModal({
   current,
   previous,
+  snapshots,
   onlyChanges,
   onOnlyChangesChange,
   onClose
 }: SnapshotDiffModalProps) {
+  const [currentMonth, setCurrentMonth] = useState(current.month);
+  const [previousMonth, setPreviousMonth] = useState(previous?.month || '');
+  const selectedCurrent = snapshots.find(snapshot => snapshot.month === currentMonth) || current;
+  const selectedPrevious = snapshots.find(snapshot => snapshot.month === previousMonth) || null;
+  const availableMonths = snapshots.map(snapshot => snapshot.month);
+  const toOptions = availableMonths.filter(month => !selectedPrevious || month >= selectedPrevious.month);
+
   const treeDiffData = useMemo(
-    () => buildTreeDiffData(current, previous, onlyChanges),
-    [current, previous, onlyChanges]
+    () => buildTreeDiffData(selectedCurrent, selectedPrevious, onlyChanges),
+    [selectedCurrent, selectedPrevious, onlyChanges]
   );
+
+  const handlePreviousMonthChange = (month: string) => {
+    setPreviousMonth(month);
+    if (selectedCurrent.month < month) {
+      setCurrentMonth(month);
+    }
+  };
 
   return createPortal(
     <div
       className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      data-hotkeys-guard="true"
       style={overlayStyle}
       onClick={onClose}
     >
@@ -229,31 +273,60 @@ export function SnapshotDiffModal({
       >
         <div className="flex justify-between items-center mb-3" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Granular Hierarchy Diff</h3>
-            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-              Comparing <b>{current.month}</b> with {previous ? <b>{previous.month}</b> : 'previous (none)'}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Granular Hierarchy Diff</h3>
+              {(selectedCurrent.data.comment || selectedPrevious?.data.comment) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CommentMarker comment={selectedCurrent.data.comment} label="To comment" />
+                  <CommentMarker comment={selectedPrevious?.data.comment} label="From comment" />
+                </div>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '6px', color: 'var(--text-secondary)', fontSize: '12px' }}>
+              <span>From</span>
+              <SearchableSelect
+                value={selectedPrevious?.month || ''}
+                onChange={handlePreviousMonthChange}
+                options={availableMonths}
+                placeholder="Select"
+                width="98px"
+                dropdownWidth="126px"
+                height="24px"
+              />
+              <span aria-hidden="true" style={{ opacity: 0.45 }}>→</span>
+              <span>To</span>
+              <SearchableSelect
+                value={selectedCurrent.month}
+                onChange={setCurrentMonth}
+                options={toOptions}
+                placeholder="Select"
+                width="98px"
+                dropdownWidth="126px"
+                height="24px"
+              />
+            </div>
           </div>
           <button className="btn" style={{ padding: '4px' }} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
 
-        <div className="mb-3 flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="onlyChangesCheckbox"
-            checked={onlyChanges}
-            onChange={event => onOnlyChangesChange(event.target.checked)}
-            title="Toggle changes only (D)"
-            style={{ cursor: 'pointer', width: '15px', height: '16px', accentColor: 'var(--accent)' }}
-          />
-          <label htmlFor="onlyChangesCheckbox" title="Toggle changes only (D)" style={{ fontSize: '14px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-            Show changes only (hide zero deltas)
-          </label>
-        </div>
+        <div style={{ overflowY: 'auto', minHeight: 0, paddingRight: '2px' }}>
+          <div className="mb-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="onlyChangesCheckbox"
+              checked={onlyChanges}
+              onChange={event => onOnlyChangesChange(event.target.checked)}
+              title="Toggle changes only (D)"
+              style={{ cursor: 'pointer', width: '15px', height: '16px', accentColor: 'var(--accent)' }}
+            />
+            <label htmlFor="onlyChangesCheckbox" title="Toggle changes only (D)" style={{ fontSize: '14px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
+              Show changes only (hide zero deltas)
+            </label>
+          </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {treeDiffData.map((org, orgIndex) => (
             <div
               key={orgIndex}
@@ -282,12 +355,42 @@ export function SnapshotDiffModal({
                     deltaColor = 'var(--diff-negative, hsl(0, 45%, 60%))';
                   }
 
+                  const visiblePreviousTags = balance.tagsChanged
+                    ? balance.previousTags.filter(tag => tag !== 'untagged')
+                    : [];
+                  const visibleCurrentTags = balance.tagsChanged
+                    ? balance.currentTags.filter(tag => tag !== 'untagged')
+                    : balance.currentTags;
+                  const showTagTransition = visiblePreviousTags.length > 0 && visibleCurrentTags.length > 0;
+                  const hasStatus = balance.status === 'new' || balance.status === 'deleted';
+
                   return (
                     <div
                       key={balanceIndex}
                       style={balanceRowStyle}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                      {hasStatus && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            left: '-15px',
+                            top: '50%',
+                            color: balance.status === 'new'
+                              ? 'var(--diff-positive, hsl(142, 45%, 55%))'
+                              : 'var(--diff-negative, hsl(0, 45%, 60%))',
+                            fontSize: '8px',
+                            fontWeight: 800,
+                            letterSpacing: '0.04em',
+                            lineHeight: 1,
+                            writingMode: 'vertical-rl',
+                            transform: 'translateY(-50%) rotate(180deg)'
+                          }}
+                        >
+                          {balance.status === 'new' ? 'NEW' : 'RMV'}
+                        </span>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
                           <Coins size={12} style={{ opacity: 0.4, flexShrink: 0 }} />
                           <span style={{
@@ -297,26 +400,24 @@ export function SnapshotDiffModal({
                           }}>
                             {balance.currency}
                           </span>
-                          {balance.status === 'new' && <span style={{ fontSize: '9px', color: 'var(--diff-positive, hsl(142, 45%, 55%))', fontWeight: 600 }}>[NEW]</span>}
-                          {balance.status === 'deleted' && <span style={{ fontSize: '9px', color: 'var(--diff-negative, hsl(0, 45%, 60%))', fontWeight: 600 }}>[RMV]</span>}
                           <CommentMarker comment={balance.comment} />
                         </div>
+                      </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                          {balance.tagsChanged && balance.previousTags.map(tag => renderTagPill(tag, false))}
-                          {balance.tagsChanged && (
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '10px', opacity: 0.7 }}>{'->'}</span>
-                          )}
-                          {balance.currentTags.map(tag => renderTagPill(tag, balance.tagsChanged))}
-                        </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '4px', flexWrap: 'wrap', minWidth: 0 }}>
+                        {visiblePreviousTags.map(tag => renderTagPill(tag, false, visibleCurrentTags.length === 0))}
+                        {showTagTransition && (
+                          <span style={{ color: 'var(--text-secondary)', fontSize: '10px', opacity: 0.7 }}>{'->'}</span>
+                        )}
+                        {visibleCurrentTags.map(tag => renderTagPill(tag, balance.tagsChanged))}
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        prev: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{Math.round(balance.previousAmt).toLocaleString('en-US')}</span>
+                        from: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{Math.round(balance.previousAmt).toLocaleString('en-US')}</span>
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        curr: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{Math.round(balance.currentAmt).toLocaleString('en-US')}</span>
+                        to: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{Math.round(balance.currentAmt).toLocaleString('en-US')}</span>
                       </div>
 
                       <div style={{ color: deltaColor, fontWeight: 700, textAlign: 'right' }}>
@@ -334,11 +435,12 @@ export function SnapshotDiffModal({
             </div>
           ))}
 
-          {treeDiffData.length === 0 && (
-            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px', fontSize: '13px' }}>
-              No historical changes detected in this period.
-            </div>
-          )}
+            {treeDiffData.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px', fontSize: '13px' }}>
+                No historical changes detected in this period.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Link } from 'react-router-dom';
-import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Keyboard } from 'lucide-react';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Keyboard, Power } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import SnapshotEdit from './pages/SnapshotEdit';
 import CommentFeed from './pages/CommentFeed';
@@ -8,9 +8,15 @@ import GraphsPage from './pages/GraphsPage';
 import Settings from './pages/Settings';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { isTextInputTarget } from './lib/hotkeys';
+import { AppFooter } from './pages/components/AppFooter';
+import { API_URL } from './types';
 
 function App() {
   const [showHotkeysHelp, setShowHotkeysHelp] = useState(false);
+  const [shuttingDown, setShuttingDown] = useState(false);
+  const [shutdownComplete, setShutdownComplete] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -23,12 +29,52 @@ function App() {
       } else if (event.code === 'KeyH') {
         event.preventDefault();
         setShowHotkeysHelp(true);
+      } else if (!showHotkeysHelp && !document.querySelector('[data-hotkeys-guard="true"]')) {
+        const routes: Record<string, string> = {
+          KeyN: '/snapshot/new',
+          KeyG: '/graphs',
+          KeyF: '/feed',
+          KeyS: '/settings'
+        };
+        const route = routes[event.code];
+        const isSafeNavigationPage = ['/', '/feed', '/graphs'].includes(location.pathname);
+        if (route && isSafeNavigationPage) {
+          event.preventDefault();
+          navigate(route);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [showHotkeysHelp]);
+  }, [location.pathname, navigate, showHotkeysHelp]);
+
+  const handleShutdown = async () => {
+    if (!window.confirm('Shut down Finn Tracker? Any unsaved changes will be lost.')) return;
+
+    setShuttingDown(true);
+    try {
+      const response = await fetch(`${API_URL}/shutdown`, { method: 'POST' });
+      if (!response.ok) throw new Error(`Shutdown request failed with status ${response.status}`);
+
+      setShutdownComplete(true);
+      window.close();
+    } catch (error) {
+      console.error(error);
+      setShuttingDown(false);
+      alert('Failed to shut down the server.');
+    }
+  };
+
+  if (shutdownComplete) {
+    return (
+      <div className="shutdown-screen">
+        <Power size={36} />
+        <h2>Finn Tracker stopped</h2>
+        <p>You can close this tab.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
@@ -41,6 +87,16 @@ function App() {
           <div style={{ width: '1px', height: '24px', background: 'var(--glass-border)', margin: '0 4px' }} />
           <button className="btn" title="Keyboard shortcuts (H)" aria-label="Keyboard shortcuts" style={{ padding: '8px' }} onClick={() => setShowHotkeysHelp(true)}>
             <Keyboard size={18} />
+          </button>
+          <button
+            className="btn btn-danger"
+            title="Shut down Finn Tracker"
+            aria-label="Shut down Finn Tracker"
+            onClick={handleShutdown}
+            disabled={shuttingDown}
+            style={{ padding: '8px' }}
+          >
+            <Power size={18} />
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -67,6 +123,7 @@ function App() {
           <Route path="/graphs" element={<GraphsPage />} />
         </Routes>
       </main>
+      <AppFooter />
       {showHotkeysHelp && (
         <HotkeysHelpModal onClose={() => setShowHotkeysHelp(false)} />
       )}

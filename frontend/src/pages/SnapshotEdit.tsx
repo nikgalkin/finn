@@ -42,8 +42,11 @@ export default function SnapshotEdit() {
 
   const [fetchingRates, setFetchingRates] = useState<'latest' | 'periodStart' | null>(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [recentlyAddedOrgId, setRecentlyAddedOrgId] = useState<string | null>(null);
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const addOrganizationScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialDataHash = useRef<string>('');
   const draftKey = `finn_draft_${month || 'new'}`;
 
@@ -78,6 +81,31 @@ export default function SnapshotEdit() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
+
+  useEffect(() => {
+    const handleInternalLinkClick = (event: MouseEvent) => {
+      if (!isDirty || showLeaveConfirm || event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const anchor = (event.target as Element | null)?.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === '_blank') return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin || !url.hash.startsWith('#/')) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingNavigation(url.hash.slice(1));
+      setShowLeaveConfirm(true);
+    };
+
+    document.addEventListener('click', handleInternalLinkClick, true);
+    return () => document.removeEventListener('click', handleInternalLinkClick, true);
+  }, [isDirty, showLeaveConfirm]);
+
+  useEffect(() => () => {
+    if (addOrganizationScrollTimer.current) clearTimeout(addOrganizationScrollTimer.current);
+  }, []);
 
   const handleRestoreDraft = () => {
     if (draftToRestore) {
@@ -158,6 +186,21 @@ export default function SnapshotEdit() {
   };
 
   const handleSave = () => {
+    const organizationNames = data.organizations
+      .map(org => org.name.trim().toLocaleLowerCase())
+      .filter(Boolean);
+    const duplicateOrganizationNames = Array.from(new Set(
+      organizationNames.filter((name, index) => organizationNames.indexOf(name) !== index)
+    ));
+
+    if (duplicateOrganizationNames.length > 0) {
+      const displayNames = duplicateOrganizationNames.map(name => (
+        data.organizations.find(org => org.name.trim().toLocaleLowerCase() === name)?.name.trim() || name
+      ));
+      alert(`Each organization can only be added once. Remove or rename the duplicate: ${displayNames.join(', ')}.`);
+      return;
+    }
+
     const usedCurrencies = new Set<string>();
 
     data.organizations.forEach(org => {
@@ -267,13 +310,13 @@ export default function SnapshotEdit() {
       Object.entries(fetchedRates).map(([currency, rate]) => [currency.toUpperCase(), rate])
     );
     const base = (settings.baseCurrency || 'RUB').toUpperCase();
-    const autoFetchList = settings.autoFetchCurrencies || [];
+    const autoFetchList = new Set((settings.autoFetchCurrencies || []).map(currency => currency.toUpperCase()));
 
     setData(prev => {
       const newRates = { ...prev.rates };
 
       Object.keys(newRates).forEach(currency => {
-        if (!autoFetchList.includes(currency)) return;
+        if (!autoFetchList.has(currency.toUpperCase())) return;
 
         const sourceCurrency = currency === 'USDT' && !normalizedRates.USDT ? 'USD' : currency;
         const fetchedRate = normalizedRates[sourceCurrency];
@@ -291,16 +334,34 @@ export default function SnapshotEdit() {
 
   const fetchLatestRates = async () => {
     setFetchingRates('latest');
-    const base = settings.baseCurrency || 'RUB';
+    const base = (settings.baseCurrency || 'RUB').toLowerCase();
+    const urls = [
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${base}.json`,
+      `https://latest.currency-api.pages.dev/v1/currencies/${base}.json`
+    ];
 
     try {
-      const response = await fetch(`https://open.er-api.com/v6/latest/${base}`);
-      if (!response.ok) throw new Error(`Exchange rate request failed with status ${response.status}`);
+      let lastError: unknown;
 
-      const responseData = await response.json();
-      if (!responseData?.rates) throw new Error('Exchange rate response does not contain rates');
+      for (const url of urls) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Exchange rate request failed with status ${response.status}`);
 
-      applyFetchedRates(responseData.rates);
+          const responseData: Record<string, unknown> = await response.json();
+          const rates = responseData[base];
+          if (!rates || typeof rates !== 'object' || Array.isArray(rates)) {
+            throw new Error('Exchange rate response does not contain rates');
+          }
+
+          applyFetchedRates(rates as Record<string, number>);
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('All exchange rate sources failed');
     } catch (error) {
       console.error(error);
       alert('Failed to fetch latest rates');
@@ -362,9 +423,12 @@ export default function SnapshotEdit() {
   };
 
   const fillFromSettings = () => {
+    const uniqueOrganizationNames = settings.organizations.filter((name, index, names) => (
+      names.findIndex(candidate => candidate.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()) === index
+    ));
     setData({
       ...data,
-      organizations: settings.organizations.map(name => ({
+      organizations: uniqueOrganizationNames.map(name => ({
         id: uuidv4(),
         name,
         balances: [{ currency: settings.baseCurrency || 'RUB', amount: 0, comment: '', tags: [] }]
@@ -373,13 +437,20 @@ export default function SnapshotEdit() {
   };
 
   const addOrganization = () => {
-    setData({
-      ...data,
-      organizations: [
-        ...data.organizations,
-        { id: uuidv4(), name: '', balances: [] }
-      ]
-    });
+    const id = uuidv4();
+    setData(prev => ({
+      ...prev,
+      organizations: [...prev.organizations, { id, name: '', balances: [] }]
+    }));
+    setRecentlyAddedOrgId(id);
+
+    if (addOrganizationScrollTimer.current) clearTimeout(addOrganizationScrollTimer.current);
+    addOrganizationScrollTimer.current = setTimeout(() => {
+      const card = orgRefs.current[id];
+      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card?.querySelector('select')?.focus({ preventScroll: true });
+      addOrganizationScrollTimer.current = null;
+    }, 350);
   };
 
   const updateOrganizationField = (id: string, field: 'name' | 'comment', value: string) => {
@@ -538,6 +609,7 @@ export default function SnapshotEdit() {
         activeDropdownOrgId={activeDropdownOrgId}
         isNew={isNew}
         latestSnapshotAvailable={!!latestSnapshot}
+        recentlyAddedOrgId={recentlyAddedOrgId}
         organizations={data.organizations}
         orgRefs={orgRefs}
         settings={settings}
@@ -565,8 +637,11 @@ export default function SnapshotEdit() {
       {showLeaveConfirm && (
         <ConfirmLeaveModal
           message="This snapshot has unsaved changes. Leave without saving?"
-          onCancel={() => setShowLeaveConfirm(false)}
-          onConfirm={() => navigate('/')}
+          onCancel={() => {
+            setShowLeaveConfirm(false);
+            setPendingNavigation(null);
+          }}
+          onConfirm={() => navigate(pendingNavigation || '/')}
         />
       )}
     </div>
