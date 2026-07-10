@@ -59,6 +59,15 @@ a {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.btn:disabled:hover {
+  background: var(--glass-bg);
+}
+
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -67,6 +76,10 @@ a {
 
 .btn-primary:hover {
   background: var(--accent-hover);
+}
+
+.btn-primary:disabled:hover {
+  background: var(--accent);
 }
 
 .btn-danger {
@@ -114,6 +127,27 @@ a {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
+}
+
+.app-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+@keyframes organization-card-added {
+  0%, 100% { border-color: var(--glass-border); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
+  35% { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 4px 30px rgba(0, 0, 0, 0.1); }
+}
+
+.organization-card-new {
+  animation: organization-card-added 1.4s ease-out;
 }
 
 /* Specific components */

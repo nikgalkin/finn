@@ -8,6 +8,7 @@ import GraphsPage from './pages/GraphsPage';
 import Settings from './pages/Settings';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { isTextInputTarget } from './lib/hotkeys';
+import { AppFooter } from './pages/components/AppFooter';
 
 function App() {
   const [showHotkeysHelp, setShowHotkeysHelp] = useState(false);
@@ -82,6 +83,7 @@ function App() {
           <Route path="/graphs" element={<GraphsPage />} />
         </Routes>
       </main>
+      <AppFooter />
       {showHotkeysHelp && (
         <HotkeysHelpModal onClose={() => setShowHotkeysHelp(false)} />
       )}

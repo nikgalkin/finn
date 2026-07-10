@@ -661,7 +661,7 @@ export default function CommentFeed() {
           {mode === 'comments' ? 'No comments yet.' : 'No feed events yet.'}
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {visiblePeriods.map(period => (
             <section key={period.month} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div
@@ -699,8 +699,6 @@ export default function CommentFeed() {
           ))}
         </div>
       )}
-
-      <div style={{ height: '56px' }} />
 
       {diffModalData && (
         <SnapshotDiffModal
