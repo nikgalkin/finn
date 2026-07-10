@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Keyboard } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import SnapshotEdit from './pages/SnapshotEdit';
@@ -11,6 +11,8 @@ import { isTextInputTarget } from './lib/hotkeys';
 
 function App() {
   const [showHotkeysHelp, setShowHotkeysHelp] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -23,12 +25,25 @@ function App() {
       } else if (event.code === 'KeyH') {
         event.preventDefault();
         setShowHotkeysHelp(true);
+      } else if (!showHotkeysHelp && !document.querySelector('[data-hotkeys-guard="true"]')) {
+        const routes: Record<string, string> = {
+          KeyN: '/snapshot/new',
+          KeyG: '/graphs',
+          KeyF: '/feed',
+          KeyS: '/settings'
+        };
+        const route = routes[event.code];
+        const isSafeNavigationPage = ['/', '/feed', '/graphs'].includes(location.pathname);
+        if (route && isSafeNavigationPage) {
+          event.preventDefault();
+          navigate(route);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [showHotkeysHelp]);
+  }, [location.pathname, navigate, showHotkeysHelp]);
 
   return (
     <div className="container">

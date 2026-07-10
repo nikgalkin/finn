@@ -14,6 +14,7 @@ export type CommentItem = {
   type: 'snapshot' | 'org' | 'balance';
   orgName?: string;
   currency?: string;
+  tags?: string[];
   text: string;
 };
 
@@ -169,6 +170,7 @@ export const extractComments = (snapshot: ParsedSnapshot): CommentItem[] => {
           type: 'balance',
           orgName: org.name,
           currency: balance.currency,
+          tags: balance.tags,
           text: balance.comment
         });
       }

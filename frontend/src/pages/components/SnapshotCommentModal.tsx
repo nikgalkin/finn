@@ -22,7 +22,7 @@ const panelStyle = { width: '600px', minWidth: '300px', minHeight: '300px', resi
 
 export function SnapshotCommentModal({ comment, onChange, onClose, onSave }: SnapshotCommentModalProps) {
   return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={overlayStyle}>
+    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-hotkeys-guard="true" style={overlayStyle}>
       <div className="glass-panel flex flex-col" style={panelStyle}>
         <div className="flex justify-between items-center mb-4">
           <h3 style={{ margin: 0, fontSize: '18px' }}>{comment.title}</h3>

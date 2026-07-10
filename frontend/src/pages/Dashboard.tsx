@@ -99,18 +99,9 @@ export default function Dashboard() {
         return;
       }
 
-      const routes: Record<string, string> = {
-        KeyN: '/snapshot/new',
-        KeyG: '/graphs',
-        KeyF: '/feed',
-        KeyS: '/settings'
-      };
       if (e.code === 'KeyC' && latestSnapshot) {
         e.preventDefault();
         navigate(`/snapshot/copy/${latestSnapshot.month}`);
-      } else if (routes[e.code]) {
-        e.preventDefault();
-        navigate(routes[e.code]);
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);

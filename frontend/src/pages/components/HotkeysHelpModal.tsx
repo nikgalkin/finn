@@ -13,8 +13,12 @@ const keyStyle = { justifySelf: 'start', minWidth: '32px', textAlign: 'center' a
 
 const sections = [
   {
+    title: 'Navigation',
+    rows: [['N', 'New snapshot'], ['G', 'Open graphs'], ['F', 'Open feed'], ['S', 'Open settings'], ['H', 'Show this help']]
+  },
+  {
     title: 'Dashboard',
-    rows: [['C', 'Copy latest snapshot'], ['N', 'New snapshot'], ['G', 'Open graphs'], ['F', 'Open feed'], ['S', 'Open settings'], ['H', 'Show this help']]
+    rows: [['C', 'Copy latest snapshot']]
   },
   {
     title: 'Popups',
@@ -38,7 +42,7 @@ export function HotkeysHelpModal({ onClose }: HotkeysHelpModalProps) {
   }, [onClose]);
 
   return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-escape-guard="true" style={overlayStyle} onClick={onClose}>
+    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-escape-guard="true" data-hotkeys-guard="true" style={overlayStyle} onClick={onClose}>
       <div className="glass-panel" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 style={{ margin: 0, fontSize: '18px' }}>Keyboard Shortcuts</h3>

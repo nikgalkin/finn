@@ -12,7 +12,7 @@ const panelStyle = { width: '440px', maxWidth: '92vw', padding: '20px', boxShado
 
 export function ConfirmLeaveModal({ message, onCancel, onConfirm }: ConfirmLeaveModalProps) {
   return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={overlayStyle} onClick={onCancel}>
+    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-hotkeys-guard="true" style={overlayStyle} onClick={onCancel}>
       <div className="glass-panel" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle size={20} style={{ color: '#eab308' }} />
