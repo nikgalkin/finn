@@ -27,6 +27,7 @@ type DBConfig struct {
 
 type BackupConfig struct {
 	Enabled       bool           `mapstructure:"enabled"`
+	OnlyIfChanged bool           `mapstructure:"only_if_changed"`
 	IntervalHours int            `mapstructure:"interval_hours"`
 	CipherKey     string         `mapstructure:"cipher_key"`
 	Targets       []BackupTarget `mapstructure:"targets"`
@@ -64,6 +65,7 @@ func LoadConfig() *Config {
 	viper.SetDefault("database.filename", "finn.db")
 	viper.SetDefault("database.demo_filename", "finn-demo.db")
 	viper.SetDefault("backup.enabled", false)
+	viper.SetDefault("backup.only_if_changed", true)
 	viper.SetDefault("backup.interval_hours", 12)
 
 	// Читаем конфиг-файл

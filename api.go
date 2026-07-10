@@ -42,7 +42,7 @@ func isLocalShutdownRequest(r *http.Request) bool {
 	return originIP != nil && originIP.IsLoopback()
 }
 
-func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func()) {
+func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBackup func() BackupReport) {
 	r.GET("/api/version", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"version": version})
 	})
@@ -55,7 +55,23 @@ func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func()) {
 			return
 		}
 
-		c.JSON(http.StatusAccepted, gin.H{"status": "shutting_down"})
+		if c.Query("skip_backup") == "true" {
+			c.JSON(http.StatusAccepted, gin.H{"status": "shutting_down", "backup": gin.H{"status": "bypassed"}})
+			c.Writer.Flush()
+			go func() {
+				time.Sleep(200 * time.Millisecond)
+				requestShutdown()
+			}()
+			return
+		}
+
+		backupReport := runShutdownBackup()
+		if backupReport.Status == backupStatusFailed || backupReport.Status == backupStatusPartial {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "backup_failed", "backup": backupReport})
+			return
+		}
+
+		c.JSON(http.StatusAccepted, gin.H{"status": "shutting_down", "backup": backupReport})
 		c.Writer.Flush()
 
 		go func() {

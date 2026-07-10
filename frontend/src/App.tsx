@@ -11,10 +11,34 @@ import { isTextInputTarget } from './lib/hotkeys';
 import { AppFooter } from './pages/components/AppFooter';
 import { API_URL } from './types';
 
+type BackupTargetResult = {
+  name: string;
+  path: string;
+  status: 'current' | 'created' | 'failed';
+  error?: string;
+};
+
+type BackupReport = {
+  status: 'disabled' | 'skipped' | 'success' | 'partial' | 'failed' | 'bypassed';
+  targets?: BackupTargetResult[];
+  error?: string;
+};
+
+const backupSummary = (report: BackupReport | null) => {
+  switch (report?.status) {
+    case 'success': return 'Backups completed successfully.';
+    case 'skipped': return 'The database has not changed. Existing backups are up to date.';
+    case 'disabled': return 'Backups are disabled in the configuration.';
+    case 'bypassed': return 'Finn was stopped without completing a backup.';
+    default: return 'Backup status is unavailable.';
+  }
+};
+
 function App() {
   const [showHotkeysHelp, setShowHotkeysHelp] = useState(false);
   const [shuttingDown, setShuttingDown] = useState(false);
   const [shutdownComplete, setShutdownComplete] = useState(false);
+  const [shutdownBackup, setShutdownBackup] = useState<BackupReport | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -49,16 +73,30 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [location.pathname, navigate, showHotkeysHelp]);
 
-  const handleShutdown = async () => {
-    if (!window.confirm('Shut down Finn Tracker? Any unsaved changes will be lost.')) return;
-
+  const requestShutdown = async (skipBackup = false) => {
     setShuttingDown(true);
     try {
-      const response = await fetch(`${API_URL}/shutdown`, { method: 'POST' });
-      if (!response.ok) throw new Error(`Shutdown request failed with status ${response.status}`);
+      const suffix = skipBackup ? '?skip_backup=true' : '';
+      const response = await fetch(`${API_URL}/shutdown${suffix}`, { method: 'POST' });
+      const payload = await response.json() as { status?: string; backup?: BackupReport; error?: string };
 
+      if (!response.ok) {
+        setShuttingDown(false);
+        const report = payload.backup;
+        const failedTargets = report?.targets
+          ?.filter(target => target.status === 'failed')
+          .map(target => `${target.name}: ${target.error || 'unknown error'}`)
+          .join('\n');
+        const details = failedTargets || report?.error || payload.error || 'Unknown backup error.';
+        const shutDownAnyway = window.confirm(
+          `Finn is still running because the backup did not complete:\n\n${details}\n\nShut down anyway without a complete backup?`
+        );
+        if (shutDownAnyway) await requestShutdown(true);
+        return;
+      }
+
+      setShutdownBackup(payload.backup || null);
       setShutdownComplete(true);
-      window.close();
     } catch (error) {
       console.error(error);
       setShuttingDown(false);
@@ -66,12 +104,64 @@ function App() {
     }
   };
 
+  const handleShutdown = () => {
+    if (!window.confirm('Shut down Finn Tracker? Any unsaved changes will be lost.')) return;
+    void requestShutdown();
+  };
+
   if (shutdownComplete) {
+    const backupWasBypassed = shutdownBackup?.status === 'bypassed';
     return (
       <div className="shutdown-screen">
-        <Power size={36} />
+        <Power size={36} color={backupWasBypassed ? 'var(--danger)' : undefined} />
         <h2>Finn Tracker stopped</h2>
-        <p>You can close this tab.</p>
+        <p
+          style={backupWasBypassed ? {
+            color: 'var(--danger)',
+            fontWeight: 600,
+            padding: '10px 14px',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: '8px',
+            background: 'rgba(239, 68, 68, 0.08)'
+          } : undefined}
+        >
+          {backupSummary(shutdownBackup)}
+        </p>
+        {!!shutdownBackup?.targets?.length && (
+          <div style={{ marginTop: '20px', display: 'grid', gap: '8px', width: 'min(560px, 90vw)' }}>
+            {shutdownBackup.targets.map(target => (
+              <div
+                key={`${target.name}-${target.path}`}
+                className="glass-panel"
+                style={{
+                  padding: '12px 16px',
+                  textAlign: 'left',
+                  borderColor: target.status === 'created'
+                    ? 'rgba(34, 197, 94, 0.45)'
+                    : target.status === 'current'
+                      ? 'rgba(59, 130, 246, 0.45)'
+                      : 'rgba(239, 68, 68, 0.45)'
+                }}
+              >
+                <strong style={{ color: 'var(--text-primary)' }}>{target.name}</strong>
+                <span
+                  style={{
+                    float: 'right',
+                    color: target.status === 'created'
+                      ? 'var(--success)'
+                      : target.status === 'current'
+                        ? 'var(--accent)'
+                        : 'var(--danger)'
+                  }}
+                >
+                  <span aria-hidden="true" style={{ marginRight: '7px' }}>●</span>
+                  {target.status === 'created' ? 'Backup created' : target.status === 'current' ? 'Already up to date' : 'Failed'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p style={{ marginTop: '16px' }}>You can close this tab.</p>
       </div>
     );
   }
