@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-// Changed path from '../types' to '../../types'
 import type { SnapshotData } from '../../types';
 
 interface UseSnapshotDraftProps {

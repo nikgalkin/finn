@@ -74,7 +74,7 @@ func LoadConfig() *Config {
 			log.Printf("⚠️  Config: Error reading config file: %v\n", err)
 		}
 	} else {
-		log.Printf("ℹ️  Config: Loaded configuration from %s\n", viper.ConfigFileUsed())
+		log.Printf("ℹ️  Config: Loaded from %s\n", viper.ConfigFileUsed())
 	}
 
 	// 3. Распаковываем всё в нашу структуру
