@@ -23,7 +23,7 @@ const sections = [
 
 export function HotkeysHelpModal({ onClose }: HotkeysHelpModalProps) {
   return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={overlayStyle} onClick={onClose}>
+    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-escape-guard="true" style={overlayStyle} onClick={onClose}>
       <div className="glass-panel" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 style={{ margin: 0, fontSize: '18px' }}>Keyboard Shortcuts</h3>
