@@ -20,6 +20,7 @@ export function useEscapeToDashboard({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (blocked || event.defaultPrevented || event.key !== 'Escape' || isTextInputTarget(event.target)) return;
+      if (document.querySelector('[data-escape-guard="true"]')) return;
 
       event.preventDefault();
       event.stopPropagation();

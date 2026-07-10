@@ -1,13 +1,14 @@
-import { Plus, RefreshCw } from 'lucide-react';
+import { Calendar, Plus, RefreshCw } from 'lucide-react';
 import type { AppSettings, SnapshotData } from '../../types';
 
 type PeriodRatesPanelProps = {
   currentMonth: string;
   rates: SnapshotData['rates'];
   settings: AppSettings;
-  fetchingRates: boolean;
+  fetchingRates: 'latest' | 'periodStart' | null;
   onAddRate: () => void;
-  onFetchRates: () => void;
+  onFetchLatestRates: () => void;
+  onFetchPeriodStartRates: () => void;
   onMonthChange: (month: string) => void;
   onRateChange: (currency: string, value: string | number) => void;
 };
@@ -18,7 +19,8 @@ export function PeriodRatesPanel({
   settings,
   fetchingRates,
   onAddRate,
-  onFetchRates,
+  onFetchLatestRates,
+  onFetchPeriodStartRates,
   onMonthChange,
   onRateChange
 }: PeriodRatesPanelProps) {
@@ -47,10 +49,21 @@ export function PeriodRatesPanel({
           <h3 style={{ margin: 0, fontSize: '1rem' }}>
             Exchange Rates (to {settings.baseCurrency || 'RUB'})
           </h3>
-          <button className="btn" onClick={onFetchRates} disabled={fetchingRates}>
-            <RefreshCw size={16} className={`mr-2 ${fetchingRates ? 'animate-spin' : ''}`} />
-            {fetchingRates ? 'Fetching...' : 'Fetch Rates'}
-          </button>
+          <div className="flex gap-2">
+            <button className="btn" onClick={onFetchLatestRates} disabled={fetchingRates !== null}>
+              <RefreshCw size={16} className={`mr-2 ${fetchingRates === 'latest' ? 'animate-spin' : ''}`} />
+              {fetchingRates === 'latest' ? 'Fetching...' : 'Fetch Latest'}
+            </button>
+            <button
+              className="btn"
+              onClick={onFetchPeriodStartRates}
+              disabled={fetchingRates !== null}
+              title={`Fetch exchange rates for ${currentMonth || 'YYYY-MM'}-01`}
+            >
+              <Calendar size={16} className="mr-2" />
+              {fetchingRates === 'periodStart' ? 'Fetching...' : 'Fetch on 1st'}
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', flex: 1, alignContent: 'flex-start' }}>

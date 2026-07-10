@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -22,8 +23,22 @@ const sections = [
 ];
 
 export function HotkeysHelpModal({ onClose }: HotkeysHelpModalProps) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onClose]);
+
   return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" style={overlayStyle} onClick={onClose}>
+    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-escape-guard="true" style={overlayStyle} onClick={onClose}>
       <div className="glass-panel" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 style={{ margin: 0, fontSize: '18px' }}>Keyboard Shortcuts</h3>

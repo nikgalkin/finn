@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Activity, ArrowLeftRight, BarChart3, ChevronDown, Clock, Grid, HelpCircle, Landmark, Layers, LineChart as LineChartIcon, ListFilter, Percent, TrendingUp } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Activity, ArrowLeftRight, BarChart3, ChevronDown, Clock, Grid, Landmark, Layers, LineChart as LineChartIcon, ListFilter, Percent, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
+import { HelpTooltip } from '../HelpTooltip';
 
 type ChartDatum = Record<string, any>;
 
@@ -234,96 +234,6 @@ const SummaryCard = ({ stat }: { stat: SummaryStat }) => {
         </div>
       </div>
     </div>
-  );
-};
-
-const HelpTooltip = ({ text }: { text: string }) => {
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const tooltipWidth = 320;
-
-  const openTooltip = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const viewportPadding = 12;
-    const preferredLeft = rect.left - 24;
-    const maxLeft = window.innerWidth - tooltipWidth - viewportPadding;
-
-    setPosition({
-      top: rect.bottom + 8,
-      left: Math.max(viewportPadding, Math.min(preferredLeft, maxLeft))
-    });
-    setOpen(true);
-  };
-
-  return (
-    <span
-      onMouseEnter={openTooltip}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={openTooltip}
-      onBlur={() => setOpen(false)}
-      onClick={event => event.stopPropagation()}
-      style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
-    >
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label="Chart explanation"
-        onClick={event => {
-          event.stopPropagation();
-          if (open) {
-            setOpen(false);
-          } else {
-            openTooltip();
-          }
-        }}
-        style={{
-          width: '18px',
-          height: '18px',
-          padding: 0,
-          border: '1px solid var(--glass-border)',
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.04)',
-          color: 'var(--text-secondary)',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'help'
-        }}
-      >
-        <HelpCircle size={13} />
-      </button>
-      {open && createPortal(
-        <span
-          role="tooltip"
-          style={{
-            position: 'fixed',
-            zIndex: 10000,
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-            width: `${tooltipWidth}px`,
-            maxWidth: `calc(100vw - 24px)`,
-            padding: '10px 12px',
-            borderRadius: '8px',
-            border: '1px solid var(--glass-border)',
-            background: 'var(--bg-color)',
-            color: 'var(--text-primary)',
-            boxShadow: '0 16px 40px rgba(0,0,0,0.35)',
-            fontSize: '12px',
-            fontWeight: 500,
-            lineHeight: 1.45,
-            letterSpacing: 0,
-            textTransform: 'none',
-            pointerEvents: 'none'
-          }}
-        >
-          {text}
-        </span>,
-        document.body
-      )}
-    </span>
   );
 };
 
