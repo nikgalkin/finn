@@ -40,7 +40,7 @@ export default function SnapshotEdit() {
 
   const [activeComment, setActiveComment] = useState<ActiveSnapshotComment | null>(null);
 
-  const [fetchingRates, setFetchingRates] = useState(false);
+  const [fetchingRates, setFetchingRates] = useState<'latest' | 'periodStart' | null>(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -262,36 +262,96 @@ export default function SnapshotEdit() {
     }
   };
 
-  const fetchRates = () => {
-    setFetchingRates(true);
-    const base = settings.baseCurrency || 'RUB';
-    fetch(`https://open.er-api.com/v6/latest/${base}`)
-      .then(res => res.json())
-      .then(resData => {
-        if (resData && resData.rates) {
-          const newRates = { ...data.rates };
-          const autoFetchList = settings.autoFetchCurrencies || [];
+  const applyFetchedRates = (fetchedRates: Record<string, number>) => {
+    const normalizedRates = Object.fromEntries(
+      Object.entries(fetchedRates).map(([currency, rate]) => [currency.toUpperCase(), rate])
+    );
+    const base = (settings.baseCurrency || 'RUB').toUpperCase();
+    const autoFetchList = settings.autoFetchCurrencies || [];
 
-          Object.keys(newRates).forEach(curr => {
-            if (autoFetchList.includes(curr)) {
-              if (curr === base) {
-                newRates[curr] = 1;
-              } else if (resData.rates[curr]) {
-                newRates[curr] = parseFloat((1 / resData.rates[curr]).toFixed(6));
-              } else if (curr === 'USDT' && resData.rates['USD']) {
-                newRates[curr] = parseFloat((1 / resData.rates['USD']).toFixed(6));
-              }
-            }
-          });
-          setData({ ...data, rates: newRates });
+    setData(prev => {
+      const newRates = { ...prev.rates };
+
+      Object.keys(newRates).forEach(currency => {
+        if (!autoFetchList.includes(currency)) return;
+
+        const sourceCurrency = currency === 'USDT' && !normalizedRates.USDT ? 'USD' : currency;
+        const fetchedRate = normalizedRates[sourceCurrency];
+
+        if (currency === base) {
+          newRates[currency] = 1;
+        } else if (Number.isFinite(fetchedRate) && fetchedRate > 0) {
+          newRates[currency] = parseFloat((1 / fetchedRate).toFixed(6));
         }
-        setFetchingRates(false);
-      })
-      .catch(e => {
-        console.error(e);
-        alert('Failed to fetch rates');
-        setFetchingRates(false);
       });
+
+      return { ...prev, rates: newRates };
+    });
+  };
+
+  const fetchLatestRates = async () => {
+    setFetchingRates('latest');
+    const base = settings.baseCurrency || 'RUB';
+
+    try {
+      const response = await fetch(`https://open.er-api.com/v6/latest/${base}`);
+      if (!response.ok) throw new Error(`Exchange rate request failed with status ${response.status}`);
+
+      const responseData = await response.json();
+      if (!responseData?.rates) throw new Error('Exchange rate response does not contain rates');
+
+      applyFetchedRates(responseData.rates);
+    } catch (error) {
+      console.error(error);
+      alert('Failed to fetch latest rates');
+    } finally {
+      setFetchingRates(null);
+    }
+  };
+
+  const fetchPeriodStartRates = async () => {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(currentMonth)) {
+      alert('Enter a valid period in YYYY-MM format first.');
+      return;
+    }
+
+    const date = `${currentMonth}-01`;
+    const base = (settings.baseCurrency || 'RUB').toLowerCase();
+    const urls = [
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${date}/v1/currencies/${base}.json`,
+      `https://${date}.currency-api.pages.dev/v1/currencies/${base}.json`
+    ];
+
+    setFetchingRates('periodStart');
+
+    try {
+      let lastError: unknown;
+
+      for (const url of urls) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`Exchange rate request failed with status ${response.status}`);
+
+          const responseData: Record<string, unknown> = await response.json();
+          const rates = responseData[base];
+          if (!rates || typeof rates !== 'object' || Array.isArray(rates)) {
+            throw new Error('Exchange rate response does not contain rates');
+          }
+
+          applyFetchedRates(rates as Record<string, number>);
+          return;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw lastError || new Error('All exchange rate sources failed');
+    } catch (error) {
+      console.error(error);
+      alert(`Failed to fetch rates for ${date}`);
+    } finally {
+      setFetchingRates(null);
+    }
   };
 
   const copyFromPrevious = () => {
@@ -468,7 +528,8 @@ export default function SnapshotEdit() {
         settings={settings}
         fetchingRates={fetchingRates}
         onAddRate={addRate}
-        onFetchRates={fetchRates}
+        onFetchLatestRates={fetchLatestRates}
+        onFetchPeriodStartRates={fetchPeriodStartRates}
         onMonthChange={setCurrentMonth}
         onRateChange={updateRate}
       />
