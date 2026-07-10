@@ -6,22 +6,180 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
 	backupPrefix     = "finn_backup_"
 	backupTimeFormat = "2006_01_02_150405"
+	backupHashLength = 32
 	extEncrypted     = "enc"
 	extRaw           = "db"
 )
+
+const (
+	backupStatusDisabled = "disabled"
+	backupStatusSkipped  = "skipped"
+	backupStatusSuccess  = "success"
+	backupStatusPartial  = "partial"
+	backupStatusFailed   = "failed"
+)
+
+var backupJobMutex sync.Mutex
+
+type BackupTargetResult struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+}
+
+type BackupReport struct {
+	Status      string               `json:"status"`
+	Fingerprint string               `json:"fingerprint,omitempty"`
+	Targets     []BackupTargetResult `json:"targets,omitempty"`
+	Error       string               `json:"error,omitempty"`
+}
+
+func writeFingerprintString(h hash.Hash, value string) {
+	var length [8]byte
+	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
+	_, _ = h.Write(length[:])
+	_, _ = h.Write([]byte(value))
+}
+
+// databaseFingerprint hashes the logical database state rather than SQLite file
+// bytes, which may change because of WAL bookkeeping even when user data does not.
+func databaseFingerprint(db *sql.DB) (string, error) {
+	h := sha256.New()
+
+	rows, err := db.Query("SELECT id, month, data, duration_seconds FROM snapshots ORDER BY id")
+	if err != nil {
+		return "", err
+	}
+	for rows.Next() {
+		var id int64
+		var month, data string
+		var duration sql.NullInt64
+		if err := rows.Scan(&id, &month, &data, &duration); err != nil {
+			rows.Close()
+			return "", err
+		}
+		_, _ = h.Write([]byte{'S'})
+		var number [8]byte
+		binary.BigEndian.PutUint64(number[:], uint64(id))
+		_, _ = h.Write(number[:])
+		writeFingerprintString(h, month)
+		writeFingerprintString(h, data)
+		if duration.Valid {
+			_, _ = h.Write([]byte{1})
+			binary.BigEndian.PutUint64(number[:], uint64(duration.Int64))
+			_, _ = h.Write(number[:])
+		} else {
+			_, _ = h.Write([]byte{0})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return "", err
+	}
+	rows.Close()
+
+	rows, err = db.Query("SELECT key, value FROM settings ORDER BY key")
+	if err != nil {
+		return "", err
+	}
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			rows.Close()
+			return "", err
+		}
+		_, _ = h.Write([]byte{'C'})
+		writeFingerprintString(h, key)
+		writeFingerprintString(h, value)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return "", err
+	}
+	rows.Close()
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func fingerprintFromBackupName(name string) string {
+	extension := filepath.Ext(name)
+	if extension != "."+extRaw && extension != "."+extEncrypted {
+		return ""
+	}
+	base := strings.TrimSuffix(name, extension)
+	separator := strings.LastIndexByte(base, '_')
+	if separator < 0 {
+		return ""
+	}
+	fingerprint := base[separator+1:]
+	if len(fingerprint) != backupHashLength && len(fingerprint) != sha256.Size*2 {
+		return ""
+	}
+	if _, err := hex.DecodeString(fingerprint); err != nil {
+		return ""
+	}
+	return strings.ToLower(fingerprint)
+}
+
+func latestBackupFingerprint(target BackupTarget) string {
+	files, err := os.ReadDir(target.Path)
+	if err != nil {
+		return ""
+	}
+
+	var latestName string
+	var latestModTime time.Time
+	for _, file := range files {
+		if file.IsDir() || !strings.HasPrefix(file.Name(), backupPrefix) {
+			continue
+		}
+		info, err := file.Info()
+		if err != nil {
+			continue
+		}
+		if latestName == "" || info.ModTime().After(latestModTime) || (info.ModTime().Equal(latestModTime) && file.Name() > latestName) {
+			latestName = file.Name()
+			latestModTime = info.ModTime()
+		}
+	}
+
+	return fingerprintFromBackupName(latestName)
+}
+
+func backupFilePath(target BackupTarget, timestamp, fingerprint, extension string) string {
+	shortFingerprint := fingerprint[:backupHashLength]
+	filename := fmt.Sprintf("%s%s_%s.%s", backupPrefix, timestamp, shortFingerprint, extension)
+	targetFile := filepath.Join(target.Path, filename)
+	if _, err := os.Stat(targetFile); err != nil {
+		return targetFile
+	}
+
+	for sequence := 2; ; sequence++ {
+		filename = fmt.Sprintf("%s%s_%d_%s.%s", backupPrefix, timestamp, sequence, shortFingerprint, extension)
+		targetFile = filepath.Join(target.Path, filename)
+		if _, err := os.Stat(targetFile); err != nil {
+			return targetFile
+		}
+	}
+}
 
 // encryptData blocks the bytes using AES-256-GCM
 func encryptData(plaintext []byte, passphrase string) ([]byte, error) {
@@ -114,24 +272,108 @@ func rotateBackups(target BackupTarget) {
 	}
 }
 
-// RunBackupJob triggers the main operational backup loop
-func RunBackupJob(cfg *Config, db *sql.DB) {
-	if !cfg.Backup.Enabled {
-		return
+func finalizeBackupReport(report BackupReport) BackupReport {
+	var current, created, failed int
+	for _, target := range report.Targets {
+		switch target.Status {
+		case "current":
+			current++
+		case "created":
+			created++
+		case "failed":
+			failed++
+		}
 	}
 
-	dbPath := resolveDatabasePath(cfg.Database.Filename)
-	tempPath := dbPath + ".tmp_backup"
+	switch {
+	case failed > 0 && current+created > 0:
+		report.Status = backupStatusPartial
+	case failed > 0:
+		report.Status = backupStatusFailed
+	case created > 0:
+		report.Status = backupStatusSuccess
+	default:
+		report.Status = backupStatusSkipped
+	}
+	return report
+}
 
-	// Clean up any stale temp backup file first
-	_ = os.Remove(tempPath)
+func failPendingTargets(report *BackupReport, message string) {
+	for i := range report.Targets {
+		if report.Targets[i].Status == "pending" {
+			report.Targets[i].Status = "failed"
+			report.Targets[i].Error = message
+		}
+	}
+}
+
+// RunBackupJob creates a consistent snapshot only for targets whose latest
+// successful backup does not match the current logical database state.
+func RunBackupJob(cfg *Config, db *sql.DB) BackupReport {
+	backupJobMutex.Lock()
+	defer backupJobMutex.Unlock()
+
+	if !cfg.Backup.Enabled {
+		return BackupReport{Status: backupStatusDisabled}
+	}
+	if len(cfg.Backup.Targets) == 0 {
+		return BackupReport{Status: backupStatusFailed, Error: "backup is enabled but no targets are configured"}
+	}
+
+	fingerprint, err := databaseFingerprint(db)
+	if err != nil {
+		message := fmt.Sprintf("failed to calculate database fingerprint: %v", err)
+		log.Printf("❌ Backup: %s\n", message)
+		return BackupReport{Status: backupStatusFailed, Error: message}
+	}
+
+	report := BackupReport{
+		Fingerprint: fingerprint,
+		Targets:     make([]BackupTargetResult, len(cfg.Backup.Targets)),
+	}
+	pendingCount := 0
+	for i, target := range cfg.Backup.Targets {
+		status := "pending"
+		storedFingerprint := latestBackupFingerprint(target)
+		if cfg.Backup.OnlyIfChanged && storedFingerprint != "" && strings.HasPrefix(fingerprint, storedFingerprint) {
+			status = "current"
+			log.Printf("⏭️  Backup [Target %s]: Database is unchanged; keeping the existing backup.\n", target.Name)
+		} else {
+			pendingCount++
+		}
+		report.Targets[i] = BackupTargetResult{Name: target.Name, Path: target.Path, Status: status}
+	}
+	if !cfg.Backup.OnlyIfChanged {
+		log.Println("ℹ️  Backup: only_if_changed is disabled; creating a new backup regardless of database changes.")
+	}
+	if pendingCount == 0 {
+		return finalizeBackupReport(report)
+	}
+
+	tempFile, err := os.CreateTemp("", "finn-backup-*.db")
+	if err != nil {
+		failPendingTargets(&report, fmt.Sprintf("failed to allocate temporary backup file: %v", err))
+		return finalizeBackupReport(report)
+	}
+	tempPath := tempFile.Name()
+	if err := tempFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		failPendingTargets(&report, fmt.Sprintf("failed to prepare temporary backup file: %v", err))
+		return finalizeBackupReport(report)
+	}
+	// VACUUM INTO requires its destination not to exist.
+	if err := os.Remove(tempPath); err != nil {
+		failPendingTargets(&report, fmt.Sprintf("failed to prepare temporary backup path: %v", err))
+		return finalizeBackupReport(report)
+	}
 
 	// Run SQLite VACUUM INTO to get a consistent backup snapshot safely
 	log.Println("💾 Backup: Running SQLite VACUUM INTO to create consistent snapshot...")
 	escapedPath := strings.ReplaceAll(tempPath, "'", "''")
 	if _, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", escapedPath)); err != nil {
 		log.Printf("❌ Backup: SQLite VACUUM INTO failed: %v\n", err)
-		return
+		failPendingTargets(&report, fmt.Sprintf("SQLite VACUUM INTO failed: %v", err))
+		return finalizeBackupReport(report)
 	}
 
 	// Clean up temp file after reading
@@ -144,7 +386,8 @@ func RunBackupJob(cfg *Config, db *sql.DB) {
 	dbBytes, err := os.ReadFile(tempPath)
 	if err != nil {
 		log.Printf("⚠️  Backup: Failed to read temporary backup file: %v\n", err)
-		return
+		failPendingTargets(&report, fmt.Sprintf("failed to read temporary backup file: %v", err))
+		return finalizeBackupReport(report)
 	}
 
 	var finalData []byte
@@ -155,7 +398,8 @@ func RunBackupJob(cfg *Config, db *sql.DB) {
 		encrypted, err := encryptData(dbBytes, cfg.Backup.CipherKey)
 		if err != nil {
 			log.Printf("⚠️  Backup: Encryption failed: %v\n", err)
-			return
+			failPendingTargets(&report, fmt.Sprintf("encryption failed: %v", err))
+			return finalizeBackupReport(report)
 		}
 		finalData = encrypted
 		extension = extEncrypted
@@ -166,22 +410,30 @@ func RunBackupJob(cfg *Config, db *sql.DB) {
 	}
 
 	timestamp := time.Now().Format(backupTimeFormat)
-	filename := fmt.Sprintf("%s%s.%s", backupPrefix, timestamp, extension)
-
-	for _, target := range cfg.Backup.Targets {
+	for i, target := range cfg.Backup.Targets {
+		if report.Targets[i].Status == "current" {
+			continue
+		}
 		if err := os.MkdirAll(target.Path, 0755); err != nil {
 			log.Printf("⚠️  Backup [Target %s]: Directory creation skipped at %s: %v\n", target.Name, target.Path, err)
+			report.Targets[i].Status = "failed"
+			report.Targets[i].Error = fmt.Sprintf("failed to create backup directory: %v", err)
 			continue
 		}
 
-		targetFile := filepath.Join(target.Path, filename)
+		targetFile := backupFilePath(target, timestamp, fingerprint, extension)
 		if err := os.WriteFile(targetFile, finalData, 0600); err != nil {
 			log.Printf("❌ Backup [Target %s]: File write failed at %s: %v\n", target.Name, targetFile, err)
+			report.Targets[i].Status = "failed"
+			report.Targets[i].Error = fmt.Sprintf("failed to write backup file: %v", err)
 		} else {
 			log.Printf("✅ Backup [Target %s]: Saved to %s\n", target.Name, targetFile)
+			report.Targets[i].Status = "created"
 			rotateBackups(target)
 		}
 	}
+
+	return finalizeBackupReport(report)
 }
 
 // RunRestoreJob overwrites the current database with the specified backup file safely

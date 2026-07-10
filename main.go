@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -143,7 +144,9 @@ func main() {
 	r := gin.Default()
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	var appShutdownHandledBackup atomic.Bool
 	requestShutdown := func() {
+		appShutdownHandledBackup.Store(true)
 		select {
 		case quit <- syscall.SIGTERM:
 		default:
@@ -156,7 +159,12 @@ func main() {
 	r.Use(cors.New(corsConfig))
 
 	// Register API endpoints from api.go
-	setupAPI(r, db, requestShutdown)
+	setupAPI(r, db, requestShutdown, func() BackupReport {
+		if isDemoMode {
+			return BackupReport{Status: backupStatusDisabled}
+		}
+		return RunBackupJob(cfg, db)
+	})
 
 	// Inject the SPA frontend into the routing tree
 	dist, err := fs.Sub(frontendFS, "frontend/dist")
@@ -214,7 +222,7 @@ func main() {
 		log.Printf("⚠️  Shutdown: Web server forced to offline: %v\n", err)
 	}
 
-	if !isDemoMode {
+	if !isDemoMode && !appShutdownHandledBackup.Load() {
 		log.Println("💾 Shutdown: Executing final synchronized safety backup...")
 		RunBackupJob(cfg, db)
 	}

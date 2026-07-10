@@ -8,6 +8,7 @@ database:
 
 backup:
   enabled: true
+  only_if_changed: true
   interval_hours: 12
   targets:
     - name: local_storage
