@@ -9,6 +9,9 @@ import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { CountrySelect } from './components/CountrySelect';
 import { HelpTooltip } from './components/HelpTooltip';
+import { PageLoader, Spinner } from './components/PageLoader';
+import { SettingsValidationModal } from './components/SettingsValidationModal';
+import type { SettingsValidationIssue } from './components/SettingsValidationModal';
 
 type SettingsListKey = 'currencies' | 'tags';
 
@@ -19,16 +22,48 @@ const compactButtonStyle = { padding: '6px 12px', fontSize: '13px' };
 const iconButtonStyle = { padding: '8px' };
 const inputRowStyle = { height: '36px' };
 const autoFetchStyle = { background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0 10px', height: '36px', userSelect: 'none' as const };
+const normalizeListValue = (value: string) => value.trim().toLocaleLowerCase();
+
+const findDuplicateValues = (values: string[]) => {
+  const entries = new Map<string, { count: number; display: string }>();
+  values.forEach(value => {
+    const normalized = normalizeListValue(value);
+    if (!normalized) return;
+    const current = entries.get(normalized);
+    entries.set(normalized, {
+      count: (current?.count || 0) + 1,
+      display: current?.display || value.trim()
+    });
+  });
+  return Array.from(entries.entries())
+    .filter(([, entry]) => entry.count > 1)
+    .map(([normalized, entry]) => ({ normalized, display: entry.display }));
+};
 
 export default function Settings() {
   const { settings, setSettings, loading } = useSettings();
   const navigate = useNavigate();
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [validationIssues, setValidationIssues] = useState<SettingsValidationIssue[]>([]);
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
   const [aiProbing, setAIProbing] = useState(false);
   const initialSettingsHash = useRef('');
   const currentSettingsHash = useMemo(() => JSON.stringify(settings), [settings]);
   const isDirty = !!initialSettingsHash.current && initialSettingsHash.current !== currentSettingsHash;
+  const duplicateOrganizations = useMemo(() => (
+    findDuplicateValues(settings.organizations.map(organization => organization.name))
+  ), [settings.organizations]);
+  const duplicateCurrencies = useMemo(() => findDuplicateValues(settings.currencies), [settings.currencies]);
+  const duplicateTags = useMemo(() => findDuplicateValues(settings.tags || []), [settings.tags]);
+  const duplicateOrganizationNames = useMemo(() => (
+    new Set(duplicateOrganizations.map(item => item.normalized))
+  ), [duplicateOrganizations]);
+  const duplicateCurrencyNames = useMemo(() => (
+    new Set(duplicateCurrencies.map(item => item.normalized))
+  ), [duplicateCurrencies]);
+  const duplicateTagNames = useMemo(() => (
+    new Set(duplicateTags.map(item => item.normalized))
+  ), [duplicateTags]);
 
   useEffect(() => {
     if (!loading && !initialSettingsHash.current) {
@@ -66,16 +101,39 @@ export default function Settings() {
   };
 
   useEscapeToDashboard({
-    blocked: showLeaveConfirm,
+    blocked: showLeaveConfirm || validationIssues.length > 0,
     confirmWhen: isDirty,
     confirmMessage: 'Settings have unsaved changes. Leave without saving?',
     onConfirmRequired: () => setShowLeaveConfirm(true)
   });
 
   const handleSave = () => {
-    const invalidOrganization = settings.organizations.find(organization => !isValidCountryCode(organization.country));
-    if (invalidOrganization) {
-      alert(`Choose a valid ISO alpha-3 country for ${invalidOrganization.name || 'the organization'}.`);
+    const issues: SettingsValidationIssue[] = [
+      ...duplicateOrganizations.map(item => ({
+        section: 'Organization',
+        value: item.display,
+        message: 'This organization is listed more than once.'
+      })),
+      ...duplicateCurrencies.map(item => ({
+        section: 'Currency',
+        value: item.display,
+        message: 'This currency is listed more than once.'
+      })),
+      ...duplicateTags.map(item => ({
+        section: 'Balance tag',
+        value: item.display,
+        message: 'This balance tag is listed more than once.'
+      })),
+      ...settings.organizations
+        .filter(organization => !isValidCountryCode(organization.country))
+        .map(organization => ({
+          section: 'Country',
+          value: `${organization.name.trim() || 'Unnamed organization'} · ${organization.country?.trim() || 'empty'}`,
+          message: 'Choose a valid ISO alpha-3 country code.'
+        }))
+    ];
+    if (issues.length > 0) {
+      setValidationIssues(issues);
       return;
     }
     const normalizedSettings = {
@@ -196,6 +254,8 @@ export default function Settings() {
         {(settings[list] || []).map((item, i) => {
           const isCurrency = list === 'currencies';
           const isAuto = isCurrency && (settings.autoFetchCurrencies || []).includes(item);
+          const duplicateNames = isCurrency ? duplicateCurrencyNames : duplicateTagNames;
+          const isDuplicate = duplicateNames.has(normalizeListValue(item));
 
           return (
             <div key={i} className={`flex gap-2${isCurrency ? ' items-center' : ''}`}>
@@ -205,7 +265,18 @@ export default function Settings() {
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Auto rate</span>
                 </label>
               )}
-              <input className="input" value={item} placeholder={placeholder} onChange={event => updateList(list, i, event.target.value)} style={inputRowStyle} />
+              <input
+                className="input"
+                value={item}
+                placeholder={placeholder}
+                onChange={event => updateList(list, i, event.target.value)}
+                aria-invalid={isDuplicate}
+                title={isDuplicate ? `Duplicate ${isCurrency ? 'currency' : 'balance tag'}` : undefined}
+                style={{ ...inputRowStyle, borderColor: isDuplicate ? 'var(--danger)' : undefined }}
+              />
+              {isDuplicate && (
+                <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>Duplicate</span>
+              )}
               <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeFromList(list, i)}>
                 <Trash2 size={16} />
               </button>
@@ -232,30 +303,38 @@ export default function Settings() {
         </button>
       </div>
       <div style={organizationListBodyStyle}>
-        {settings.organizations.map((organization, index) => (
-          <div key={index} className="flex gap-2 items-center">
-            <input
-              className="input"
-              value={organization.name}
-              placeholder="Organization name"
-              onChange={event => updateOrganization(index, 'name', event.target.value)}
-              style={{ ...inputRowStyle, flex: 1 }}
-            />
-            <CountrySelect
-              id={`organization-country-${index}`}
-              value={organization.country}
-              onChange={value => updateOrganization(index, 'country', value)}
-            />
-            <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeOrganization(index)}>
-              <Trash2 size={16} />
-            </button>
-          </div>
-        ))}
+        {settings.organizations.map((organization, index) => {
+          const isDuplicate = duplicateOrganizationNames.has(normalizeListValue(organization.name));
+          return (
+            <div key={index} className="flex gap-2 items-center">
+              <input
+                className="input"
+                value={organization.name}
+                placeholder="Organization name"
+                onChange={event => updateOrganization(index, 'name', event.target.value)}
+                aria-invalid={isDuplicate}
+                title={isDuplicate ? 'Duplicate organization name' : undefined}
+                style={{ ...inputRowStyle, flex: 1, borderColor: isDuplicate ? 'var(--danger)' : undefined }}
+              />
+              {isDuplicate && (
+                <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>Duplicate</span>
+              )}
+              <CountrySelect
+                id={`organization-country-${index}`}
+                value={organization.country}
+                onChange={value => updateOrganization(index, 'country', value)}
+              />
+              <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeOrganization(index)}>
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <PageLoader label="Loading settings" />;
 
   return (
     <div>
@@ -386,14 +465,14 @@ export default function Settings() {
             disabled={aiProbing || !settings.localAI?.enabled}
             style={{ minHeight: '36px' }}
           >
-            <RefreshCw size={15} className={aiProbing ? 'ai-spin' : ''} /> Test
+            {aiProbing ? <Spinner label="Checking local AI server" size={15} /> : <RefreshCw size={15} />} Test
           </button>
         </div>
 
         {settings.localAI?.enabled && (
           <div style={{ marginTop: '13px', fontSize: '12px', color: aiStatus?.connected ? 'var(--success)' : aiStatus ? 'var(--danger)' : 'var(--text-secondary)' }}>
             {aiProbing
-              ? 'Checking local server…'
+              ? <Spinner label="Checking local AI server" size={14} />
               : aiStatus?.connected
                 ? `Connected · ${aiStatus.selectedModel || 'model auto-selected'} · ${chatModels.length} chat model${chatModels.length === 1 ? '' : 's'} available`
                 : aiStatus?.error || 'Save settings, start LM Studio Server, then test the connection.'}
@@ -410,6 +489,12 @@ export default function Settings() {
           message="Settings have unsaved changes. Leave without saving?"
           onCancel={() => setShowLeaveConfirm(false)}
           onConfirm={() => navigate('/')}
+        />
+      )}
+      {validationIssues.length > 0 && (
+        <SettingsValidationModal
+          issues={validationIssues}
+          onClose={() => setValidationIssues([])}
         />
       )}
     </div>

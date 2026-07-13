@@ -1,5 +1,6 @@
 import { Calendar, Plus, RefreshCw } from 'lucide-react';
 import type { AppSettings, SnapshotData } from '../../types';
+import { Spinner } from './PageLoader';
 
 type PeriodRatesPanelProps = {
   currentMonth: string;
@@ -51,8 +52,8 @@ export function PeriodRatesPanel({
           </h3>
           <div className="flex gap-2">
             <button className="btn" style={{ padding: '6px 10px', fontSize: '13px' }} onClick={onFetchLatestRates} disabled={fetchingRates !== null}>
-              <RefreshCw size={15} className={`mr-2 ${fetchingRates === 'latest' ? 'animate-spin' : ''}`} />
-              {fetchingRates === 'latest' ? 'Fetching...' : 'Fetch Latest'}
+              {fetchingRates === 'latest' ? <Spinner label="Fetching latest rates" size={15} /> : <RefreshCw size={15} />}
+              Fetch Latest
             </button>
             <button
               className="btn"
@@ -61,8 +62,8 @@ export function PeriodRatesPanel({
               title={`Fetch exchange rates for ${currentMonth || 'YYYY-MM'}-01`}
               style={{ padding: '6px 10px', fontSize: '13px' }}
             >
-              <Calendar size={15} className="mr-2" />
-              {fetchingRates === 'periodStart' ? 'Fetching...' : 'Fetch on 1st'}
+              {fetchingRates === 'periodStart' ? <Spinner label="Fetching rates for period start" size={15} /> : <Calendar size={15} />}
+              Fetch on 1st
             </button>
           </div>
         </div>

@@ -8,6 +8,7 @@ import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { calculateFlowDecomposition, calculateTotals, convertAmount } from '../lib/finance';
 import { GraphsAnalyticsSections } from './components/graphs/GraphsAnalyticsSections';
 import { SearchableSelect } from './components/graphs/SearchableSelect';
+import { PageLoader } from './components/PageLoader';
 import { StickyPageHeader } from './components/StickyPageHeader';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
@@ -461,11 +462,11 @@ export default function GraphsPage() {
     });
   }, [hiddenBalances]);
 
-  if (loading) return <div>Analyzing datasets & generating visuals...</div>;
+  if (loading) return <PageLoader label="Loading portfolio analytics" />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      <StickyPageHeader marginBottom="0" compactTop>
+      <StickyPageHeader marginBottom="0">
         <div className="flex items-center gap-4">
           <Link to="/" title="Back to dashboard" className="btn"><ArrowLeft size={18} /></Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>

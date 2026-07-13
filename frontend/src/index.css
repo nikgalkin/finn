@@ -107,6 +107,26 @@ a {
   border-color: var(--accent);
 }
 
+.page-loader {
+  min-height: min(36vh, 320px);
+  display: grid;
+  place-items: center;
+  color: #60a5fa;
+}
+
+.app-spinner {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  line-height: 0;
+  animation: app-spinner-spin 0.8s linear infinite;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.35));
+}
+
+@keyframes app-spinner-spin {
+  to { transform: rotate(360deg); }
+}
+
 .app-header {
   display: flex;
   justify-content: space-between;
@@ -957,14 +977,6 @@ a {
   background: rgba(15, 23, 42, 0.36);
   font-size: 11px;
   text-align: right;
-}
-
-@keyframes ai-spin {
-  to { transform: rotate(360deg); }
-}
-
-.ai-spin {
-  animation: ai-spin 0.9s linear infinite;
 }
 
 @media (max-width: 760px) {
