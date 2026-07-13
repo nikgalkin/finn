@@ -423,14 +423,14 @@ export default function SnapshotEdit() {
   };
 
   const fillFromSettings = () => {
-    const uniqueOrganizationNames = settings.organizations.filter((name, index, names) => (
-      names.findIndex(candidate => candidate.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()) === index
+    const uniqueOrganizations = settings.organizations.filter((organization, index, organizations) => (
+      organizations.findIndex(candidate => candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
     ));
     setData({
       ...data,
-      organizations: uniqueOrganizationNames.map(name => ({
+      organizations: uniqueOrganizations.map(organization => ({
         id: uuidv4(),
-        name,
+        name: organization.name,
         balances: [{ currency: settings.baseCurrency || 'RUB', amount: 0, comment: '', tags: [] }]
       }))
     });
@@ -531,10 +531,12 @@ export default function SnapshotEdit() {
 
   const addRate = () => {
     const curr = prompt('Currency code (e.g. USDT):');
-    if (curr) {
+    const currency = curr?.trim().toUpperCase();
+    if (currency) {
+      const baseCurrency = (settings.baseCurrency || 'RUB').toUpperCase();
       setData({
         ...data,
-        rates: { ...data.rates, [curr.toUpperCase()]: 1 }
+        rates: { ...data.rates, [currency]: currency === baseCurrency ? 1 : 0 }
       });
     }
   };

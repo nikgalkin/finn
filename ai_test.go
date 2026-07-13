@@ -29,6 +29,12 @@ func useAIHTTPClientForTest(t *testing.T, handler roundTripFunc) {
 	t.Cleanup(func() { newAIHTTPClient = previous })
 }
 
+func TestDefaultLocalAIIsDisabled(t *testing.T) {
+	if defaultLocalAISettings().Enabled {
+		t.Fatal("local AI must be opt-in")
+	}
+}
+
 func newAITestDB(t *testing.T, baseURL string) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -76,7 +82,7 @@ func newAITestDB(t *testing.T, baseURL string) *sql.DB {
 	}{
 		{
 			month: "2026-01",
-			data:  `{"rates":{"RUB":1,"USD":100},"organizations":[{"name":"Bank","balances":[{"currency":"RUB","amount":1000,"tags":["cash"]}]},{"name":"Broker","balances":[{"currency":"USD","amount":10,"tags":["stocks"]}]}]}`,
+			data:  `{"comment":"Moved money from Bank to Broker","rates":{"RUB":1,"USD":100},"organizations":[{"name":"Bank","country":"RUS","balances":[{"currency":"RUB","amount":1000,"tags":["cash"]}]},{"name":"Broker","balances":[{"currency":"USD","amount":10,"tags":["stocks"]}]}]}`,
 		},
 		{
 			month: "2026-02",
@@ -126,6 +132,7 @@ func TestBuildFinancialContextIncludesDerivedMetrics(t *testing.T) {
 		t.Fatalf("unexpected context info: %+v", info)
 	}
 	checks := []string{
+		`You are a financial analysis assistant.`,
 		`"snapshot_count":2`,
 		`"first_month":"2026-01"`,
 		`"last_month":"2026-02"`,
@@ -147,6 +154,42 @@ func TestBuildFinancialContextIncludesDerivedMetrics(t *testing.T) {
 	}
 	if strings.Contains(info.Prompt, defaultAIBaseURL) {
 		t.Fatal("financial context leaked local AI connection settings")
+	}
+	if strings.Contains(info.Prompt, "private local financial assistant") {
+		t.Fatal("portable financial prompt still describes itself as local-only")
+	}
+}
+
+func TestBuildFinancialContextHidesOrganizations(t *testing.T) {
+	db := newAITestDB(t, defaultAIBaseURL)
+	visible, err := buildFinancialContext(db, aiContextFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hidden, err := buildFinancialContext(db, aiContextFilter{HideOrganizations: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaked := range []string{"Bank", "Broker"} {
+		if strings.Contains(hidden.Prompt, leaked) {
+			t.Fatalf("anonymized context leaked organization %s", leaked)
+		}
+	}
+	for _, expected := range []string{
+		`"organizations":["Organization1","Organization2"]`,
+		`"name":"Organization1"`,
+		`"name":"Organization2"`,
+		`"country":"RUS"`,
+		`"comment":"Moved money from Organization1 to Organization2"`,
+		`"organization_totals_base":{"Organization1":1500,"Organization2":1100}`,
+		`Organization names and identifiers were anonymized consistently`,
+	} {
+		if !strings.Contains(hidden.Prompt, expected) {
+			t.Errorf("anonymized context does not contain %s", expected)
+		}
+	}
+	if hidden.Fingerprint == visible.Fingerprint {
+		t.Fatal("anonymized and visible contexts must have different fingerprints")
 	}
 }
 

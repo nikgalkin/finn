@@ -29,8 +29,13 @@ export type ParsedSnapshot = Omit<Snapshot, 'data'> & {
   data: SnapshotData;
 };
 
+export type ConfiguredOrganization = {
+  name: string;
+  country?: string;
+};
+
 export type AppSettings = {
-  organizations: string[];
+  organizations: ConfiguredOrganization[];
   currencies: string[];
   autoFetchCurrencies?: string[];
   baseCurrency?: string;
@@ -70,6 +75,7 @@ export type LocalAIContextFilter = {
   months?: number;
   fromMonth?: string;
   toMonth?: string;
+  hideOrganizations?: boolean;
 };
 
 export type AIResponseStyle = 'strict' | 'balanced' | 'playful';

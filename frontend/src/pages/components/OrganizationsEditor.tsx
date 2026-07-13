@@ -1,6 +1,7 @@
 import type { MutableRefObject } from 'react';
 import { Copy, List, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import type { AppSettings, Balance, Organization } from '../../types';
+import { getCountryByAlpha3, getCountryDisplayName } from '../../lib/countries';
 import { evaluateNumberExpression } from '../../lib/numberExpression';
 import { HelpTooltip } from './HelpTooltip';
 import { MultiTagSelect } from './MultiTagSelect';
@@ -78,14 +79,14 @@ export function OrganizationsEditor({
   onUpdateBalance,
   onUpdateOrganizationField
 }: OrganizationsEditorProps) {
-  const uniqueConfiguredOrganizations = settings.organizations.filter((name, index, names) => (
-    names.findIndex(candidate => candidate.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase()) === index
+  const uniqueConfiguredOrganizations = settings.organizations.filter((organization, index, organizations) => (
+    organizations.findIndex(candidate => candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
   ));
   const selectedOrganizationNames = new Set(
     organizations.map(org => org.name.trim().toLocaleLowerCase()).filter(Boolean)
   );
-  const allOrganizationsUsed = uniqueConfiguredOrganizations.every(name => (
-    selectedOrganizationNames.has(name.trim().toLocaleLowerCase())
+  const allOrganizationsUsed = uniqueConfiguredOrganizations.every(organization => (
+    selectedOrganizationNames.has(organization.name.trim().toLocaleLowerCase())
   ));
   const organizationLimitReached = organizations.length >= uniqueConfiguredOrganizations.length;
   const addOrganizationDisabled = allOrganizationsUsed || organizationLimitReached;
@@ -130,6 +131,10 @@ export function OrganizationsEditor({
               .map(item => item.name.trim().toLocaleLowerCase())
               .filter(Boolean)
           );
+          const configuredOrganization = uniqueConfiguredOrganizations.find(organization => (
+            organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
+          ));
+          const country = getCountryByAlpha3(configuredOrganization?.country);
 
           return (
             <div
@@ -143,26 +148,39 @@ export function OrganizationsEditor({
             >
               <div className="flex items-center mb-6 relative">
                 <div className="flex-1 flex justify-center">
-                  <select
-                    className="input"
-                    value={org.name}
-                    onChange={event => onUpdateOrganizationField(org.id, 'name', event.target.value)}
-                    style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
-                  >
-                    <option value="" disabled>Select Organization</option>
-                    {uniqueConfiguredOrganizations.map(name => (
-                      <option
-                        key={name}
-                        value={name}
-                        disabled={selectedOrganizationNames.has(name.trim().toLocaleLowerCase())}
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="input"
+                      value={org.name}
+                      onChange={event => onUpdateOrganizationField(org.id, 'name', event.target.value)}
+                      style={{ fontSize: 20, fontWeight: 'bold', width: 'auto', minWidth: '150px', textAlign: 'center' }}
+                    >
+                      <option value="" disabled>Select Organization</option>
+                      {uniqueConfiguredOrganizations.map(organization => (
+                        <option
+                          key={organization.name}
+                          value={organization.name}
+                          disabled={selectedOrganizationNames.has(organization.name.trim().toLocaleLowerCase())}
+                        >
+                          {organization.name}
+                        </option>
+                      ))}
+                      {!settings.organizations.some(organization => organization.name === org.name) && org.name && (
+                        <option value={org.name}>{org.name}</option>
+                      )}
+                    </select>
+                    {country && (
+                      <span
+                        className="country-code-hint"
+                        data-tooltip={getCountryDisplayName(country)}
+                        aria-label={`Country: ${getCountryDisplayName(country)}`}
+                        tabIndex={0}
+                        style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.58 }}
                       >
-                        {name}
-                      </option>
-                    ))}
-                    {!settings.organizations.includes(org.name) && org.name && (
-                      <option value={org.name}>{org.name}</option>
+                        {country.alpha3}
+                      </span>
                     )}
-                  </select>
+                  </div>
                 </div>
                 <div className="absolute right-0 flex gap-2">
                   <button

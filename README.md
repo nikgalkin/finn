@@ -39,7 +39,7 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 * **Adaptive Currency Scaling:** Smart cross-rate rendering that automatically cross-converts and realigns low-nominal currencies (like UZS) relative to your asset base to avoid skewed flat-line visuals.
 * **Math in Inputs:** Balance inputs support on-the-fly math evaluations. Type `15000 + 5000` directly into the input field, and it will compute the total instantly.
 * **Local & Secure:** All data is stored locally in an SQLite database. No third-party cloud syncing, no telemetry.
-* **Local AI Assistant:** Chat with an optional model running through LM Studio or another loopback OpenAI-compatible server. Finn sends the model a compact copy of the snapshots plus precomputed financial metrics; no cloud provider is required.
+* **Local AI Assistant with Prompt Fallback:** Chat with a local model through LM Studio or another loopback OpenAI-compatible server. If no model is connected, Finn can prepare and copy the same request with selected snapshots and precomputed metrics for use elsewhere.
 
 ## 🛠 Tech Stack
 
@@ -93,11 +93,13 @@ lms server start
 lms load <model-key> --context-length 32768 --gpu max
 ```
 
-Open **Settings → Local AI** to test the connection and select a chat model. The default endpoint is `http://127.0.0.1:1234/v1`. For privacy, Finn only accepts loopback server addresses.
+The familiar chat interface also works without a connected model: choose the context and tone, write a request, then preview and copy the prepared prompt to any AI tool.
+
+Open the optional **Local AI** section at the bottom of Settings to configure the connection and select a chat model. The default endpoint is `http://127.0.0.1:1234/v1`. For privacy, Finn only accepts loopback server addresses.
 
 LM Studio mode uses its native stateful chat API with reasoning disabled for responsive everyday analysis. The first message processes the complete financial context; subsequent messages reuse the local conversation state. Finn automatically starts a new context when the financial dataset changes.
 
-The Assistant page lets you limit the model context to the latest 1, 2, 3, 6, 12, or 24 months, use the complete history, or select an exact month range. Smaller ranges reduce the first-response processing time. You can inspect and copy the exact system prompt before sending it, and choose a strict, balanced, or playful response tone. Model answers support Markdown, including tables and code blocks.
+The Assistant page lets you limit context to the latest 1, 2, 3, 6, 12, or 24 months, use the complete history, or select an exact month range. You can choose a strict, balanced, or playful response tone. Connected local models answer directly in the existing Markdown chat; without one, the composer opens the same context plus request as a copyable prompt.
 
 ## 📝 Usage Tips and Screenshots
 

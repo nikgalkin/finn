@@ -3,14 +3,18 @@ import { ArrowLeft, Save, Plus, RefreshCw, Server, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../types';
 import type { LocalAISettings, LocalAIStatus } from '../types';
+import { isValidCountryCode } from '../lib/countries';
 import { useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
+import { CountrySelect } from './components/CountrySelect';
+import { HelpTooltip } from './components/HelpTooltip';
 
-type SettingsListKey = 'organizations' | 'currencies' | 'tags';
+type SettingsListKey = 'currencies' | 'tags';
 
-const listGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px' };
-const listBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '8px', maxHeight: '320px', overflowY: 'auto' as const, paddingRight: '4px' };
+const listGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' };
+const listBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '260px', overflowY: 'auto' as const, paddingRight: '4px' };
+const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px' };
 const compactButtonStyle = { padding: '6px 12px', fontSize: '13px' };
 const iconButtonStyle = { padding: '8px' };
 const inputRowStyle = { height: '36px' };
@@ -23,7 +27,6 @@ export default function Settings() {
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
   const [aiProbing, setAIProbing] = useState(false);
   const initialSettingsHash = useRef('');
-  const initialAIProbeDone = useRef(false);
   const currentSettingsHash = useMemo(() => JSON.stringify(settings), [settings]);
   const isDirty = !!initialSettingsHash.current && initialSettingsHash.current !== currentSettingsHash;
 
@@ -62,12 +65,6 @@ export default function Settings() {
     }
   };
 
-  useEffect(() => {
-    if (loading || initialAIProbeDone.current) return;
-    initialAIProbeDone.current = true;
-    void probeLocalAI(settings.localAI);
-  }, [loading, settings.localAI]);
-
   useEscapeToDashboard({
     blocked: showLeaveConfirm,
     confirmWhen: isDirty,
@@ -76,14 +73,27 @@ export default function Settings() {
   });
 
   const handleSave = () => {
+    const invalidOrganization = settings.organizations.find(organization => !isValidCountryCode(organization.country));
+    if (invalidOrganization) {
+      alert(`Choose a valid ISO alpha-3 country for ${invalidOrganization.name || 'the organization'}.`);
+      return;
+    }
+    const normalizedSettings = {
+      ...settings,
+      organizations: settings.organizations.map(organization => ({
+        ...organization,
+        country: organization.country?.trim().toUpperCase() || undefined
+      }))
+    };
     fetch(`${API_URL}/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: JSON.stringify(settings) })
+      body: JSON.stringify({ value: JSON.stringify(normalizedSettings) })
     })
     .then(res => {
       if (res.ok) {
-        initialSettingsHash.current = currentSettingsHash;
+        setSettings(normalizedSettings);
+        initialSettingsHash.current = JSON.stringify(normalizedSettings);
         alert('Settings saved!');
       }
       else alert('Failed to save');
@@ -92,18 +102,58 @@ export default function Settings() {
 
   const updateList = (list: SettingsListKey, index: number, val: string) => {
     const newList = [...(settings[list] || [])];
+    const previousValue = newList[index];
     newList[index] = val;
+    if (list === 'currencies') {
+      const autoFetchCurrencies = [...(settings.autoFetchCurrencies || [])];
+      const autoFetchIndex = autoFetchCurrencies.indexOf(previousValue);
+      if (autoFetchIndex >= 0) autoFetchCurrencies[autoFetchIndex] = val;
+      setSettings({ ...settings, currencies: newList, autoFetchCurrencies });
+      return;
+    }
     setSettings({ ...settings, [list]: newList });
   };
 
   const addToList = (list: SettingsListKey) => {
+    if (list === 'currencies') {
+      setSettings({
+        ...settings,
+        currencies: [...settings.currencies, ''],
+        autoFetchCurrencies: [...(settings.autoFetchCurrencies || []), '']
+      });
+      return;
+    }
     setSettings({ ...settings, [list]: [...(settings[list] || []), ''] });
   };
 
   const removeFromList = (list: SettingsListKey, index: number) => {
     const newList = [...(settings[list] || [])];
+    const removedValue = newList[index];
     newList.splice(index, 1);
+    if (list === 'currencies') {
+      const autoFetchCurrencies = [...(settings.autoFetchCurrencies || [])];
+      const autoFetchIndex = autoFetchCurrencies.indexOf(removedValue);
+      if (autoFetchIndex >= 0) autoFetchCurrencies.splice(autoFetchIndex, 1);
+      setSettings({ ...settings, currencies: newList, autoFetchCurrencies });
+      return;
+    }
     setSettings({ ...settings, [list]: newList });
+  };
+
+  const updateOrganization = (index: number, field: 'name' | 'country', value: string) => {
+    const organizations = [...settings.organizations];
+    organizations[index] = { ...organizations[index], [field]: value };
+    setSettings({ ...settings, organizations });
+  };
+
+  const addOrganization = () => {
+    setSettings({ ...settings, organizations: [...settings.organizations, { name: '' }] });
+  };
+
+  const removeOrganization = (index: number) => {
+    const organizations = [...settings.organizations];
+    organizations.splice(index, 1);
+    setSettings({ ...settings, organizations });
   };
 
   const toggleAutoFetch = (curr: string) => {
@@ -119,7 +169,7 @@ export default function Settings() {
     setSettings({
       ...settings,
       localAI: {
-        enabled: true,
+        enabled: false,
         provider: 'lmstudio',
         baseUrl: 'http://127.0.0.1:1234/v1',
         model: '',
@@ -135,10 +185,10 @@ export default function Settings() {
   });
 
   const renderListSection = (title: string, list: SettingsListKey, placeholder?: string) => (
-    <div className="glass-panel" style={{ padding: '24px' }}>
-      <div className="flex justify-between items-center mb-4">
+    <div className="glass-panel" style={{ padding: '18px 20px' }}>
+      <div className="flex justify-between items-center mb-2">
         <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{title}</h3>
-        <button className="btn" style={compactButtonStyle} onClick={() => addToList(list)}>
+        <button className="btn" style={compactButtonStyle} onClick={() => addToList(list)} aria-label={`Add ${title.toLowerCase()}`}>
           <Plus size={14} /> Add
         </button>
       </div>
@@ -166,11 +216,50 @@ export default function Settings() {
     </div>
   );
 
+  const renderOrganizationsSection = () => (
+    <div className="glass-panel" style={{ padding: '18px 20px' }}>
+      <div className="flex justify-between items-center mb-2">
+        <div className="flex items-center gap-2">
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Organizations</h3>
+          <HelpTooltip
+            text="Country is optional. Finn stores it as an ISO 3166-1 alpha-3 code, for example DEU or USA."
+            ariaLabel="Organization country explanation"
+            width={280}
+          />
+        </div>
+        <button className="btn" style={compactButtonStyle} onClick={addOrganization} aria-label="Add organization">
+          <Plus size={14} /> Add
+        </button>
+      </div>
+      <div style={organizationListBodyStyle}>
+        {settings.organizations.map((organization, index) => (
+          <div key={index} className="flex gap-2 items-center">
+            <input
+              className="input"
+              value={organization.name}
+              placeholder="Organization name"
+              onChange={event => updateOrganization(index, 'name', event.target.value)}
+              style={{ ...inputRowStyle, flex: 1 }}
+            />
+            <CountrySelect
+              id={`organization-country-${index}`}
+              value={organization.country}
+              onChange={value => updateOrganization(index, 'country', value)}
+            />
+            <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeOrganization(index)}>
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   if (loading) return <div>Loading...</div>;
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link title="Back to dashboard" to="/" className="btn"><ArrowLeft size={18} /></Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Settings</h2>
@@ -179,22 +268,73 @@ export default function Settings() {
           <Save size={18} /> Save
         </button>
       </div>
+      <div className="glass-panel mb-4" style={{ padding: '18px 24px' }}>
+        <h3 style={{ margin: '0 0 14px 0', fontSize: '18px', fontWeight: 600 }}>Currency Framework</h3>
 
-      <div className="glass-panel mb-8" style={{ padding: '24px 32px' }}>
-        <div className="flex justify-between items-center" style={{ gap: '20px', marginBottom: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>Base Currency</label>
+            <select
+              className="input"
+              value={settings.baseCurrency || 'RUB'}
+              onChange={e => setSettings({ ...settings, baseCurrency: e.target.value })}
+              style={{ width: '100%', height: '36px' }}
+            >
+              {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.35' }}>
+              The primary asset standard for your total net worth metrics.
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>Secondary Currency</label>
+            <select
+              className="input"
+              value={settings.secondaryCurrency || 'USD'}
+              onChange={e => setSettings({ ...settings, secondaryCurrency: e.target.value })}
+              style={{ width: '100%', height: '36px' }}
+            >
+              <option value="">— None —</option>
+              {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.35' }}>
+              Displayed concurrently alongside base units inside grids and trends.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '16px' }}>
+        {renderOrganizationsSection()}
+      </div>
+
+      <div style={listGridStyle}>
+        {renderListSection('Currencies', 'currencies')}
+        {renderListSection('Balance Tags', 'tags', 'e.g. Safety Cushion, Crypto')}
+      </div>
+
+      <details className="glass-panel" style={{ marginTop: '16px', padding: 0 }}>
+        <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
+          <Server size={17} />
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Local AI (optional)</span>
+          <span style={{ fontSize: '12px' }}>Connection settings and model selection</span>
+        </summary>
+        <div style={{ padding: '2px 20px 20px' }}>
+        <div className="flex justify-between items-center" style={{ gap: '16px', marginBottom: '14px' }}>
           <div>
             <div className="flex items-center gap-2">
               <Server size={18} color="var(--accent)" />
               <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Local AI</h3>
             </div>
-            <p style={{ margin: '7px 0 0', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            <p style={{ margin: '5px 0 0', color: 'var(--text-secondary)', fontSize: '13px' }}>
               Connect Finn to an OpenAI-compatible model server running on this computer.
             </p>
           </div>
           <label className="flex items-center gap-2" style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '13px' }}>
             <input
               type="checkbox"
-              checked={settings.localAI?.enabled ?? true}
+              checked={settings.localAI?.enabled ?? false}
               onChange={event => updateLocalAI({ enabled: event.target.checked })}
               style={{ width: '17px', height: '17px', accentColor: 'var(--accent)' }}
             />
@@ -202,7 +342,7 @@ export default function Settings() {
           </label>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 0.65fr) minmax(250px, 1.15fr) minmax(220px, 1fr) auto', gap: '14px', alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 0.65fr) minmax(250px, 1.15fr) minmax(220px, 1fr) auto', gap: '10px', alignItems: 'end' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
             <label style={{ fontSize: '13px', fontWeight: 500 }}>Provider</label>
             <select
@@ -262,50 +402,8 @@ export default function Settings() {
         <div style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '11px' }}>
           For privacy, Finn accepts loopback addresses only. The financial dataset is sent directly from the Go backend to the local server.
         </div>
-      </div>
-
-      <div className="glass-panel mb-8" style={{ padding: '24px 32px' }}>
-        <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 600 }}>Currency Framework</h3>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>Base Currency</label>
-            <select 
-              className="input" 
-              value={settings.baseCurrency || 'RUB'} 
-              onChange={e => setSettings({ ...settings, baseCurrency: e.target.value })}
-              style={{ width: '100%', height: '38px' }}
-            >
-              {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', marginTop: '2px' }}>
-              The primary asset standard for your total net worth metrics.
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>Secondary Currency</label>
-            <select 
-              className="input" 
-              value={settings.secondaryCurrency || 'USD'} 
-              onChange={e => setSettings({ ...settings, secondaryCurrency: e.target.value })}
-              style={{ width: '100%', height: '38px' }}
-            >
-              <option value="">— None —</option>
-              {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.4', marginTop: '2px' }}>
-              Displayed concurrently alongside base units inside grids and trends.
-            </span>
-          </div>
         </div>
-      </div>
-
-      <div style={listGridStyle}>
-        {renderListSection('Organizations', 'organizations')}
-        {renderListSection('Currencies', 'currencies')}
-        {renderListSection('Balance Tags', 'tags', 'e.g. Safety Cushion, Crypto')}
-      </div>
+      </details>
 
       {showLeaveConfirm && (
         <ConfirmLeaveModal

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent, WheelEvent } from 'react';
-import { ArrowDown, Bot, Braces, CircleStop, RefreshCw, RotateCcw, Send, Server, Sparkles, User } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertCircle, ArrowDown, ArrowLeft, Bot, Braces, CircleStop, RefreshCw, RotateCcw, Send, Server, Sparkles, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { API_URL } from '../types';
@@ -8,6 +9,7 @@ import type { AIResponseStyle, LocalAIContextFilter, LocalAIContextPreview, Loca
 import { SearchableSelect } from './components/graphs/SearchableSelect';
 import { StickyPageHeader } from './components/StickyPageHeader';
 import { AIContextPreviewModal } from './components/AIContextPreviewModal';
+import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 
 type ChatMessage = {
   id: string;
@@ -52,6 +54,7 @@ type StoredChat = {
   customFromMonth: string;
   customToMonth: string;
   responseStyle: AIResponseStyle;
+  hideOrganizations: boolean;
 };
 
 const isContextPreset = (value: unknown): value is ContextPreset =>
@@ -65,7 +68,8 @@ const loadStoredChat = (): StoredChat => {
     contextFilter: DEFAULT_CONTEXT_FILTER,
     customFromMonth: '',
     customToMonth: '',
-    responseStyle: 'balanced'
+    responseStyle: 'balanced',
+    hideOrganizations: false
   };
 
   try {
@@ -92,7 +96,8 @@ const loadStoredChat = (): StoredChat => {
       contextFilter,
       customFromMonth: typeof stored.customFromMonth === 'string' ? stored.customFromMonth : '',
       customToMonth: typeof stored.customToMonth === 'string' ? stored.customToMonth : '',
-      responseStyle: stored.responseStyle === 'strict' || stored.responseStyle === 'playful' ? stored.responseStyle : 'balanced'
+      responseStyle: stored.responseStyle === 'strict' || stored.responseStyle === 'playful' ? stored.responseStyle : 'balanced',
+      hideOrganizations: stored.hideOrganizations === true
     };
   } catch {
     localStorage.removeItem(CHAT_STORAGE_KEY);
@@ -117,6 +122,7 @@ const readResponseError = async (response: Response) => {
 };
 
 export default function AIChat() {
+  useEscapeToDashboard();
   const restoredChat = useMemo(loadStoredChat, []);
   const [status, setStatus] = useState<LocalAIStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
@@ -130,11 +136,13 @@ export default function AIChat() {
   const [customFromMonth, setCustomFromMonth] = useState(restoredChat.customFromMonth);
   const [customToMonth, setCustomToMonth] = useState(restoredChat.customToMonth);
   const [responseStyle, setResponseStyle] = useState<AIResponseStyle>(restoredChat.responseStyle);
+  const [hideOrganizations, setHideOrganizations] = useState(restoredChat.hideOrganizations);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [showContextPreview, setShowContextPreview] = useState(false);
   const [contextPreview, setContextPreview] = useState<LocalAIContextPreview | null>(null);
   const [contextPreviewLoading, setContextPreviewLoading] = useState(false);
   const [contextPreviewError, setContextPreviewError] = useState('');
+  const [contextPreviewIncludesRequest, setContextPreviewIncludesRequest] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const statusRequestIdRef = useRef(0);
   const responseIdRef = useRef('');
@@ -144,8 +152,9 @@ export default function AIChat() {
   const lastUserScrollDirectionRef = useRef(0);
   const jumpingToLatestRef = useRef(false);
   const initialContextFilterRef = useRef(restoredChat.contextFilter);
+  const initialHideOrganizationsRef = useRef(restoredChat.hideOrganizations);
 
-  const refreshStatus = async (filter = contextFilter) => {
+  const refreshStatus = async (filter = contextFilter, hideOrganizationNames = hideOrganizations) => {
     const requestId = ++statusRequestIdRef.current;
     setStatusLoading(true);
     try {
@@ -153,6 +162,7 @@ export default function AIChat() {
       if (filter.months) params.set('months', String(filter.months));
       if (filter.fromMonth) params.set('fromMonth', filter.fromMonth);
       if (filter.toMonth) params.set('toMonth', filter.toMonth);
+      if (hideOrganizationNames) params.set('hideOrganizations', 'true');
       const query = params.size > 0 ? `?${params.toString()}` : '';
       const response = await fetch(`${API_URL}/ai/status${query}`);
       if (!response.ok) throw new Error(await readResponseError(response));
@@ -178,7 +188,7 @@ export default function AIChat() {
   };
 
   useEffect(() => {
-    void refreshStatus(initialContextFilterRef.current);
+    void refreshStatus(initialContextFilterRef.current, initialHideOrganizationsRef.current);
     return () => abortRef.current?.abort();
   }, []);
 
@@ -194,12 +204,13 @@ export default function AIChat() {
         contextFilter,
         customFromMonth,
         customToMonth,
-        responseStyle
+        responseStyle,
+        hideOrganizations
       } satisfies StoredChat));
     } catch {
       // Chat persistence is best-effort; an unavailable/full local storage must not break the assistant.
     }
-  }, [contextFilter, contextPreset, customFromMonth, customToMonth, draft, generating, messages, responseStyle]);
+  }, [contextFilter, contextPreset, customFromMonth, customToMonth, draft, generating, hideOrganizations, messages, responseStyle]);
 
   useEffect(() => {
     if (!followOutputRef.current) return;
@@ -303,18 +314,27 @@ export default function AIChat() {
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   };
 
-  const openContextPreview = async () => {
+  const openContextPreview = async (requestText = '') => {
+    const includeRequest = !status?.connected && !!requestText.trim();
     setShowContextPreview(true);
     setContextPreviewLoading(true);
     setContextPreviewError('');
+    setContextPreviewIncludesRequest(includeRequest);
     try {
       const params = new URLSearchParams({ responseStyle });
       if (contextFilter.months) params.set('months', String(contextFilter.months));
       if (contextFilter.fromMonth) params.set('fromMonth', contextFilter.fromMonth);
       if (contextFilter.toMonth) params.set('toMonth', contextFilter.toMonth);
+      if (hideOrganizations) params.set('hideOrganizations', 'true');
       const response = await fetch(`${API_URL}/ai/context?${params.toString()}`);
       if (!response.ok) throw new Error(await readResponseError(response));
-      setContextPreview(await response.json() as LocalAIContextPreview);
+      const nextPreview = await response.json() as LocalAIContextPreview;
+      if (includeRequest) {
+        const prompt = `${nextPreview.prompt}\n\n<USER_REQUEST>\n${requestText.trim()}\n</USER_REQUEST>`;
+        setContextPreview({ ...nextPreview, prompt, bytes: prompt.length });
+      } else {
+        setContextPreview(nextPreview);
+      }
     } catch (previewError) {
       setContextPreviewError(previewError instanceof Error ? previewError.message : 'Failed to prepare context');
     } finally {
@@ -328,6 +348,12 @@ export default function AIChat() {
     responseIdRef.current = '';
     setResponseStyle(style);
     setError('');
+  };
+
+  const handleHideOrganizationsChange = (hidden: boolean) => {
+    prepareForContextChange();
+    setHideOrganizations(hidden);
+    void refreshStatus(contextFilter, hidden);
   };
 
   const sendMessage = async (text = draft) => {
@@ -367,7 +393,7 @@ export default function AIChat() {
           messages: history.map(message => ({ role: message.role, content: message.content })),
           responseId: responseIdRef.current,
           dataFingerprint: status.dataFingerprint,
-          context: contextFilter,
+          context: { ...contextFilter, hideOrganizations },
           responseStyle
         }),
         signal: controller.signal
@@ -444,7 +470,8 @@ export default function AIChat() {
   const handleDraftKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey) return;
     event.preventDefault();
-    void sendMessage();
+    if (status?.connected) void sendMessage();
+    else void openContextPreview(draft);
   };
 
   const stopGeneration = () => abortRef.current?.abort();
@@ -478,16 +505,19 @@ export default function AIChat() {
 
   return (
     <div className="ai-chat-page">
-      <StickyPageHeader marginBottom="0">
-        <div className="ai-chat-heading-title">
-          <div className="flex items-center gap-2">
-            <Sparkles size={22} color="var(--accent)" />
-            <h2>Finn Assistant</h2>
+      <StickyPageHeader marginBottom="0" compactTop>
+        <div className="flex items-center gap-4">
+          <Link to="/" className="btn" title="Back to dashboard"><ArrowLeft size={18} /></Link>
+          <div className="ai-chat-heading-title">
+            <div className="flex items-center gap-2">
+              <Sparkles size={22} color="var(--accent)" />
+              <h2>Finn Assistant</h2>
+            </div>
+            <p>Private analysis powered by your local model.</p>
           </div>
-          <p>Private analysis powered by your local model.</p>
         </div>
         <div className="ai-chat-header-actions">
-          {status?.connected && (
+          {!!status?.availableMonths.length && (
             <div className="ai-timeframe-control">
               <span>Context:</span>
               <SearchableSelect
@@ -526,13 +556,16 @@ export default function AIChat() {
         </div>
       </StickyPageHeader>
 
-      <div className={`ai-status-card ${status?.connected ? 'is-connected' : 'is-disconnected'}`}>
+      <div className={`ai-status-card ${status?.connected ? 'is-connected' : 'is-prompt-only'}`}>
         <div className="ai-status-main">
-          <Server size={17} />
+          {status?.connected ? <Server size={17} /> : <Braces size={17} color="#93c5fd" />}
           <strong>{statusLabel}</strong>
-          <span>{status?.connected ? 'Local · private' : status?.error}</span>
+          <span className={status?.connected ? undefined : 'ai-prompt-only-badge'}>
+            {!status?.connected && <Sparkles size={11} />}
+            {status?.connected ? 'Local · private' : 'Prompt-only'}
+          </span>
         </div>
-        {status?.connected && (
+        {!!status && !statusLoading && (
           <div className="ai-status-controls">
             <div className="ai-status-meta">
               <span>{status.snapshotCount} of {status.availableMonths.length} snapshots</span>
@@ -552,24 +585,27 @@ export default function AIChat() {
                 disabled={generating}
               />
             </div>
-            <button className="btn ai-view-context" onClick={() => void openContextPreview()} disabled={contextPreviewLoading}>
-              <Braces size={15} /> View context
+            <label className="ai-hide-organizations-control" title="Replace organization names with Organization1, Organization2, and so on">
+              <input
+                type="checkbox"
+                checked={hideOrganizations}
+                onChange={event => handleHideOrganizationsChange(event.target.checked)}
+                disabled={generating || contextPreviewLoading}
+              />
+              <span>Hide organizations</span>
+            </label>
+            <button
+              className="btn ai-view-context"
+              onClick={() => void openContextPreview(status.connected ? '' : draft)}
+              disabled={contextPreviewLoading}
+            >
+              <Braces size={15} /> {status.connected ? 'View context' : 'View prompt'}
             </button>
           </div>
         )}
       </div>
 
-      {!statusLoading && !status?.connected ? (
-        <div className="glass-panel ai-empty-state">
-          <Bot size={40} color="var(--text-secondary)" />
-          <h3>Local model is not ready</h3>
-          <p>Start LM Studio Server and load a chat model. Finn expects an OpenAI-compatible endpoint at <code>{status?.baseUrl || 'http://127.0.0.1:1234/v1'}</code>.</p>
-          <button className="btn btn-primary" onClick={() => void refreshStatus()}>
-            <RefreshCw size={16} /> Check again
-          </button>
-        </div>
-      ) : (
-        <div className="glass-panel ai-chat-shell">
+      <div className="glass-panel ai-chat-shell">
           <div
             ref={messagesListRef}
             className="ai-message-list"
@@ -585,10 +621,21 @@ export default function AIChat() {
               <div className="ai-welcome">
                 <div className="ai-welcome-icon"><Bot size={30} /></div>
                 <h3>Ask about your financial history</h3>
-                <p>Finn sends your snapshots and precomputed metrics directly to the local model. Nothing is sent to a cloud provider.</p>
+                {status?.connected ? (
+                  <p>Finn sends your snapshots and precomputed metrics directly to the local model. Nothing is sent to a cloud provider.</p>
+                ) : (
+                  <div className="ai-prompt-only-notice">
+                    <AlertCircle size={19} aria-hidden="true" />
+                    <p>No local model is connected. Choose context and tone, write a request, then copy the prepared prompt into ChatGPT, Claude, Gemini, or another AI service. Review the included financial data before sharing it.</p>
+                  </div>
+                )}
                 <div className="ai-suggestions">
                   {suggestions.map(suggestion => (
-                    <button key={suggestion} onClick={() => void sendMessage(suggestion)} disabled={!status?.connected || generating}>
+                    <button
+                      key={suggestion}
+                      onClick={() => status?.connected ? void sendMessage(suggestion) : void openContextPreview(suggestion)}
+                      disabled={generating || statusLoading}
+                    >
                       {suggestion}
                     </button>
                   ))}
@@ -645,27 +692,36 @@ export default function AIChat() {
               onKeyDown={handleDraftKeyDown}
               placeholder="Ask Finn about your snapshots…"
               rows={3}
-              disabled={!status?.connected || generating}
+              disabled={generating}
             />
             {generating ? (
               <button className="btn btn-danger ai-send-button" onClick={stopGeneration} title="Stop generation">
                 <CircleStop size={18} />
               </button>
             ) : (
-              <button className="btn btn-primary ai-send-button" onClick={() => void sendMessage()} disabled={!draft.trim() || !status?.connected} title="Send">
-                <Send size={18} />
+              <button
+                className="btn btn-primary ai-send-button"
+                onClick={() => status?.connected ? void sendMessage() : void openContextPreview(draft)}
+                disabled={statusLoading}
+                title={status?.connected ? 'Send' : 'View prompt'}
+              >
+                {status?.connected ? <Send size={18} /> : <Braces size={18} />}
               </button>
             )}
           </div>
-          <div className="ai-composer-hint">Enter to send · Shift+Enter for a new line · answers may contain mistakes</div>
+          <div className="ai-composer-hint">
+            {status?.connected
+              ? 'Enter to send · Shift+Enter for a new line · answers may contain mistakes'
+              : 'Enter to preview prompt · Shift+Enter for a new line · no model connection required'}
+          </div>
         </div>
-      )}
 
       {showContextPreview && (
         <AIContextPreviewModal
           preview={contextPreview}
           loading={contextPreviewLoading}
           error={contextPreviewError}
+          includesRequest={contextPreviewIncludesRequest}
           onClose={() => setShowContextPreview(false)}
         />
       )}

@@ -7,13 +7,27 @@ type AIContextPreviewModalProps = {
   preview: LocalAIContextPreview | null;
   loading: boolean;
   error: string;
+  includesRequest?: boolean;
   onClose: () => void;
 };
 
-export function AIContextPreviewModal({ preview, loading, error, onClose }: AIContextPreviewModalProps) {
+export function AIContextPreviewModal({ preview, loading, error, includesRequest = false, onClose }: AIContextPreviewModalProps) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => setCopied(false), [preview]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onClose]);
 
   const copyPrompt = async () => {
     if (!preview?.prompt) return;
@@ -29,9 +43,13 @@ export function AIContextPreviewModal({ preview, loading, error, onClose }: AICo
           <div>
             <div className="flex items-center gap-2">
               <FileJson size={19} color="var(--accent)" />
-              <h3>Sent model context</h3>
+              <h3>{includesRequest ? 'Prepared prompt' : 'Sent model context'}</h3>
             </div>
-            <p>This is the exact system prompt used to start a conversation with the current data and response style.</p>
+            <p>
+              {includesRequest
+                ? 'Financial context and your request are ready to copy into any AI model.'
+                : 'This is the exact system prompt used to start a conversation with the current data and response style.'}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button className="btn" onClick={() => void copyPrompt()} disabled={!preview?.prompt || loading}>
@@ -52,7 +70,7 @@ export function AIContextPreviewModal({ preview, loading, error, onClose }: AICo
         )}
 
         {loading ? (
-          <div className="ai-context-modal-state">Preparing context…</div>
+          <div className="ai-context-modal-state">{includesRequest ? 'Preparing prompt…' : 'Preparing context…'}</div>
         ) : error ? (
           <div className="ai-context-modal-state is-error">{error}</div>
         ) : (

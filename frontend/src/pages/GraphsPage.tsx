@@ -465,7 +465,7 @@ export default function GraphsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      <StickyPageHeader marginBottom="0">
+      <StickyPageHeader marginBottom="0" compactTop>
         <div className="flex items-center gap-4">
           <Link to="/" title="Back to dashboard" className="btn"><ArrowLeft size={18} /></Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>
