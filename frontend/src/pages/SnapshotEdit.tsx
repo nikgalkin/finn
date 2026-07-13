@@ -231,7 +231,17 @@ export default function SnapshotEdit() {
 
     const isEditing = !isNew && !isCopy;
 
-    const requestBody = JSON.stringify({ month: currentMonth, data: JSON.stringify(data), duration_seconds: durationSeconds });
+    const snapshotData = {
+      ...data,
+      organizations: data.organizations.map(org => {
+        if (org.country) return org;
+        const configured = settings.organizations.find(organization => (
+          organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
+        ));
+        return { ...org, country: configured?.country };
+      })
+    };
+    const requestBody = JSON.stringify({ month: currentMonth, data: JSON.stringify(snapshotData), duration_seconds: durationSeconds });
 
     if (!isEditing) {
       const createSnapshot = () => {
@@ -419,19 +429,34 @@ export default function SnapshotEdit() {
   const copyFromPrevious = () => {
     if (latestSnapshot) {
       const cleanData = stripCommentsFromSnapshot(latestSnapshot);
-      setData({ ...data, organizations: cleanData.organizations });
+      const organizations = cleanData.organizations
+        .filter(org => {
+          const configured = settings.organizations.find(organization => (
+            organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
+          ));
+          return !configured?.archivedAt;
+        })
+        .map(org => {
+          const configured = settings.organizations.find(organization => (
+            organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
+          ));
+          return { ...org, country: configured?.country || org.country };
+        });
+      setData({ ...data, organizations });
     }
   };
 
   const fillFromSettings = () => {
     const uniqueOrganizations = settings.organizations.filter((organization, index, organizations) => (
-      organizations.findIndex(candidate => candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
+      !organization.archivedAt
+      && organizations.findIndex(candidate => !candidate.archivedAt && candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
     ));
     setData({
       ...data,
       organizations: uniqueOrganizations.map(organization => ({
         id: uuidv4(),
         name: organization.name,
+        country: organization.country,
         balances: [{ currency: settings.baseCurrency || 'RUB', amount: 0, comment: '', tags: [] }]
       }))
     });
@@ -457,7 +482,15 @@ export default function SnapshotEdit() {
   const updateOrganizationField = (id: string, field: 'name' | 'comment', value: string) => {
     setData({
       ...data,
-      organizations: data.organizations.map(o => o.id === id ? { ...o, [field]: value } : o)
+      organizations: data.organizations.map(o => {
+        if (o.id !== id) return o;
+        if (field !== 'name') return { ...o, [field]: value };
+        const configured = settings.organizations.find(organization => (
+          !organization.archivedAt
+          && organization.name.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase()
+        ));
+        return { ...o, name: value, country: configured?.country };
+      })
     });
   };
 

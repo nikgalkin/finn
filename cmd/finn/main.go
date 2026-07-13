@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"embed"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -18,16 +17,12 @@ import (
 	"syscall"
 	"time"
 
+	appassets "finn"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
-// 1. Embedded assets definition
-//
-//go:embed frontend/dist
-var frontendFS embed.FS
-
-// 2. Global application version injection point
+// Global application version injection point
 var version = "dev"
 
 // openBrowser opens the specified URL in the default system browser based on the OS
@@ -167,7 +162,7 @@ func main() {
 	})
 
 	// Inject the SPA frontend into the routing tree
-	dist, err := fs.Sub(frontendFS, "frontend/dist")
+	dist, err := fs.Sub(appassets.FrontendFS, "frontend/dist")
 	if err == nil {
 		fileServer := http.FileServer(http.FS(dist))
 		r.NoRoute(func(c *gin.Context) {

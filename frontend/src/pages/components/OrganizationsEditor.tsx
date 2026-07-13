@@ -80,7 +80,8 @@ export function OrganizationsEditor({
   onUpdateOrganizationField
 }: OrganizationsEditorProps) {
   const uniqueConfiguredOrganizations = settings.organizations.filter((organization, index, organizations) => (
-    organizations.findIndex(candidate => candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
+    !organization.archivedAt
+    && organizations.findIndex(candidate => !candidate.archivedAt && candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
   ));
   const selectedOrganizationNames = new Set(
     organizations.map(org => org.name.trim().toLocaleLowerCase()).filter(Boolean)
@@ -88,8 +89,7 @@ export function OrganizationsEditor({
   const allOrganizationsUsed = uniqueConfiguredOrganizations.every(organization => (
     selectedOrganizationNames.has(organization.name.trim().toLocaleLowerCase())
   ));
-  const organizationLimitReached = organizations.length >= uniqueConfiguredOrganizations.length;
-  const addOrganizationDisabled = allOrganizationsUsed || organizationLimitReached;
+  const addOrganizationDisabled = allOrganizationsUsed;
 
   return (
     <>
@@ -131,10 +131,11 @@ export function OrganizationsEditor({
               .map(item => item.name.trim().toLocaleLowerCase())
               .filter(Boolean)
           );
-          const configuredOrganization = uniqueConfiguredOrganizations.find(organization => (
-            organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
+          const archivedOrganization = settings.organizations.find(organization => (
+            !!organization.archivedAt
+            && organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
           ));
-          const country = getCountryByAlpha3(configuredOrganization?.country);
+          const country = getCountryByAlpha3(org.country);
 
           return (
             <div
@@ -165,14 +166,14 @@ export function OrganizationsEditor({
                           {organization.name}
                         </option>
                       ))}
-                      {!settings.organizations.some(organization => organization.name === org.name) && org.name && (
-                        <option value={org.name}>{org.name}</option>
+                      {!uniqueConfiguredOrganizations.some(organization => organization.name === org.name) && org.name && (
+                        <option value={org.name}>{org.name}{archivedOrganization ? ' (archived)' : ''}</option>
                       )}
                     </select>
                     {country && (
                       <span
                         className="country-code-hint"
-                        data-tooltip={getCountryDisplayName(country)}
+                        data-tooltip={`${getCountryDisplayName(country)}`}
                         aria-label={`Country: ${getCountryDisplayName(country)}`}
                         tabIndex={0}
                         style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', opacity: 0.58 }}

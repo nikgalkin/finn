@@ -8,6 +8,7 @@ export type Balance = {
 export type Organization = {
   id: string;
   name: string;
+  country?: string;
   comment?: string;
   balances: Balance[];
 };
@@ -32,6 +33,7 @@ export type ParsedSnapshot = Omit<Snapshot, 'data'> & {
 export type ConfiguredOrganization = {
   name: string;
   country?: string;
+  archivedAt?: string;
 };
 
 export type AppSettings = {

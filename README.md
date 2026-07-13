@@ -58,8 +58,10 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 ├── frontend/             # React SPA (Vite ecosystem)
 │   ├── src/              # Frontend source code (Pages, Components, Shared Hooks)
 │   └── package.json      
-├── main.go               # Go backend entry point
-├── *.go                  # Go backend logic & API handlers
+├── cmd/finn/             # Go entry point, backend logic, API handlers, and tests
+├── demo/                 # Demo dataset embedded into the application
+├── migrations/           # Embedded SQL database migrations
+├── assets.go             # Embedded frontend, demo data, and migrations
 └── README.md
 ```
 
@@ -80,6 +82,10 @@ We use a universal Bash script that automatically builds the React frontend, com
 
    ```shell
    ./bin/up.sh --demo
+
+   # Rebuild both frontend and backend even when no changes are detected.
+   # Other flags are still forwarded to finn.
+   ./bin/up.sh --force-build --demo
    ```
 
 The script features **smart caching**: it will only rebuild the frontend or recompile the backend if it detects changes in your source files, making subsequent startups lightning fast! ⚡️
