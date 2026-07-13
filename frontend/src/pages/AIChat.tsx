@@ -9,6 +9,7 @@ import type { AIResponseStyle, LocalAIContextFilter, LocalAIContextPreview, Loca
 import { SearchableSelect } from './components/graphs/SearchableSelect';
 import { StickyPageHeader } from './components/StickyPageHeader';
 import { AIContextPreviewModal } from './components/AIContextPreviewModal';
+import { Spinner } from './components/PageLoader';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 
 type ChatMessage = {
@@ -229,11 +230,10 @@ export default function AIChat() {
   }, [messages, thinking]);
 
   const statusLabel = useMemo(() => {
-    if (statusLoading) return 'Checking LM Studio…';
     if (!status?.enabled) return 'Local AI disabled';
     if (!status.connected) return 'LM Studio unavailable';
     return status.selectedModel || 'Connected';
-  }, [status, statusLoading]);
+  }, [status]);
 
   const replaceAssistantMessage = (id: string, content: string) => {
     setMessages(current => current.map(message => message.id === id ? { ...message, content } : message));
@@ -548,7 +548,7 @@ export default function AIChat() {
             </div>
           )}
           <button className="btn" onClick={() => void refreshStatus(contextFilter)} disabled={statusLoading || generating} title="Refresh connection">
-            <RefreshCw size={16} className={statusLoading ? 'ai-spin' : ''} />
+            {statusLoading ? <Spinner label="Checking local AI connection" size={16} /> : <RefreshCw size={16} />}
           </button>
           <button className="btn" onClick={resetChat} disabled={messages.length === 0 && !generating}>
             <RotateCcw size={16} /> New chat
@@ -558,12 +558,18 @@ export default function AIChat() {
 
       <div className={`ai-status-card ${status?.connected ? 'is-connected' : 'is-prompt-only'}`}>
         <div className="ai-status-main">
-          {status?.connected ? <Server size={17} /> : <Braces size={17} color="#93c5fd" />}
-          <strong>{statusLabel}</strong>
-          <span className={status?.connected ? undefined : 'ai-prompt-only-badge'}>
-            {!status?.connected && <Sparkles size={11} />}
-            {status?.connected ? 'Local · private' : 'Prompt-only'}
-          </span>
+          {statusLoading ? (
+            <Spinner label="Checking local AI connection" size={17} />
+          ) : (
+            <>
+              {status?.connected ? <Server size={17} /> : <Braces size={17} color="#93c5fd" />}
+              <strong>{statusLabel}</strong>
+              <span className={status?.connected ? undefined : 'ai-prompt-only-badge'}>
+                {!status?.connected && <Sparkles size={11} />}
+                {status?.connected ? 'Local · private' : 'Prompt-only'}
+              </span>
+            </>
+          )}
         </div>
         {!!status && !statusLoading && (
           <div className="ai-status-controls">

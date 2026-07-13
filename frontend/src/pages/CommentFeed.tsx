@@ -10,6 +10,7 @@ import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
+import { PageLoader } from './components/PageLoader';
 import { StickyPageHeader } from './components/StickyPageHeader';
 
 type FeedMode = 'all' | 'comments';
@@ -602,7 +603,7 @@ export default function CommentFeed() {
     );
   };
 
-  if (loading) return <div>Loading feed...</div>;
+  if (loading) return <PageLoader label="Loading financial feed" />;
 
   return (
     <div>

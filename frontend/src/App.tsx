@@ -9,6 +9,7 @@ import Settings from './pages/Settings';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { isTextInputTarget } from './lib/hotkeys';
 import { AppFooter } from './pages/components/AppFooter';
+import { PageLoader } from './pages/components/PageLoader';
 import { API_URL } from './types';
 
 const AIChat = lazy(() => import('./pages/AIChat'));
@@ -217,7 +218,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/feed" element={<CommentFeed />} />
           <Route path="/graphs" element={<GraphsPage />} />
-          <Route path="/assistant" element={<Suspense fallback={<div>Loading assistant…</div>}><AIChat /></Suspense>} />
+          <Route path="/assistant" element={<Suspense fallback={<PageLoader label="Loading assistant" />}><AIChat /></Suspense>} />
         </Routes>
       </main>
       <AppFooter />

@@ -6,6 +6,7 @@ import type { Balance } from '../types';
 import { DraftRestoreBanner } from './components/DraftRestoreBanner';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { OrganizationsEditor } from './components/OrganizationsEditor';
+import { PageLoader } from './components/PageLoader';
 import { PeriodRatesPanel } from './components/PeriodRatesPanel';
 import { SnapshotCommentModal } from './components/SnapshotCommentModal';
 import type { ActiveSnapshotComment } from './components/SnapshotCommentModal';
@@ -565,7 +566,7 @@ export default function SnapshotEdit() {
     setActiveComment(null);
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <PageLoader label="Loading snapshot" />;
 
   return (
     <div>

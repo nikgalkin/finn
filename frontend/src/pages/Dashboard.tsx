@@ -8,6 +8,7 @@ import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
+import { PageLoader } from './components/PageLoader';
 import { isTextInputTarget } from '../lib/hotkeys';
 import {
   calculateCurrencyTotals,
@@ -249,7 +250,7 @@ export default function Dashboard() {
       </div>
 
       {loading ? (
-        <p>Loading data...</p>
+        <PageLoader label="Loading dashboard" />
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>

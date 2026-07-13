@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, FileJson, X } from 'lucide-react';
 import type { LocalAIContextPreview } from '../../types';
+import { Spinner } from './PageLoader';
 
 type AIContextPreviewModalProps = {
   preview: LocalAIContextPreview | null;
@@ -70,7 +71,9 @@ export function AIContextPreviewModal({ preview, loading, error, includesRequest
         )}
 
         {loading ? (
-          <div className="ai-context-modal-state">{includesRequest ? 'Preparing prompt…' : 'Preparing context…'}</div>
+          <div className="ai-context-modal-state">
+            <Spinner label={includesRequest ? 'Preparing prompt' : 'Preparing context'} size={28} />
+          </div>
         ) : error ? (
           <div className="ai-context-modal-state is-error">{error}</div>
         ) : (
