@@ -14,7 +14,7 @@ const keyStyle = { justifySelf: 'start', minWidth: '32px', textAlign: 'center' a
 const sections = [
   {
     title: 'Navigation',
-    rows: [['N', 'New snapshot'], ['G', 'Open graphs'], ['F', 'Open feed'], ['S', 'Open settings'], ['H', 'Show this help']]
+    rows: [['N', 'New snapshot'], ['A', 'Open assistant'], ['G', 'Open graphs'], ['F', 'Open feed'], ['S', 'Open settings'], ['H', 'Show this help']]
   },
   {
     title: 'Dashboard',

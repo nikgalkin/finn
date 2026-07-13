@@ -606,7 +606,7 @@ export default function CommentFeed() {
 
   return (
     <div>
-      <StickyPageHeader>
+      <StickyPageHeader compactTop>
         <div className="flex items-center gap-4">
           <Link to="/" className="btn" title="Back to dashboard"><ArrowLeft size={18} /></Link>
           <div>

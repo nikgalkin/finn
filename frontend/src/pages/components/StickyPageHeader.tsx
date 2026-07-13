@@ -4,32 +4,36 @@ import type { ReactNode } from 'react';
 type StickyPageHeaderProps = {
   children: ReactNode;
   marginBottom?: string;
+  compactTop?: boolean;
 };
 
-export function StickyPageHeader({ children, marginBottom = '24px' }: StickyPageHeaderProps) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
+export function StickyPageHeader({ children, marginBottom = '24px', compactTop = false }: StickyPageHeaderProps) {
+  const headerRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
 
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    const updateStuckState = () => {
+      const header = headerRef.current;
+      if (!header) return;
+      setIsStuck(window.scrollY > 0 && header.getBoundingClientRect().top <= 0.5);
+    };
 
-    const observer = new IntersectionObserver(([entry]) => {
-      setIsStuck(!entry.isIntersecting);
-    });
-    observer.observe(sentinel);
-    return () => observer.disconnect();
+    updateStuckState();
+    window.addEventListener('scroll', updateStuckState, { passive: true });
+    window.addEventListener('resize', updateStuckState);
+    return () => {
+      window.removeEventListener('scroll', updateStuckState);
+      window.removeEventListener('resize', updateStuckState);
+    };
   }, []);
 
   return (
-    <>
-      <div ref={sentinelRef} className="sticky-page-header-sentinel" aria-hidden="true" />
-      <div
-        className={`sticky-page-header flex justify-between items-center${isStuck ? ' is-stuck' : ''}`}
-        style={{ marginBottom }}
-      >
-        {children}
-      </div>
-    </>
+    <div
+      ref={headerRef}
+      className={`sticky-page-header flex justify-between items-center${compactTop ? ' is-compact-top' : ''}${isStuck ? ' is-stuck' : ''}`}
+      style={{ marginBottom }}
+    >
+      {children}
+    </div>
   );
 }

@@ -29,13 +29,63 @@ export type ParsedSnapshot = Omit<Snapshot, 'data'> & {
   data: SnapshotData;
 };
 
+export type ConfiguredOrganization = {
+  name: string;
+  country?: string;
+};
+
 export type AppSettings = {
-  organizations: string[];
+  organizations: ConfiguredOrganization[];
   currencies: string[];
   autoFetchCurrencies?: string[];
   baseCurrency?: string;
   secondaryCurrency?: string;
   tags?: string[]; // Balance analytical tagging infrastructure array
+  localAI?: LocalAISettings;
+};
+
+export type LocalAISettings = {
+  enabled: boolean;
+  provider: 'lmstudio' | 'openai-compatible';
+  baseUrl: string;
+  model: string;
+};
+
+export type LocalAIModel = {
+  id: string;
+  object?: string;
+  owned_by?: string;
+  type?: string;
+};
+
+export type LocalAIStatus = {
+  enabled: boolean;
+  connected: boolean;
+  baseUrl: string;
+  selectedModel: string;
+  models: LocalAIModel[];
+  error?: string;
+  snapshotCount: number;
+  contextBytes: number;
+  dataFingerprint: string;
+  availableMonths: string[];
+};
+
+export type LocalAIContextFilter = {
+  months?: number;
+  fromMonth?: string;
+  toMonth?: string;
+  hideOrganizations?: boolean;
+};
+
+export type AIResponseStyle = 'strict' | 'balanced' | 'playful';
+
+export type LocalAIContextPreview = {
+  prompt: string;
+  bytes: number;
+  snapshotCount: number;
+  dataFingerprint: string;
+  availableMonths: string[];
 };
 
 export const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:8080/api';

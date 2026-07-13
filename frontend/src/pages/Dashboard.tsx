@@ -241,8 +241,8 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 style={{ fontSize: 24, fontWeight: 'bold' }}>Overview</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Overview</h2>
         <Link to="/snapshot/new" className="btn btn-primary" title="New Snapshot (N)">
           New Snapshot
         </Link>

@@ -1,22 +1,48 @@
 import { useEffect, useState } from 'react';
 import { API_URL } from '../types';
-import type { AppSettings } from '../types';
+import type { AppSettings, ConfiguredOrganization } from '../types';
 
 const defaultSettings: AppSettings = {
   organizations: [],
   currencies: [],
   tags: [],
   baseCurrency: 'RUB',
-  secondaryCurrency: 'USD'
+  secondaryCurrency: 'USD',
+  localAI: {
+    enabled: false,
+    provider: 'lmstudio',
+    baseUrl: 'http://127.0.0.1:1234/v1',
+    model: ''
+  }
 };
 
-const normalizeSettings = (settings: Partial<AppSettings>): AppSettings => ({
+type StoredSettings = Omit<Partial<AppSettings>, 'organizations'> & { organizations?: unknown };
+
+const normalizeOrganizations = (organizations: unknown): ConfiguredOrganization[] => {
+  if (!Array.isArray(organizations)) return [];
+  return organizations.flatMap(item => {
+    if (typeof item === 'string') return [{ name: item }];
+    if (!item || typeof item !== 'object') return [];
+    const value = item as { name?: unknown; country?: unknown };
+    if (typeof value.name !== 'string') return [];
+    return [{
+      name: value.name,
+      country: typeof value.country === 'string' ? value.country.trim().toUpperCase() : undefined
+    }];
+  });
+};
+
+const normalizeSettings = (settings: StoredSettings): AppSettings => ({
   ...defaultSettings,
   ...settings,
-  organizations: settings.organizations || [],
+  organizations: normalizeOrganizations(settings.organizations),
   currencies: settings.currencies || [],
   autoFetchCurrencies: settings.autoFetchCurrencies || [],
-  tags: settings.tags || []
+  tags: settings.tags || [],
+  localAI: {
+    ...defaultSettings.localAI!,
+    ...(settings.localAI || {})
+  }
 });
 
 export function useSettings() {

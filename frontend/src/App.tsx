@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Keyboard, Power } from 'lucide-react';
+import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Bot, Keyboard, Power } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import SnapshotEdit from './pages/SnapshotEdit';
 import CommentFeed from './pages/CommentFeed';
@@ -10,6 +10,8 @@ import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { isTextInputTarget } from './lib/hotkeys';
 import { AppFooter } from './pages/components/AppFooter';
 import { API_URL } from './types';
+
+const AIChat = lazy(() => import('./pages/AIChat'));
 
 type BackupTargetResult = {
   name: string;
@@ -58,10 +60,11 @@ function App() {
           KeyN: '/snapshot/new',
           KeyG: '/graphs',
           KeyF: '/feed',
+          KeyA: '/assistant',
           KeyS: '/settings'
         };
         const route = routes[event.code];
-        const isSafeNavigationPage = ['/', '/feed', '/graphs'].includes(location.pathname);
+        const isSafeNavigationPage = ['/', '/feed', '/graphs', '/assistant'].includes(location.pathname);
         if (route && isSafeNavigationPage) {
           event.preventDefault();
           navigate(route);
@@ -190,6 +193,9 @@ function App() {
           </button>
         </div>
         <div className="flex items-center gap-2">
+          <Link to="/assistant" className="btn" style={{ color: 'var(--text-secondary)' }}>
+            <Bot size={18} /> Assistant
+          </Link>
           <Link to="/graphs" className="btn" style={{ color: 'var(--text-secondary)' }}>
             <BarChart3 size={18} /> Graphs
           </Link>
@@ -211,6 +217,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/feed" element={<CommentFeed />} />
           <Route path="/graphs" element={<GraphsPage />} />
+          <Route path="/assistant" element={<Suspense fallback={<div>Loading assistant…</div>}><AIChat /></Suspense>} />
         </Routes>
       </main>
       <AppFooter />
