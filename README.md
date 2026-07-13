@@ -39,6 +39,7 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 * **Adaptive Currency Scaling:** Smart cross-rate rendering that automatically cross-converts and realigns low-nominal currencies (like UZS) relative to your asset base to avoid skewed flat-line visuals.
 * **Math in Inputs:** Balance inputs support on-the-fly math evaluations. Type `15000 + 5000` directly into the input field, and it will compute the total instantly.
 * **Local & Secure:** All data is stored locally in an SQLite database. No third-party cloud syncing, no telemetry.
+* **Local AI Assistant:** Chat with an optional model running through LM Studio or another loopback OpenAI-compatible server. Finn sends the model a compact copy of the snapshots plus precomputed financial metrics; no cloud provider is required.
 
 ## 🛠 Tech Stack
 
@@ -82,6 +83,21 @@ We use a universal Bash script that automatically builds the React frontend, com
    ```
 
 The script features **smart caching**: it will only rebuild the frontend or recompile the backend if it detects changes in your source files, making subsequent startups lightning fast! ⚡️
+
+## 🤖 Local AI Assistant (Experimental)
+
+Finn can connect to a model served locally by [LM Studio](https://lmstudio.ai/). Download and load an instruction-tuned model, then start the local server:
+
+```shell
+lms server start
+lms load <model-key> --context-length 32768 --gpu max
+```
+
+Open **Settings → Local AI** to test the connection and select a chat model. The default endpoint is `http://127.0.0.1:1234/v1`. For privacy, Finn only accepts loopback server addresses.
+
+LM Studio mode uses its native stateful chat API with reasoning disabled for responsive everyday analysis. The first message processes the complete financial context; subsequent messages reuse the local conversation state. Finn automatically starts a new context when the financial dataset changes.
+
+The Assistant page lets you limit the model context to the latest 1, 2, 3, 6, 12, or 24 months, use the complete history, or select an exact month range. Smaller ranges reduce the first-response processing time. You can inspect and copy the exact system prompt before sending it, and choose a strict, balanced, or playful response tone. Model answers support Markdown, including tables and code blocks.
 
 ## 📝 Usage Tips and Screenshots
 

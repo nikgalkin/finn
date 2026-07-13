@@ -7,7 +7,13 @@ const defaultSettings: AppSettings = {
   currencies: [],
   tags: [],
   baseCurrency: 'RUB',
-  secondaryCurrency: 'USD'
+  secondaryCurrency: 'USD',
+  localAI: {
+    enabled: true,
+    provider: 'lmstudio',
+    baseUrl: 'http://127.0.0.1:1234/v1',
+    model: ''
+  }
 };
 
 const normalizeSettings = (settings: Partial<AppSettings>): AppSettings => ({
@@ -16,7 +22,11 @@ const normalizeSettings = (settings: Partial<AppSettings>): AppSettings => ({
   organizations: settings.organizations || [],
   currencies: settings.currencies || [],
   autoFetchCurrencies: settings.autoFetchCurrencies || [],
-  tags: settings.tags || []
+  tags: settings.tags || [],
+  localAI: {
+    ...defaultSettings.localAI!,
+    ...(settings.localAI || {})
+  }
 });
 
 export function useSettings() {

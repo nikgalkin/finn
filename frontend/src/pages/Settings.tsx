@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Plus, RefreshCw, Server, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../types';
+import type { LocalAISettings, LocalAIStatus } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
@@ -19,7 +20,10 @@ export default function Settings() {
   const { settings, setSettings, loading } = useSettings();
   const navigate = useNavigate();
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
+  const [aiProbing, setAIProbing] = useState(false);
   const initialSettingsHash = useRef('');
+  const initialAIProbeDone = useRef(false);
   const currentSettingsHash = useMemo(() => JSON.stringify(settings), [settings]);
   const isDirty = !!initialSettingsHash.current && initialSettingsHash.current !== currentSettingsHash;
 
@@ -28,6 +32,41 @@ export default function Settings() {
       initialSettingsHash.current = currentSettingsHash;
     }
   }, [currentSettingsHash, loading]);
+
+  const probeLocalAI = async (localAI = settings.localAI) => {
+    if (!localAI) return;
+    setAIProbing(true);
+    try {
+      const response = await fetch(`${API_URL}/ai/probe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(localAI)
+      });
+      const payload = await response.json() as LocalAIStatus & { error?: string };
+      setAIStatus(payload);
+    } catch (error) {
+      setAIStatus({
+        enabled: localAI.enabled,
+        connected: false,
+        baseUrl: localAI.baseUrl,
+        selectedModel: localAI.model,
+        models: [],
+        snapshotCount: 0,
+        contextBytes: 0,
+        dataFingerprint: '',
+        availableMonths: [],
+        error: error instanceof Error ? error.message : 'Connection check failed'
+      });
+    } finally {
+      setAIProbing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (loading || initialAIProbeDone.current) return;
+    initialAIProbeDone.current = true;
+    void probeLocalAI(settings.localAI);
+  }, [loading, settings.localAI]);
 
   useEscapeToDashboard({
     blocked: showLeaveConfirm,
@@ -76,6 +115,25 @@ export default function Settings() {
     }
   };
 
+  const updateLocalAI = (patch: Partial<LocalAISettings>) => {
+    setSettings({
+      ...settings,
+      localAI: {
+        enabled: true,
+        provider: 'lmstudio',
+        baseUrl: 'http://127.0.0.1:1234/v1',
+        model: '',
+        ...(settings.localAI || {}),
+        ...patch
+      }
+    });
+  };
+
+  const chatModels = (aiStatus?.models || []).filter(model => {
+    const value = `${model.id} ${model.type || ''}`.toLowerCase();
+    return !value.includes('embed') && !value.includes('rerank') && !value.includes('whisper');
+  });
+
   const renderListSection = (title: string, list: SettingsListKey, placeholder?: string) => (
     <div className="glass-panel" style={{ padding: '24px' }}>
       <div className="flex justify-between items-center mb-4">
@@ -120,6 +178,90 @@ export default function Settings() {
         <button className="btn btn-primary" onClick={handleSave}>
           <Save size={18} /> Save
         </button>
+      </div>
+
+      <div className="glass-panel mb-8" style={{ padding: '24px 32px' }}>
+        <div className="flex justify-between items-center" style={{ gap: '20px', marginBottom: '20px' }}>
+          <div>
+            <div className="flex items-center gap-2">
+              <Server size={18} color="var(--accent)" />
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Local AI</h3>
+            </div>
+            <p style={{ margin: '7px 0 0', color: 'var(--text-secondary)', fontSize: '13px' }}>
+              Connect Finn to an OpenAI-compatible model server running on this computer.
+            </p>
+          </div>
+          <label className="flex items-center gap-2" style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            <input
+              type="checkbox"
+              checked={settings.localAI?.enabled ?? true}
+              onChange={event => updateLocalAI({ enabled: event.target.checked })}
+              style={{ width: '17px', height: '17px', accentColor: 'var(--accent)' }}
+            />
+            Enabled
+          </label>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 0.65fr) minmax(250px, 1.15fr) minmax(220px, 1fr) auto', gap: '14px', alignItems: 'end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 500 }}>Provider</label>
+            <select
+              className="input"
+              value={settings.localAI?.provider || 'lmstudio'}
+              onChange={event => updateLocalAI({ provider: event.target.value as LocalAISettings['provider'] })}
+              disabled={!settings.localAI?.enabled}
+            >
+              <option value="lmstudio">LM Studio</option>
+              <option value="openai-compatible">OpenAI compatible</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 500 }}>Server URL</label>
+            <input
+              className="input"
+              value={settings.localAI?.baseUrl || 'http://127.0.0.1:1234/v1'}
+              onChange={event => updateLocalAI({ baseUrl: event.target.value })}
+              disabled={!settings.localAI?.enabled}
+              placeholder="http://127.0.0.1:1234/v1"
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 500 }}>Chat model</label>
+            <select
+              className="input"
+              value={settings.localAI?.model || ''}
+              onChange={event => updateLocalAI({ model: event.target.value })}
+              disabled={!settings.localAI?.enabled}
+            >
+              <option value="">Auto-select first chat model</option>
+              {chatModels.map(model => <option key={model.id} value={model.id}>{model.id}</option>)}
+              {!!settings.localAI?.model && !chatModels.some(model => model.id === settings.localAI?.model) && (
+                <option value={settings.localAI.model}>{settings.localAI.model}</option>
+              )}
+            </select>
+          </div>
+          <button
+            className="btn"
+            onClick={() => void probeLocalAI()}
+            disabled={aiProbing || !settings.localAI?.enabled}
+            style={{ minHeight: '36px' }}
+          >
+            <RefreshCw size={15} className={aiProbing ? 'ai-spin' : ''} /> Test
+          </button>
+        </div>
+
+        {settings.localAI?.enabled && (
+          <div style={{ marginTop: '13px', fontSize: '12px', color: aiStatus?.connected ? 'var(--success)' : aiStatus ? 'var(--danger)' : 'var(--text-secondary)' }}>
+            {aiProbing
+              ? 'Checking local server…'
+              : aiStatus?.connected
+                ? `Connected · ${aiStatus.selectedModel || 'model auto-selected'} · ${chatModels.length} chat model${chatModels.length === 1 ? '' : 's'} available`
+                : aiStatus?.error || 'Save settings, start LM Studio Server, then test the connection.'}
+          </div>
+        )}
+        <div style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '11px' }}>
+          For privacy, Finn accepts loopback addresses only. The financial dataset is sent directly from the Go backend to the local server.
+        </div>
       </div>
 
       <div className="glass-panel mb-8" style={{ padding: '24px 32px' }}>

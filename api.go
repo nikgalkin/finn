@@ -48,6 +48,7 @@ func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBack
 	})
 
 	api := r.Group("/api")
+	setupAIAPI(api, db)
 
 	api.POST("/shutdown", func(c *gin.Context) {
 		if !isLocalShutdownRequest(c.Request) {

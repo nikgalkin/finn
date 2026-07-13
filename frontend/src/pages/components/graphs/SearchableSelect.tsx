@@ -10,6 +10,7 @@ type SearchableSelectProps = {
   width?: string;
   dropdownWidth?: string;
   height?: string;
+  disabled?: boolean;
 };
 
 const triggerStyle = { padding: '4px 8px', background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' as const, height: '28px' };
@@ -18,7 +19,7 @@ const searchIconStyle = { position: 'absolute' as const, left: '8px', top: '50%'
 const searchInputStyle = { width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '4px', padding: '2px 6px 2px 22px', fontSize: '12px', color: 'var(--text-primary)', outline: 'none' };
 const optionsStyle = { overflowY: 'auto' as const, flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '2px' };
 
-export function SearchableSelect({ value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px' }: SearchableSelectProps) {
+export function SearchableSelect({ value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -39,11 +40,16 @@ export function SearchableSelect({ value, onChange, options, placeholder, showSe
   );
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width }}>
+    <div ref={containerRef} style={{ position: 'relative', width, opacity: disabled ? 0.5 : 1 }}>
       <div
-        onClick={() => { setIsOpen(!isOpen); setSearch(''); }}
+        onClick={() => {
+          if (disabled) return;
+          setIsOpen(!isOpen);
+          setSearch('');
+        }}
         className="input"
-        style={{ ...triggerStyle, height }}
+        aria-disabled={disabled}
+        style={{ ...triggerStyle, height, cursor: disabled ? 'not-allowed' : 'pointer' }}
       >
         <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1, textAlign: 'center' }}>
           {value || placeholder}
