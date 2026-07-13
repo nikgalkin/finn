@@ -37,7 +37,7 @@ build_target() {
     local output_name="${BUILD_DIR}/${APP_NAME}-${os}-${arch}${suffix}"
     
     echo "📦 Compiling Go binary for ${os}/${arch}..."
-    GOOS=$os GOARCH=$arch go build -ldflags="$LDFLAGS" -o "$output_name" .
+    GOOS=$os GOARCH=$arch go build -ldflags="$LDFLAGS" -o "$output_name" ./cmd/finn
     echo "✅ Success: $output_name"
     echo "-----------------------------------------"
 }

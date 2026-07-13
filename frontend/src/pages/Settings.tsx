@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Save, Plus, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { Archive, ArrowLeft, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../types';
-import type { LocalAISettings, LocalAIStatus } from '../types';
+import type { LocalAISettings, LocalAIStatus, Snapshot } from '../types';
 import { isValidCountryCode } from '../lib/countries';
 import { useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
+import { ArchiveOrganizationModal } from './components/ArchiveOrganizationModal';
 import { CountrySelect } from './components/CountrySelect';
 import { HelpTooltip } from './components/HelpTooltip';
 import { PageLoader, Spinner } from './components/PageLoader';
@@ -14,6 +15,14 @@ import { SettingsValidationModal } from './components/SettingsValidationModal';
 import type { SettingsValidationIssue } from './components/SettingsValidationModal';
 
 type SettingsListKey = 'currencies' | 'tags';
+
+type ArchiveImpact = {
+  index: number;
+  loading: boolean;
+  error: string;
+  snapshotCount: number;
+  latestNonZeroBalances: string[];
+};
 
 const listGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' };
 const listBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '260px', overflowY: 'auto' as const, paddingRight: '4px' };
@@ -45,6 +54,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [validationIssues, setValidationIssues] = useState<SettingsValidationIssue[]>([]);
+  const [archiveImpact, setArchiveImpact] = useState<ArchiveImpact | null>(null);
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
   const [aiProbing, setAIProbing] = useState(false);
   const initialSettingsHash = useRef('');
@@ -64,6 +74,12 @@ export default function Settings() {
   const duplicateTagNames = useMemo(() => (
     new Set(duplicateTags.map(item => item.normalized))
   ), [duplicateTags]);
+  const activeOrganizations = useMemo(() => (
+    settings.organizations.map((organization, index) => ({ organization, index })).filter(({ organization }) => !organization.archivedAt)
+  ), [settings.organizations]);
+  const archivedOrganizations = useMemo(() => (
+    settings.organizations.map((organization, index) => ({ organization, index })).filter(({ organization }) => !!organization.archivedAt)
+  ), [settings.organizations]);
 
   useEffect(() => {
     if (!loading && !initialSettingsHash.current) {
@@ -101,7 +117,7 @@ export default function Settings() {
   };
 
   useEscapeToDashboard({
-    blocked: showLeaveConfirm || validationIssues.length > 0,
+    blocked: showLeaveConfirm || validationIssues.length > 0 || archiveImpact !== null,
     confirmWhen: isDirty,
     confirmMessage: 'Settings have unsaved changes. Leave without saving?',
     onConfirmRequired: () => setShowLeaveConfirm(true)
@@ -208,9 +224,51 @@ export default function Settings() {
     setSettings({ ...settings, organizations: [...settings.organizations, { name: '' }] });
   };
 
-  const removeOrganization = (index: number) => {
+  const requestArchiveOrganization = (index: number) => {
+    const organization = settings.organizations[index];
+    setArchiveImpact({ index, loading: true, error: '', snapshotCount: 0, latestNonZeroBalances: [] });
+
+    fetch(`${API_URL}/snapshots`)
+      .then(response => {
+        if (!response.ok) throw new Error('Could not check the latest snapshot. Nothing was archived.');
+        return response.json() as Promise<Snapshot[]>;
+      })
+      .then(snapshots => {
+        const normalizedName = normalizeListValue(organization.name);
+        const parsed = (snapshots || []).map(snapshot => ({ ...snapshot, parsedData: JSON.parse(snapshot.data) }));
+        const matchingSnapshots = parsed.filter(snapshot => (
+          snapshot.parsedData.organizations?.some((item: { name?: string }) => normalizeListValue(item.name || '') === normalizedName)
+        ));
+        const latestSnapshot = [...parsed].sort((a, b) => b.month.localeCompare(a.month))[0];
+        const latestOrganization = latestSnapshot?.parsedData.organizations?.find((item: { name?: string }) => (
+          normalizeListValue(item.name || '') === normalizedName
+        ));
+        const latestNonZeroBalances = (latestOrganization?.balances || [])
+          .filter((balance: { amount?: number | string }) => Number(balance.amount || 0) !== 0)
+          .map((balance: { amount?: number | string; currency?: string }) => `${balance.currency || ''} ${Number(balance.amount).toLocaleString('en-US')}`.trim());
+        setArchiveImpact({ index, loading: false, error: '', snapshotCount: matchingSnapshots.length, latestNonZeroBalances });
+      })
+      .catch(error => setArchiveImpact({
+        index,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Could not check organization history. Nothing was archived.',
+        snapshotCount: 0,
+        latestNonZeroBalances: []
+      }));
+  };
+
+  const archiveOrganization = () => {
+    if (!archiveImpact) return;
     const organizations = [...settings.organizations];
-    organizations.splice(index, 1);
+    organizations[archiveImpact.index] = { ...organizations[archiveImpact.index], archivedAt: new Date().toISOString() };
+    setSettings({ ...settings, organizations });
+    setArchiveImpact(null);
+  };
+
+  const restoreOrganization = (index: number) => {
+    const organizations = [...settings.organizations];
+    const { archivedAt: _archivedAt, ...organization } = organizations[index];
+    organizations[index] = organization;
     setSettings({ ...settings, organizations });
   };
 
@@ -303,7 +361,7 @@ export default function Settings() {
         </button>
       </div>
       <div style={organizationListBodyStyle}>
-        {settings.organizations.map((organization, index) => {
+        {activeOrganizations.map(({ organization, index }) => {
           const isDuplicate = duplicateOrganizationNames.has(normalizeListValue(organization.name));
           return (
             <div key={index} className="flex gap-2 items-center">
@@ -324,13 +382,34 @@ export default function Settings() {
                 value={organization.country}
                 onChange={value => updateOrganization(index, 'country', value)}
               />
-              <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeOrganization(index)}>
-                <Trash2 size={16} />
+              <button className="btn" style={{ ...iconButtonStyle, color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.3)' }} onClick={() => requestArchiveOrganization(index)} title={`Archive ${organization.name || 'organization'}`}>
+                <Archive size={16} />
               </button>
             </div>
           );
         })}
+        {activeOrganizations.length === 0 && (
+          <div style={{ padding: '10px 0', color: 'var(--text-secondary)', fontSize: '12px' }}>No active organizations.</div>
+        )}
       </div>
+      {archivedOrganizations.length > 0 && (
+        <details style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--glass-border)' }}>
+          <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, userSelect: 'none' }}>
+            Archived organizations ({archivedOrganizations.length})
+          </summary>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
+            {archivedOrganizations.map(({ organization, index }) => (
+              <div key={index} className="flex items-center gap-2" style={{ minHeight: '36px', padding: '5px 8px 5px 12px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.38)', border: '1px solid var(--glass-border)' }}>
+                <span style={{ flex: 1, fontSize: '13px' }}>{organization.name}</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em' }}>{organization.country || '—'}</span>
+                <button className="btn" style={compactButtonStyle} onClick={() => restoreOrganization(index)} title={`Restore ${organization.name}`}>
+                  <RotateCcw size={14} /> Restore
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 
@@ -495,6 +574,18 @@ export default function Settings() {
         <SettingsValidationModal
           issues={validationIssues}
           onClose={() => setValidationIssues([])}
+        />
+      )}
+      {archiveImpact && (
+        <ArchiveOrganizationModal
+          name={settings.organizations[archiveImpact.index]?.name || ''}
+          country={settings.organizations[archiveImpact.index]?.country}
+          loading={archiveImpact.loading}
+          error={archiveImpact.error}
+          snapshotCount={archiveImpact.snapshotCount}
+          latestNonZeroBalances={archiveImpact.latestNonZeroBalances}
+          onCancel={() => setArchiveImpact(null)}
+          onConfirm={archiveOrganization}
         />
       )}
     </div>

@@ -2,17 +2,18 @@ package main
 
 import (
 	"database/sql"
-	_ "embed"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 
+	appassets "finn"
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
 )
-
-//go:embed demo/demo.sql
-var demoSQL string
 
 func resolveDatabasePath(filename string) string {
 	homeDir, err := os.UserHomeDir()
@@ -71,10 +72,15 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 		data TEXT NOT NULL,
 		duration_seconds INTEGER DEFAULT 0
 	);
-	CREATE TABLE IF NOT EXISTS settings (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL
-	);
+		CREATE TABLE IF NOT EXISTS settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version INTEGER PRIMARY KEY,
+			name TEXT NOT NULL,
+			applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
 	`
 	_, err = db.Exec(createTableQuery)
 	if err != nil {
@@ -89,7 +95,7 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 		err := db.QueryRow("SELECT COUNT(*) FROM snapshots").Scan(&count)
 		if err == nil && count == 0 {
 			log.Println("🌱 DB: Populating fresh demo workspace from demo/demo.sql...")
-			_, err = db.Exec(demoSQL)
+			_, err = db.Exec(appassets.DemoSQL)
 			if err != nil {
 				log.Printf("⚠️  DB: Population failed: %v\n", err)
 			} else {
@@ -98,7 +104,86 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 		}
 	}
 
+	appliedMigrations, err := runMigrations(db)
+	if err != nil {
+		log.Fatalf("❌ DB CRITICAL: Migration failed: %v\n", err)
+	}
+	for _, migration := range appliedMigrations {
+		log.Printf("✅ DB: Applied migration %03d (%s).\n", migration.version, migration.name)
+	}
+
 	return db
+}
+
+type appliedMigration struct {
+	version int
+	name    string
+}
+
+func migrationVersion(name string) (int, error) {
+	separator := strings.IndexByte(name, '_')
+	if separator <= 0 {
+		return 0, fmt.Errorf("migration filename %q must start with a numeric version", name)
+	}
+	version, err := strconv.Atoi(name[:separator])
+	if err != nil || version <= 0 {
+		return 0, fmt.Errorf("migration filename %q has an invalid version", name)
+	}
+	return version, nil
+}
+
+func runMigrations(db *sql.DB) ([]appliedMigration, error) {
+	entries, err := appassets.MigrationFiles.ReadDir("migrations")
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+
+	seenVersions := make(map[int]string)
+	var applied []appliedMigration
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".sql" {
+			continue
+		}
+		version, err := migrationVersion(entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		if existing, duplicate := seenVersions[version]; duplicate {
+			return nil, fmt.Errorf("migrations %q and %q use the same version", existing, entry.Name())
+		}
+		seenVersions[version] = entry.Name()
+
+		var alreadyApplied int
+		if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", version).Scan(&alreadyApplied); err != nil {
+			return nil, err
+		}
+		if alreadyApplied > 0 {
+			continue
+		}
+
+		migrationSQL, err := appassets.MigrationFiles.ReadFile("migrations/" + entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := tx.Exec(string(migrationSQL)); err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("apply %s: %w", entry.Name(), err)
+		}
+		if _, err := tx.Exec("INSERT INTO schema_migrations (version, name) VALUES (?, ?)", version, entry.Name()); err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("record %s: %w", entry.Name(), err)
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit %s: %w", entry.Name(), err)
+		}
+		applied = append(applied, appliedMigration{version: version, name: entry.Name()})
+	}
+	return applied, nil
 }
 
 func handleForceDemoCleanup() {

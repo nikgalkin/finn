@@ -23,11 +23,12 @@ const normalizeOrganizations = (organizations: unknown): ConfiguredOrganization[
   return organizations.flatMap(item => {
     if (typeof item === 'string') return [{ name: item }];
     if (!item || typeof item !== 'object') return [];
-    const value = item as { name?: unknown; country?: unknown };
+    const value = item as { name?: unknown; country?: unknown; archivedAt?: unknown };
     if (typeof value.name !== 'string') return [];
     return [{
       name: value.name,
-      country: typeof value.country === 'string' ? value.country.trim().toUpperCase() : undefined
+      country: typeof value.country === 'string' ? value.country.trim().toUpperCase() : undefined,
+      archivedAt: typeof value.archivedAt === 'string' && value.archivedAt ? value.archivedAt : undefined
     }];
   });
 };
