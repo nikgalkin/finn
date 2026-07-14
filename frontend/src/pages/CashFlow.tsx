@@ -26,6 +26,18 @@ const sortEntries = (entries: FlowEntry[]) => [...entries].sort((a, b) => (
   b.month.localeCompare(a.month) || b.id - a.id
 ));
 
+const matchesDirection = (entry: FlowEntry, direction: 'all' | FlowDirection) => (
+  direction === 'all' || entry.direction === direction
+);
+
+const matchesCategory = (entry: FlowEntry, category: string) => (
+  category === 'all' || (category === 'none' ? !entry.category : entry.category === category)
+);
+
+const matchesCounterparty = (entry: FlowEntry, counterparty: string) => (
+  counterparty === 'all' || entry.counterparty === counterparty
+);
+
 const formatAmount = (amount: number, currency: string) => (
   `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(amount)} ${currency}`
 );
@@ -135,16 +147,46 @@ export default function CashFlow() {
     setEndMonth(linkedMonth);
   }, [linkedMonth, months]);
 
-  const categories = useMemo(() => Array.from(new Set(entries.map(entry => entry.category).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [entries]);
-  const hasUncategorizedEntries = useMemo(() => entries.some(entry => !entry.category), [entries]);
-  const counterparties = useMemo(() => Array.from(new Set(entries.map(entry => entry.counterparty).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [entries]);
-  const visibleEntries = useMemo(() => entries.filter(entry => (
+  const timeframeEntries = useMemo(() => entries.filter(entry => (
     (!startMonth || entry.month >= startMonth)
     && (!effectiveEndMonth || entry.month <= effectiveEndMonth)
-    && (directionFilter === 'all' || entry.direction === directionFilter)
-    && (categoryFilter === 'all' || (categoryFilter === 'none' ? !entry.category : entry.category === categoryFilter))
-    && (counterpartyFilter === 'all' || entry.counterparty === counterpartyFilter)
-  )), [categoryFilter, counterpartyFilter, directionFilter, effectiveEndMonth, entries, startMonth]);
+  )), [effectiveEndMonth, entries, startMonth]);
+
+  const timeframeDirections = useMemo(() => new Set(timeframeEntries.map(entry => entry.direction)), [timeframeEntries]);
+
+  const counterpartyFacetEntries = useMemo(() => timeframeEntries.filter(entry => (
+    matchesDirection(entry, directionFilter) && matchesCategory(entry, categoryFilter)
+  )), [categoryFilter, directionFilter, timeframeEntries]);
+  const counterparties = useMemo(() => Array.from(new Set(
+    counterpartyFacetEntries.map(entry => entry.counterparty).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b)), [counterpartyFacetEntries]);
+
+  const categoryFacetEntries = useMemo(() => timeframeEntries.filter(entry => (
+    matchesDirection(entry, directionFilter) && matchesCounterparty(entry, counterpartyFilter)
+  )), [counterpartyFilter, directionFilter, timeframeEntries]);
+  const categories = useMemo(() => Array.from(new Set(
+    categoryFacetEntries.map(entry => entry.category).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b)), [categoryFacetEntries]);
+  const hasUncategorizedEntries = useMemo(() => categoryFacetEntries.some(entry => !entry.category), [categoryFacetEntries]);
+
+  useEffect(() => {
+    if (directionFilter !== 'all' && !timeframeDirections.has(directionFilter)) setDirectionFilter('all');
+  }, [directionFilter, timeframeDirections]);
+
+  useEffect(() => {
+    if (counterpartyFilter !== 'all' && !counterparties.includes(counterpartyFilter)) setCounterpartyFilter('all');
+  }, [counterparties, counterpartyFilter]);
+
+  useEffect(() => {
+    const categoryAvailable = categoryFilter === 'none' ? hasUncategorizedEntries : categories.includes(categoryFilter);
+    if (categoryFilter !== 'all' && !categoryAvailable) setCategoryFilter('all');
+  }, [categories, categoryFilter, hasUncategorizedEntries]);
+
+  const visibleEntries = useMemo(() => timeframeEntries.filter(entry => (
+    matchesDirection(entry, directionFilter)
+    && matchesCategory(entry, categoryFilter)
+    && matchesCounterparty(entry, counterpartyFilter)
+  )), [categoryFilter, counterpartyFilter, directionFilter, timeframeEntries]);
   const visiblePeriods = useMemo(() => {
     const grouped = new Map<string, FlowEntry[]>();
     visibleEntries.forEach(entry => grouped.set(entry.month, [...(grouped.get(entry.month) || []), entry]));
@@ -163,6 +205,8 @@ export default function CashFlow() {
 
   const totals = useMemo(() => summarizeFlowEntries(visibleEntries), [visibleEntries]);
   const latestVisibleMonth = visiblePeriods[0]?.[0];
+  const counterpartyAllLabel = directionFilter === 'in' ? 'All From' : directionFilter === 'out' ? 'All To' : 'All From / To';
+  const counterpartyAriaLabel = directionFilter === 'in' ? 'From' : directionFilter === 'out' ? 'To' : 'From or To';
 
   useEffect(() => {
     if (expansionInitializedRef.current || visibleYears.length === 0) return;
@@ -483,16 +527,16 @@ export default function CashFlow() {
                 setEndMonth(end);
               }}
             />
-            <select className="input" value={directionFilter} onChange={event => setDirectionFilter(event.target.value as 'all' | FlowDirection)} style={{ width: 'auto', minWidth: '150px' }}>
+            <select className="input" aria-label="Direction" value={directionFilter} onChange={event => setDirectionFilter(event.target.value as 'all' | FlowDirection)} style={{ width: 'auto', minWidth: '150px' }}>
               <option value="all">All directions</option>
-              <option value="in">Incoming</option>
-              <option value="out">Outgoing</option>
+              <option value="in" disabled={!timeframeDirections.has('in')}>Incoming</option>
+              <option value="out" disabled={!timeframeDirections.has('out')}>Outgoing</option>
             </select>
-            <select className="input" value={counterpartyFilter} onChange={event => setCounterpartyFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
-              <option value="all">All From / To</option>
+            <select className="input" aria-label={counterpartyAriaLabel} value={counterpartyFilter} onChange={event => setCounterpartyFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
+              <option value="all">{counterpartyAllLabel}</option>
               {counterparties.map(counterparty => <option key={counterparty} value={counterparty}>{counterparty}</option>)}
             </select>
-            <select className="input" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
+            <select className="input" aria-label="Category" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
               <option value="all">All categories</option>
               {hasUncategorizedEntries && <option value="none">No category</option>}
               {categories.map(category => <option key={category} value={category}>{category}</option>)}
@@ -550,7 +594,6 @@ export default function CashFlow() {
                 <div className="cash-flow-month-list">
                   {yearPeriods.map(([month, periodEntries]) => {
                     const periodTotals = summarizeFlowEntries(periodEntries);
-                    const allMonthEntries = entries.filter(entry => entry.month === month);
                     const periodComments = periodEntries
                       .filter(entry => entry.comment.trim())
                       .map(entry => `${entry.direction === 'in' ? 'From' : 'To'} ${entry.counterparty}: ${entry.comment.trim()}`);
@@ -564,7 +607,7 @@ export default function CashFlow() {
                         <summary className="cash-flow-month-summary">
                           <div className="cash-flow-period-group-title">
                             <strong>{formatMonth(month)}</strong>
-                            <span>{allMonthEntries.length} movement{allMonthEntries.length === 1 ? '' : 's'}</span>
+                            <span>{periodEntries.length} movement{periodEntries.length === 1 ? '' : 's'}</span>
                           </div>
                           <FlowNetSummary totals={periodTotals} compact />
                           <div className="cash-flow-period-group-actions">

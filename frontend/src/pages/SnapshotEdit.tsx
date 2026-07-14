@@ -55,7 +55,7 @@ export default function SnapshotEdit() {
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const addOrganizationScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialDataHash = useRef<string>('');
-  const draftKey = `finn_draft_${month || 'new'}`;
+  const draftKey = isCopy ? `finn_draft_copy_${sourceMonth}` : `finn_draft_${month || 'new'}`;
 
   const isDirty = useMemo(() => {
     if (!initialDataHash.current) return false;
@@ -68,7 +68,7 @@ export default function SnapshotEdit() {
     data,
     currentMonth,
     durationSeconds,
-    isNew
+    isNew: isNew || isCopy
   });
 
   useEscapeToDashboard({

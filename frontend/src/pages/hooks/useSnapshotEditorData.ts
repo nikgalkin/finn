@@ -6,6 +6,11 @@ const initialSnapshotData: SnapshotData = { comment: '', rates: { USD: 90, EUR: 
 
 type UseSnapshotEditorDataProps = { isCopy: boolean; isNew: boolean; month?: string; sourceMonth?: string };
 
+const getCurrentMonth = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => ({
   ...snapshotData,
   comment: '',
@@ -52,7 +57,7 @@ const parseSnapshotData = (
 
 export function useSnapshotEditorData({ isCopy, isNew, month, sourceMonth }: UseSnapshotEditorDataProps) {
   const { settings, loading: settingsLoading } = useSettings();
-  const [currentMonth, setCurrentMonth] = useState('');
+  const [currentMonth, setCurrentMonth] = useState(() => (isNew || isCopy ? getCurrentMonth() : ''));
   const [originalMonth, setOriginalMonth] = useState('');
   const [data, setData] = useState<SnapshotData>(initialSnapshotData);
   const [durationSeconds, setDurationSeconds] = useState(0);
@@ -70,14 +75,15 @@ export function useSnapshotEditorData({ isCopy, isNew, month, sourceMonth }: Use
 
       try {
         if (isNew || isCopy) {
-          const now = new Date();
-          setCurrentMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+          const targetMonth = getCurrentMonth();
+          setCurrentMonth(targetMonth);
           setOriginalMonth('');
 
           if (sourceMonth) {
             const snapshot: Snapshot = await fetch(`${API_URL}/snapshots/${sourceMonth}`).then(res => res.json());
             if (!cancelled && snapshot.data) {
               setData(stripCommentsFromSnapshot(parseSnapshotData(snapshot, settings, true, true)));
+              setCurrentMonth(targetMonth);
             }
           } else {
             setData(initialSnapshotData);

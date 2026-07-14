@@ -717,6 +717,7 @@ a {
 }
 
 .cash-flow-period-header {
+  position: relative;
   padding: 18px 20px;
   border-bottom: 1px solid var(--glass-border);
 }
@@ -732,6 +733,16 @@ a {
   font-size: 12px;
 }
 
+.cash-flow-period-header-month {
+  flex: 0 0 auto;
+}
+
+.cash-flow-period-header-info {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+}
+
 .cash-flow-period-header-actions {
   display: flex;
   align-items: center;
@@ -739,7 +750,7 @@ a {
   flex: 0 0 auto;
 }
 
-.cash-flow-period-header-actions .cash-flow-month-input {
+.cash-flow-period-header-month .cash-flow-month-input {
   width: 155px;
 }
 
@@ -2096,9 +2107,19 @@ a {
     flex-direction: column;
   }
 
-  .cash-flow-period-header-actions,
-  .cash-flow-period-header-actions .cash-flow-month-input {
+  .cash-flow-period-header-month,
+  .cash-flow-period-header-month .cash-flow-month-input {
     width: 100%;
+  }
+
+  .cash-flow-period-header-actions {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+  }
+
+  .cash-flow-period-header-info {
+    padding-right: 44px;
   }
 
   .cash-flow-period-row {

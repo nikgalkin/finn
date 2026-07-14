@@ -188,11 +188,7 @@ export function FlowPeriodModal({
     }}>
       <form className="cash-flow-period-modal glass-panel" onSubmit={submit}>
         <div className="cash-flow-period-header">
-          <div>
-            <h3>Cash Flow · {formatMonth(month)}</h3>
-            <p>Edit all movements for this month, then save the period once.</p>
-          </div>
-          <div className="cash-flow-period-header-actions">
+          <div className="cash-flow-period-header-month">
             <input
               className="input cash-flow-month-input"
               type="month"
@@ -207,6 +203,12 @@ export function FlowPeriodModal({
               disabled={saving || lockMonth}
               title={lockMonth ? 'This month is linked to the snapshot period.' : undefined}
             />
+          </div>
+          <div className="cash-flow-period-header-info">
+            <h3>Cash Flow · {formatMonth(month)}</h3>
+            <p>Edit all movements for this month, then save the period once.</p>
+          </div>
+          <div className="cash-flow-period-header-actions">
             <button type="button" className="btn cash-flow-icon-button" onClick={requestClose} disabled={saving} title="Close"><X size={18} /></button>
           </div>
         </div>
