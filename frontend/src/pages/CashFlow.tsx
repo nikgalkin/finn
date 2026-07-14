@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, ArrowUp, Calendar, Copy, FileUp, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ArrowDown, ArrowLeft, ArrowUp, Calendar, ChevronsUpDown, Copy, FileUp, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
+import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { API_URL } from '../types';
 import type { FlowDirection, FlowEntry } from '../types';
+import { calculateFlowTax, summarizeFlowEntries } from '../lib/cashFlow';
 import { FlowPeriodModal } from './components/FlowPeriodModal';
 import type { FlowPeriodDraft, FlowPeriodSeed } from './components/FlowPeriodModal';
 import { PageLoader } from './components/PageLoader';
@@ -11,7 +13,8 @@ import { QuickHoverTooltip } from './components/QuickHoverTooltip';
 import { CommentModal } from './components/SnapshotCommentModal';
 import { TimeframeControl } from './components/TimeframeControl';
 import { FlowCsvImportModal } from './components/FlowCsvImportModal';
-import { parseFlowCsv } from '../lib/flowCsv';
+import { FlowNetSummary } from './components/FlowNetSummary';
+import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 
 const currentMonth = () => {
@@ -27,6 +30,10 @@ const formatAmount = (amount: number, currency: string) => (
   `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(amount)} ${currency}`
 );
 
+const formatTaxAmount = (amount: number, currency: string) => (
+  `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount)} ${currency}`
+);
+
 const formatMonth = (month: string) => {
   const [year, monthNumber] = month.split('-').map(Number);
   if (!year || !monthNumber) return month;
@@ -38,26 +45,6 @@ const nextMonth = (month: string) => {
   if (!year || !monthNumber) return currentMonth();
   const date = new Date(year, monthNumber, 1);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const taxAmount = (entry: Pick<FlowEntry, 'direction' | 'amount' | 'taxRate'>) => (
-  entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0
-);
-
-const summarizeEntries = (entries: FlowEntry[]) => {
-  const byCurrency = new Map<string, { incoming: number; incomingNet: number; outgoing: number; tax: number }>();
-  entries.forEach(entry => {
-    const total = byCurrency.get(entry.currency) || { incoming: 0, incomingNet: 0, outgoing: 0, tax: 0 };
-    if (entry.direction === 'in') {
-      total.incoming += entry.amount;
-      total.tax += taxAmount(entry);
-    } else {
-      total.outgoing += entry.amount;
-    }
-    total.incomingNet = total.incoming - total.tax;
-    byCurrency.set(entry.currency, total);
-  });
-  return Array.from(byCurrency.entries()).sort(([a], [b]) => a.localeCompare(b));
 };
 
 const readError = async (response: Response) => {
@@ -78,6 +65,7 @@ const fetchFlowEntries = async () => {
 
 export default function CashFlow() {
   const { settings, loading: settingsLoading } = useSettings();
+  const [searchParams] = useSearchParams();
   const [entries, setEntries] = useState<FlowEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,10 +80,19 @@ export default function CashFlow() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [counterpartyFilter, setCounterpartyFilter] = useState('all');
   const [csvPreview, setCsvPreview] = useState<FlowCsvPreview | null>(null);
+  const [csvImportDuplicates, setCsvImportDuplicates] = useState(false);
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvImportError, setCsvImportError] = useState('');
   const [csvImportNotice, setCsvImportNotice] = useState('');
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const csvFileInputRef = useRef<HTMLInputElement | null>(null);
+  const expansionInitializedRef = useRef(false);
+  const linkedMonth = searchParams.get('month');
+
+  useEscapeToDashboard({
+    blocked: Boolean(periodEditor || commentEditor || csvPreview)
+  });
 
   useEffect(() => {
     if (settingsLoading) return;
@@ -125,10 +122,18 @@ export default function CashFlow() {
 
   useEffect(() => {
     if (months.length > 0 && !startMonth && !endMonth) {
-      setStartMonth(months[0]);
-      setEndMonth(months[months.length - 1]);
+      if (!linkedMonth || !months.includes(linkedMonth)) {
+        setStartMonth(months[0]);
+        setEndMonth(months[months.length - 1]);
+      }
     }
-  }, [endMonth, months, startMonth]);
+  }, [endMonth, linkedMonth, months, startMonth]);
+
+  useEffect(() => {
+    if (!linkedMonth || !months.includes(linkedMonth)) return;
+    setStartMonth(linkedMonth);
+    setEndMonth(linkedMonth);
+  }, [linkedMonth, months]);
 
   const categories = useMemo(() => Array.from(new Set(entries.map(entry => entry.category).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [entries]);
   const hasUncategorizedEntries = useMemo(() => entries.some(entry => !entry.category), [entries]);
@@ -156,7 +161,57 @@ export default function CashFlow() {
   const currentYear = String(new Date().getFullYear());
   const latestVisibleYear = visibleYears[0]?.[0];
 
-  const totals = useMemo(() => summarizeEntries(visibleEntries), [visibleEntries]);
+  const totals = useMemo(() => summarizeFlowEntries(visibleEntries), [visibleEntries]);
+  const latestVisibleMonth = visiblePeriods[0]?.[0];
+
+  useEffect(() => {
+    if (expansionInitializedRef.current || visibleYears.length === 0) return;
+    expansionInitializedRef.current = true;
+    setExpandedYears(new Set(
+      visibleYears
+        .map(([year]) => year)
+        .filter(year => year === currentYear || year === latestVisibleYear)
+    ));
+    setExpandedMonths(new Set(latestVisibleMonth ? [latestVisibleMonth] : []));
+  }, [currentYear, latestVisibleMonth, latestVisibleYear, visibleYears]);
+
+  const toggleYearPeriods = (year: string, yearPeriods: Array<[string, FlowEntry[]]>) => {
+    const allExpanded = yearPeriods.every(([month]) => expandedMonths.has(month));
+    const expand = !allExpanded;
+    setExpandedYears(previous => {
+      const next = new Set(previous);
+      if (expand) next.add(year);
+      return next;
+    });
+    setExpandedMonths(previous => {
+      const next = new Set(previous);
+      yearPeriods.forEach(([month]) => {
+        if (expand) next.add(month);
+        else next.delete(month);
+      });
+      return next;
+    });
+  };
+
+  const setYearExpanded = (year: string, expanded: boolean) => {
+    setExpandedYears(previous => {
+      if (previous.has(year) === expanded) return previous;
+      const next = new Set(previous);
+      if (expanded) next.add(year);
+      else next.delete(year);
+      return next;
+    });
+  };
+
+  const setMonthExpanded = (month: string, expanded: boolean) => {
+    setExpandedMonths(previous => {
+      if (previous.has(month) === expanded) return previous;
+      const next = new Set(previous);
+      if (expanded) next.add(month);
+      else next.delete(month);
+      return next;
+    });
+  };
 
   const openNewEntry = () => {
     setError('');
@@ -184,13 +239,19 @@ export default function CashFlow() {
   const readCsvFile = async (file: File) => {
     setCsvImportError('');
     setCsvImportNotice('');
+    setCsvImportDuplicates(false);
     try {
-      setCsvPreview(parseFlowCsv(await file.text(), file.name, settings.currencies));
+      const preview = parseFlowCsv(await file.text(), file.name, settings.currencies);
+      setCsvPreview({
+        ...preview,
+        duplicates: findFlowCsvDuplicates(preview.entries, entries)
+      });
     } catch (fileError) {
       setCsvPreview({
         fileName: file.name,
         entries: [],
-        errors: [fileError instanceof Error ? fileError.message : 'Could not read the CSV file.']
+        errors: [fileError instanceof Error ? fileError.message : 'Could not read the CSV file.'],
+        duplicates: []
       });
     }
   };
@@ -203,7 +264,7 @@ export default function CashFlow() {
       const response = await fetch(`${API_URL}/flows/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entries: csvPreview.entries })
+        body: JSON.stringify({ entries: csvPreview.entries, allowDuplicates: csvImportDuplicates })
       });
       if (!response.ok) throw new Error(await readError(response));
       const result = await response.json() as { imported: number; skipped: number };
@@ -366,8 +427,13 @@ export default function CashFlow() {
           preview={csvPreview}
           importing={csvImporting}
           error={csvImportError}
+          importDuplicates={csvImportDuplicates}
+          onImportDuplicatesChange={setCsvImportDuplicates}
           onClose={() => {
-            if (!csvImporting) setCsvPreview(null);
+            if (!csvImporting) {
+              setCsvPreview(null);
+              setCsvImportDuplicates(false);
+            }
           }}
           onImport={() => void importCsv()}
         />
@@ -436,16 +502,9 @@ export default function CashFlow() {
         </div>
 
         {totals.length > 0 && (
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '14px' }}>
-            {totals.map(([currency, total]) => (
-              <div key={currency} style={{ padding: '8px 11px', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.35)', fontSize: '12px' }}>
-                <strong style={{ marginRight: '9px' }}>{currency}</strong>
-                <span style={{ color: 'var(--success)', marginRight: '9px' }}>↑ {new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.incomingNet)}</span>
-                <span style={{ color: 'var(--danger)', marginRight: '9px' }}>↓ {new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.outgoing)}</span>
-                {total.tax > 0 && <span style={{ color: '#f59e0b', marginRight: '9px' }}>Tax −{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.tax)}</span>}
-                <span style={{ color: 'var(--text-secondary)' }}>Gross +{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.incoming)}</span>
-              </div>
-            ))}
+          <div className="cash-flow-overview-summary">
+            <FlowNetSummary totals={totals} />
+            <span>Hover a value for incoming, outgoing, and tax details.</span>
           </div>
         )}
       </div>
@@ -458,116 +517,158 @@ export default function CashFlow() {
         <div className="cash-flow-year-list">
           {visibleYears.map(([year, yearPeriods]) => {
             const yearEntries = yearPeriods.flatMap(([, periodEntries]) => periodEntries);
-            const yearTotals = summarizeEntries(yearEntries);
-            const isDefaultOpen = year === currentYear || year === latestVisibleYear;
+            const yearTotals = summarizeFlowEntries(yearEntries);
+            const allYearPeriodsExpanded = yearPeriods.every(([month]) => expandedMonths.has(month));
             return (
-              <details key={year} open={isDefaultOpen} className="glass-panel cash-flow-year-group">
+              <details
+                key={year}
+                open={expandedYears.has(year)}
+                onToggle={event => setYearExpanded(year, event.currentTarget.open)}
+                className="glass-panel cash-flow-year-group"
+              >
                 <summary className="cash-flow-year-summary">
                   <div className="cash-flow-year-title">
                     <Calendar size={18} />
                     <strong>{year} Year</strong>
                     <span>{yearEntries.length} movement{yearEntries.length === 1 ? '' : 's'}</span>
                   </div>
-                  <div className="cash-flow-period-group-summary">
-                    {yearTotals.map(([currency, total]) => (
-                      <span key={currency}>
-                        <strong>{currency}</strong>
-                        <i className="is-in">+{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.incomingNet)}</i>
-                        {total.outgoing > 0 && <i className="is-out">−{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.outgoing)}</i>}
-                        {total.tax > 0 && <i className="is-tax">Tax −{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.tax)}</i>}
-                        <i className="is-gross">Gross +{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.incoming)}</i>
-                      </span>
-                    ))}
+                  <div className="cash-flow-year-summary-actions">
+                    <FlowNetSummary totals={yearTotals} compact />
+                    <button
+                      className="btn cash-flow-year-toggle"
+                      onClick={event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleYearPeriods(year, yearPeriods);
+                      }}
+                      title={allYearPeriodsExpanded ? `Collapse all months in ${year}` : `Expand all months in ${year}`}
+                    >
+                      <ChevronsUpDown size={15} /> {allYearPeriodsExpanded ? 'Collapse all' : 'Expand all'}
+                    </button>
                   </div>
                 </summary>
-                <div className="cash-flow-year-body">
-                  <table className="table cash-flow-period-table" style={{ minWidth: '850px' }}>
-                    <thead>
-                      <tr>
-                        <th>Direction</th>
-                        <th>Counterparty</th>
-                        <th>Category</th>
-                        <th>Comment</th>
-                        <th className="text-right">Amount</th>
-                        <th aria-label="Actions" />
-                      </tr>
-                    </thead>
-                    {yearPeriods.map(([month, periodEntries]) => {
-                      const periodTotals = summarizeEntries(periodEntries);
-                      const allMonthEntries = entries.filter(entry => entry.month === month);
-                      return (
-                        <tbody key={month}>
-                          <tr className="cash-flow-period-group-row">
-                            <td colSpan={6}>
-                              <div className="cash-flow-period-group">
-                                <div className="cash-flow-period-group-title">
-                                  <strong>{formatMonth(month)}</strong>
-                                  <span>{allMonthEntries.length} movement{allMonthEntries.length === 1 ? '' : 's'}</span>
-                                </div>
-                                <div className="cash-flow-period-group-summary">
-                                  {periodTotals.map(([currency, total]) => (
-                                    <span key={currency}>
-                                      <strong>{currency}</strong>
-                                      <i className="is-in">+{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.incomingNet)}</i>
-                                      {total.outgoing > 0 && <i className="is-out">−{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.outgoing)}</i>}
-                                      {total.tax > 0 && <i className="is-tax">Tax −{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.tax)}</i>}
-                                      <i className="is-gross">Gross +{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(total.incoming)}</i>
-                                    </span>
-                                  ))}
-                                </div>
-                                <div className="cash-flow-period-group-actions">
-                                  <button className="btn" onClick={() => copyPeriod(month)} title={`Copy period to ${formatMonth(nextMonth(month))}`}><Copy size={15} /> Copy</button>
-                                  <button className="btn" onClick={() => openEditPeriod(month)} title={`Edit all movements for ${formatMonth(month)}`}><Pencil size={15} /> Edit period</button>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                          {periodEntries.map(entry => {
-                            const tax = taxAmount(entry);
-                            const netAmount = entry.direction === 'in' ? entry.amount - tax : -entry.amount;
-                            return (
-                              <tr key={entry.id}>
-                                <td>
-                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 600, fontSize: '13px' }}>
-                                    {entry.direction === 'in' ? <ArrowDown size={15} /> : <ArrowUp size={15} />}
-                                    {entry.direction === 'in' ? 'Incoming' : 'Outgoing'}
-                                  </span>
-                                </td>
-                                <td style={{ fontWeight: 600 }}>{entry.counterparty}</td>
-                                <td style={{ color: entry.category ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{entry.category || '—'}</td>
-                                <td style={{ width: '26%', maxWidth: '300px' }}>
-                                  <QuickHoverTooltip text={entry.comment}>
-                                    <button
-                                      className={`cash-flow-table-comment${entry.comment ? ' has-comment' : ''}`}
-                                      onClick={() => openCommentEditor(entry)}
-                                      aria-label={entry.comment ? `Edit comment for ${entry.counterparty}` : `Add comment for ${entry.counterparty}`}
-                                    >
-                                      <MessageSquare size={15} />
-                                      <span>{entry.comment || '—'}</span>
-                                    </button>
-                                  </QuickHoverTooltip>
-                                </td>
-                                <td className="text-right" style={{ whiteSpace: 'nowrap', color: entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
-                                  <div>{entry.direction === 'in' ? '+' : '−'}{formatAmount(Math.abs(netAmount), entry.currency)}</div>
-                                  {tax > 0 && (
-                                    <div className="cash-flow-entry-details">
-                                      Gross +{formatAmount(entry.amount, entry.currency)}
-                                      <span> · Tax −{formatAmount(tax, entry.currency)}</span>
-                                    </div>
-                                  )}
-                                </td>
-                                <td>
-                                  <div className="flex justify-end gap-2">
-                                    <button className="btn btn-danger" style={{ padding: '7px' }} onClick={() => void deleteEntry(entry)} title="Delete entry"><Trash2 size={15} /></button>
-                                  </div>
-                                </td>
+                <div className="cash-flow-month-list">
+                  {yearPeriods.map(([month, periodEntries]) => {
+                    const periodTotals = summarizeFlowEntries(periodEntries);
+                    const allMonthEntries = entries.filter(entry => entry.month === month);
+                    const periodComments = periodEntries
+                      .filter(entry => entry.comment.trim())
+                      .map(entry => `${entry.direction === 'in' ? 'From' : 'To'} ${entry.counterparty}: ${entry.comment.trim()}`);
+                    return (
+                      <details
+                        key={month}
+                        open={expandedMonths.has(month)}
+                        onToggle={event => setMonthExpanded(month, event.currentTarget.open)}
+                        className="cash-flow-month-group"
+                      >
+                        <summary className="cash-flow-month-summary">
+                          <div className="cash-flow-period-group-title">
+                            <strong>{formatMonth(month)}</strong>
+                            <span>{allMonthEntries.length} movement{allMonthEntries.length === 1 ? '' : 's'}</span>
+                          </div>
+                          <FlowNetSummary totals={periodTotals} compact />
+                          <div className="cash-flow-period-group-actions">
+                            {periodComments.length > 0 && (
+                              <QuickHoverTooltip text={periodComments.join('\n')}>
+                                <button
+                                  type="button"
+                                  className="btn cash-flow-collapsed-comments"
+                                  onClick={event => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                  }}
+                                  aria-label={`View ${periodComments.length} movement comment${periodComments.length === 1 ? '' : 's'}`}
+                                >
+                                  <MessageSquare size={15} />
+                                  {periodComments.length > 1 && periodComments.length}
+                                </button>
+                              </QuickHoverTooltip>
+                            )}
+                            <button
+                              className="btn"
+                              onClick={event => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                copyPeriod(month);
+                              }}
+                              title={`Copy period to ${formatMonth(nextMonth(month))}`}
+                            >
+                              <Copy size={15} /> Copy
+                            </button>
+                            <button
+                              className="btn"
+                              onClick={event => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                openEditPeriod(month);
+                              }}
+                              title={`Edit all movements for ${formatMonth(month)}`}
+                            >
+                              <Pencil size={15} /> Edit period
+                            </button>
+                          </div>
+                        </summary>
+                        <div className="cash-flow-year-body">
+                          <table className="table cash-flow-period-table" style={{ minWidth: '850px' }}>
+                            <thead>
+                              <tr>
+                                <th>Direction</th>
+                                <th>Counterparty</th>
+                                <th>Category</th>
+                                <th>Comment</th>
+                                <th className="text-right">Amount</th>
+                                <th aria-label="Actions" />
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      );
-                    })}
-                  </table>
+                            </thead>
+                            <tbody>
+                              {periodEntries.map(entry => {
+                                const tax = calculateFlowTax(entry);
+                                const netAmount = entry.direction === 'in' ? entry.amount - tax : -entry.amount;
+                                return (
+                                  <tr key={entry.id}>
+                                    <td>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 600, fontSize: '13px' }}>
+                                        {entry.direction === 'in' ? <ArrowDown size={15} /> : <ArrowUp size={15} />}
+                                        {entry.direction === 'in' ? 'Incoming' : 'Outgoing'}
+                                      </span>
+                                    </td>
+                                    <td style={{ fontWeight: 600 }}>{entry.counterparty}</td>
+                                    <td style={{ color: entry.category ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{entry.category || '—'}</td>
+                                    <td style={{ width: '26%', maxWidth: '300px' }}>
+                                      <QuickHoverTooltip text={entry.comment}>
+                                        <button
+                                          className={`cash-flow-table-comment${entry.comment ? ' has-comment' : ''}`}
+                                          onClick={() => openCommentEditor(entry)}
+                                          aria-label={entry.comment ? `Edit comment for ${entry.counterparty}` : `Add comment for ${entry.counterparty}`}
+                                        >
+                                          <MessageSquare size={15} />
+                                          <span>{entry.comment || '—'}</span>
+                                        </button>
+                                      </QuickHoverTooltip>
+                                    </td>
+                                    <td className="text-right" style={{ whiteSpace: 'nowrap', color: entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
+                                      <div>{entry.direction === 'in' ? '+' : '−'}{formatAmount(Math.abs(netAmount), entry.currency)}</div>
+                                      {tax > 0 && (
+                                        <div className="cash-flow-entry-details">
+                                          Gross +{formatAmount(entry.amount, entry.currency)}
+                                          <span> · Tax −{formatTaxAmount(tax, entry.currency)}</span>
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <div className="flex justify-end gap-2">
+                                        <button className="btn btn-danger" style={{ padding: '7px' }} onClick={() => void deleteEntry(entry)} title="Delete entry"><Trash2 size={15} /></button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    );
+                  })}
                 </div>
               </details>
             );

@@ -153,6 +153,38 @@ func TestFlowAPIImportsEntriesAndSkipsExactDuplicates(t *testing.T) {
 	}
 }
 
+func TestFlowAPIImportsExactDuplicatesWhenRequested(t *testing.T) {
+	router, db := newFlowAPITestRouter(t)
+	insertFlowTestEntry(t, db, "2026-07", "in", "Acme", 100)
+
+	response := performFlowRequest(router, http.MethodPost, "/api/flows/import", `{
+		"allowDuplicates":true,
+		"entries":[
+			{"month":"2026-07","direction":"in","counterparty":"Acme","currency":"USD","amount":100},
+			{"month":"2026-07","direction":"in","counterparty":"Acme","currency":"USD","amount":100}
+		]
+	}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("duplicate import status = %d, want %d; body: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+
+	var result FlowImportResult
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Imported != 2 || result.Skipped != 0 {
+		t.Fatalf("duplicate import result = %+v, want 2 imported and 0 skipped", result)
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Fatalf("flow entry count = %d, want 3", count)
+	}
+}
+
 func TestFlowAPIImportRejectsInvalidFileWithoutPartialSave(t *testing.T) {
 	router, db := newFlowAPITestRouter(t)
 

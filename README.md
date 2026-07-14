@@ -50,12 +50,12 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 
 ## Cash Flow CSV format
 
-Cash Flow accepts UTF-8, comma-separated CSV files. Each row is one movement; existing entries are kept and exact duplicates are skipped.
+Cash Flow accepts UTF-8 CSV files separated with semicolons (`;`). Decimal values may use either a dot or a comma. Each row is one movement. The preview marks rows that already exist or repeat inside the file; exact duplicates are skipped by default and can be explicitly included with the import checkbox.
 
 ```csv
-month,direction,counterparty,amount,currency,tax_rate,category,comment
-2026-01,in,Acme,5000,USD,6,Salary,January salary
-2026-01,out,Landlord,85000,RUB,0,Rent,
+month;direction;counterparty;amount;currency;tax_rate;category;comment
+2026-01;in;Acme;5000;USD;6;Salary;January salary
+2026-01;out;Landlord;85000;RUB;0;Rent;
 ```
 
 Required headers are `month`, `direction`, `counterparty`, `amount`, and `currency`. The `tax_rate`, `category`, and `comment` columns are optional. Months use `YYYY-MM`, direction is `in` or `out`, amount is a positive gross value, and tax rate is a percentage from `0` to `100` that only applies to incoming entries.

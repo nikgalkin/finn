@@ -6,6 +6,7 @@ import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
+import { useFlowEntries } from '../hooks/useFlowEntries';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
 import { PageLoader } from './components/PageLoader';
@@ -68,6 +69,7 @@ export default function Dashboard() {
   const [activeViewNotes, setActiveViewNotes] = useState<ParsedSnapshot | null>(null);
   const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
   const [onlyChanges, setOnlyChanges] = useState(true);
+  const { entries: flowEntries } = useFlowEntries(Boolean(settings.cashFlow?.enabled && diffModalData));
 
   const navigate = useNavigate();
   const latestSnapshot = useMemo(() => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null, [snapshots]);
@@ -526,6 +528,8 @@ export default function Dashboard() {
           current={diffModalData.current}
           previous={diffModalData.previous}
           snapshots={snapshots}
+          cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
+          flowEntries={flowEntries}
           onlyChanges={onlyChanges}
           onOnlyChangesChange={setOnlyChanges}
           onClose={() => setDiffModalData(null)}

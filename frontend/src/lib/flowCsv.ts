@@ -1,4 +1,4 @@
-import type { FlowDirection } from '../types';
+import type { FlowDirection, FlowEntry } from '../types';
 
 export type FlowCsvEntry = {
   month: string;
@@ -15,11 +15,46 @@ export type FlowCsvPreview = {
   fileName: string;
   entries: FlowCsvEntry[];
   errors: string[];
+  duplicates: FlowCsvDuplicate[];
+};
+
+export type FlowCsvDuplicate = {
+  entryIndex: number;
+  reason: 'existing' | 'file';
 };
 
 const ALLOWED_HEADERS = ['month', 'direction', 'counterparty', 'amount', 'currency', 'tax_rate', 'category', 'comment'] as const;
 const REQUIRED_HEADERS = ['month', 'direction', 'counterparty', 'amount', 'currency'] as const;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+const CSV_SEPARATOR = ';';
+
+const parseNumber = (value: string) => Number(/^[-+]?\d+,\d+$/.test(value) ? value.replace(',', '.') : value);
+
+const flowEntryKey = (entry: FlowCsvEntry | FlowEntry) => [
+  entry.month.trim(),
+  entry.direction.trim().toLowerCase(),
+  entry.counterparty.trim(),
+  entry.currency.trim().toUpperCase(),
+  String(Number(entry.amount)),
+  String(entry.direction === 'out' ? 0 : Number(entry.taxRate || 0)),
+  entry.category.trim(),
+  entry.comment.trim()
+].join('\u001f');
+
+export const findFlowCsvDuplicates = (csvEntries: FlowCsvEntry[], existingEntries: FlowEntry[]): FlowCsvDuplicate[] => {
+  const existingKeys = new Set(existingEntries.map(flowEntryKey));
+  const seenFileKeys = new Set<string>();
+  const duplicates: FlowCsvDuplicate[] = [];
+
+  csvEntries.forEach((entry, entryIndex) => {
+    const key = flowEntryKey(entry);
+    if (existingKeys.has(key)) duplicates.push({ entryIndex, reason: 'existing' });
+    else if (seenFileKeys.has(key)) duplicates.push({ entryIndex, reason: 'file' });
+    seenFileKeys.add(key);
+  });
+
+  return duplicates;
+};
 
 const parseCsvRows = (source: string): string[][] => {
   const rows: string[][] = [];
@@ -38,7 +73,7 @@ const parseCsvRows = (source: string): string[][] => {
       }
       continue;
     }
-    if (character === ',' && !quoted) {
+    if (character === CSV_SEPARATOR && !quoted) {
       row.push(value);
       value = '';
       continue;
@@ -65,10 +100,13 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
   try {
     rows = parseCsvRows(text.replace(/^\uFEFF/, ''));
   } catch (error) {
-    return { fileName, entries: [], errors: [error instanceof Error ? error.message : 'Could not parse CSV.'] };
+    return { fileName, entries: [], errors: [error instanceof Error ? error.message : 'Could not parse CSV.'], duplicates: [] };
   }
 
-  if (rows.length === 0) return { fileName, entries: [], errors: ['The CSV file is empty.'] };
+  if (rows.length === 0) return { fileName, entries: [], errors: ['The CSV file is empty.'], duplicates: [] };
+  if (rows[0].length === 1 && rows[0][0].includes(',')) {
+    return { fileName, entries: [], errors: ['Use a semicolon (;) as the CSV separator.'], duplicates: [] };
+  }
 
   const headers = rows[0].map(header => header.trim().toLowerCase());
   const errors: string[] = [];
@@ -78,7 +116,7 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
   if (unknownHeaders.length > 0) errors.push(`Unknown headers: ${Array.from(new Set(unknownHeaders)).join(', ')}.`);
   const missingHeaders = REQUIRED_HEADERS.filter(header => !headers.includes(header));
   if (missingHeaders.length > 0) errors.push(`Missing required headers: ${missingHeaders.join(', ')}.`);
-  if (errors.length > 0) return { fileName, entries: [], errors };
+  if (errors.length > 0) return { fileName, entries: [], errors, duplicates: [] };
 
   const headerIndex = new Map(headers.map((header, index) => [header, index]));
   const configuredCurrencySet = new Set(configuredCurrencies.map(currency => currency.trim().toUpperCase()).filter(Boolean));
@@ -91,10 +129,10 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
     const direction = read('direction').toLowerCase();
     const counterparty = read('counterparty');
     const amountText = read('amount');
-    const amount = Number(amountText);
+    const amount = parseNumber(amountText);
     const currency = read('currency').toUpperCase();
     const taxRateText = read('tax_rate');
-    const taxRate = taxRateText === '' ? 0 : Number(taxRateText);
+    const taxRate = taxRateText === '' ? 0 : parseNumber(taxRateText);
     const rowErrors: string[] = [];
 
     if (row.length > headers.length) rowErrors.push('has more values than headers');
@@ -126,5 +164,5 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
 
   if (entries.length > 5000) errors.push('A single import cannot contain more than 5000 entries.');
   if (entries.length === 0 && errors.length === 0) errors.push('The CSV file has a header but no entries.');
-  return { fileName, entries, errors };
+  return { fileName, entries, errors, duplicates: [] };
 };

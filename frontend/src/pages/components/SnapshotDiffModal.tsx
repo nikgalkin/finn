@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
 import type { FocusEvent, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Coins, Folder, MessageSquare, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowDownUp, Coins, ExternalLink, Folder, MessageSquare, X } from 'lucide-react';
 import { getCurrencyColor, getTagColor } from '../../types';
-import type { ParsedSnapshot } from '../../types';
+import type { FlowEntry, ParsedSnapshot } from '../../types';
+import { summarizeFlowEntries } from '../../lib/cashFlow';
+import { FlowNetSummary } from './FlowNetSummary';
 import { SearchableSelect } from './graphs/SearchableSelect';
 
 type DiffStatus = 'new' | 'deleted' | 'up' | 'down' | 'stable';
@@ -32,6 +35,8 @@ type SnapshotDiffModalProps = {
   current: ParsedSnapshot;
   previous: ParsedSnapshot | null;
   snapshots: ParsedSnapshot[];
+  cashFlowEnabled: boolean;
+  flowEntries: FlowEntry[];
   onlyChanges: boolean;
   onOnlyChangesChange: (value: boolean) => void;
   onClose: () => void;
@@ -236,6 +241,8 @@ export function SnapshotDiffModal({
   current,
   previous,
   snapshots,
+  cashFlowEnabled,
+  flowEntries,
   onlyChanges,
   onOnlyChangesChange,
   onClose
@@ -250,6 +257,14 @@ export function SnapshotDiffModal({
   const treeDiffData = useMemo(
     () => buildTreeDiffData(selectedCurrent, selectedPrevious, onlyChanges),
     [selectedCurrent, selectedPrevious, onlyChanges]
+  );
+  const selectedMonthFlowEntries = useMemo(
+    () => flowEntries.filter(entry => entry.month === selectedCurrent.month),
+    [flowEntries, selectedCurrent.month]
+  );
+  const selectedMonthFlowTotals = useMemo(
+    () => summarizeFlowEntries(selectedMonthFlowEntries),
+    [selectedMonthFlowEntries]
   );
 
   const handlePreviousMonthChange = (month: string) => {
@@ -273,15 +288,7 @@ export function SnapshotDiffModal({
       >
         <div className="flex justify-between items-center mb-3" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Granular Hierarchy Diff</h3>
-              {(selectedCurrent.data.comment || selectedPrevious?.data.comment) && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CommentMarker comment={selectedCurrent.data.comment} label="To comment" />
-                  <CommentMarker comment={selectedPrevious?.data.comment} label="From comment" />
-                </div>
-              )}
-            </div>
+            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Granular Hierarchy Diff</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '6px', color: 'var(--text-secondary)', fontSize: '12px' }}>
               <span>From</span>
               <SearchableSelect
@@ -325,6 +332,46 @@ export function SnapshotDiffModal({
               Show changes only (hide zero deltas)
             </label>
           </div>
+
+          {(selectedCurrent.data.comment || selectedPrevious?.data.comment) && (
+            <section className="snapshot-diff-period-notes">
+              {selectedPrevious?.data.comment && (
+                <div className="snapshot-diff-period-note">
+                  <div className="snapshot-diff-period-note-label">
+                    <MessageSquare size={14} /> Previous · {selectedPrevious.month}
+                  </div>
+                  <p>{selectedPrevious.data.comment}</p>
+                </div>
+              )}
+              {selectedCurrent.data.comment && (
+                <div className="snapshot-diff-period-note">
+                  <div className="snapshot-diff-period-note-label">
+                    <MessageSquare size={14} /> Current · {selectedCurrent.month}
+                  </div>
+                  <p>{selectedCurrent.data.comment}</p>
+                </div>
+              )}
+            </section>
+          )}
+
+          {cashFlowEnabled && selectedMonthFlowEntries.length > 0 && (
+            <section className="snapshot-diff-recorded-flow">
+              <div className="snapshot-diff-recorded-flow-heading">
+                <div>
+                  <div className="snapshot-diff-recorded-flow-title">
+                    <ArrowDownUp size={15} />
+                    <strong>Recorded Cash Flow</strong>
+                    <span>{selectedCurrent.month}</span>
+                  </div>
+                  <p>Optional recorded movements. They are context and are not expected to match the snapshot change.</p>
+                </div>
+                <Link to={`/flow?month=${selectedCurrent.month}`} className="btn" onClick={onClose}>
+                  Open month <ExternalLink size={14} />
+                </Link>
+              </div>
+              <FlowNetSummary totals={selectedMonthFlowTotals} compact />
+            </section>
+          )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {treeDiffData.map((org, orgIndex) => (

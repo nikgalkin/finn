@@ -580,6 +580,45 @@ a {
   color: var(--text-primary);
 }
 
+.cash-flow-import-duplicate-count,
+.cash-flow-import-duplicate-count strong {
+  color: var(--warning);
+}
+
+.cash-flow-import-duplicates-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.06);
+  cursor: pointer;
+}
+
+.cash-flow-import-duplicates-toggle input {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--warning);
+}
+
+.cash-flow-import-duplicates-toggle span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cash-flow-import-duplicates-toggle strong {
+  font-size: 12px;
+}
+
+.cash-flow-import-duplicates-toggle small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .cash-flow-import-preview {
   flex: 1;
   overflow: auto;
@@ -603,6 +642,26 @@ a {
 .cash-flow-import-preview th {
   padding: 9px 10px;
   font-size: 12px;
+}
+
+.cash-flow-import-preview tr.is-duplicate td {
+  background: rgba(245, 158, 11, 0.045);
+}
+
+.cash-flow-import-status {
+  display: inline-flex;
+  padding: 2px 6px;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 999px;
+  color: var(--success);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cash-flow-import-status.is-duplicate {
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--warning);
 }
 
 .cash-flow-import-comment {
@@ -1035,6 +1094,71 @@ a {
   gap: 12px;
 }
 
+.cash-flow-overview-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.cash-flow-overview-summary > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.cash-flow-net-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.cash-flow-net-summary > .quick-hover-anchor {
+  display: inline-flex;
+  width: auto;
+}
+
+.cash-flow-net-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cash-flow-net-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--glass-border);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.42);
+  font-size: 12px;
+  cursor: help;
+}
+
+.cash-flow-net-pill i {
+  font-style: normal;
+  font-weight: 700;
+}
+
+.cash-flow-net-pill.is-positive i { color: var(--success); }
+.cash-flow-net-pill.is-negative i { color: var(--danger); }
+.cash-flow-net-pill.is-neutral i { color: var(--text-secondary); }
+
+.cash-flow-net-summary.is-compact .cash-flow-net-label {
+  font-size: 10px;
+}
+
+.cash-flow-net-summary.is-compact .cash-flow-net-pill {
+  padding: 4px 7px;
+  font-size: 11px;
+}
+
 .cash-flow-year-group {
   padding: 0;
   overflow: hidden;
@@ -1083,8 +1207,145 @@ a {
   font-size: 12px;
 }
 
+.cash-flow-year-summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cash-flow-year-toggle {
+  padding: 6px 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .cash-flow-year-body {
   overflow-x: auto;
+}
+
+.cash-flow-month-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.cash-flow-month-group + .cash-flow-month-group {
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.cash-flow-month-summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(155px, auto) minmax(260px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 12px;
+  cursor: pointer;
+  list-style: none;
+  background: rgba(30, 41, 59, 0.64);
+  user-select: none;
+}
+
+.cash-flow-month-summary::-webkit-details-marker {
+  display: none;
+}
+
+.cash-flow-month-summary:hover {
+  background: rgba(30, 41, 59, 0.82);
+}
+
+.cash-flow-month-group[open] > .cash-flow-month-summary {
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.cash-flow-month-group:not([open]) > .cash-flow-month-summary::before {
+  content: '›';
+  position: absolute;
+  margin-left: -2px;
+  color: var(--text-secondary);
+  transform: translateX(-100%);
+}
+
+.snapshot-diff-period-notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.snapshot-diff-period-note {
+  padding: 9px 11px;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 9px;
+  background: rgba(59, 130, 246, 0.065);
+}
+
+.snapshot-diff-period-note-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.snapshot-diff-period-note p {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.snapshot-diff-recorded-flow {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 9px;
+  background: rgba(59, 130, 246, 0.055);
+}
+
+.snapshot-diff-recorded-flow-heading,
+.snapshot-diff-recorded-flow-title {
+  display: flex;
+  align-items: center;
+}
+
+.snapshot-diff-recorded-flow-heading {
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.snapshot-diff-recorded-flow-title {
+  gap: 7px;
+  font-size: 13px;
+}
+
+.snapshot-diff-recorded-flow-title svg {
+  color: var(--accent);
+}
+
+.snapshot-diff-recorded-flow-title span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.snapshot-diff-recorded-flow p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.snapshot-diff-recorded-flow .btn {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  font-size: 11px;
 }
 
 .cash-flow-period-table tbody + tbody .cash-flow-period-group-row td {
@@ -1148,6 +1409,15 @@ a {
 .cash-flow-period-group-actions {
   display: flex;
   gap: 7px;
+}
+
+.cash-flow-period-group-actions > .quick-hover-anchor {
+  display: inline-flex;
+  width: auto;
+}
+
+.cash-flow-month-group[open] > .cash-flow-month-summary .cash-flow-collapsed-comments {
+  display: none;
 }
 
 .cash-flow-period-group-actions .btn {
@@ -1874,9 +2144,27 @@ a {
     gap: 9px;
   }
 
+  .cash-flow-overview-summary,
+  .snapshot-diff-recorded-flow-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cash-flow-month-summary {
+    grid-template-columns: 1fr;
+    gap: 9px;
+    padding: 12px 14px;
+  }
+
   .cash-flow-year-summary {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .cash-flow-year-summary-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .cash-flow-period-group-actions {

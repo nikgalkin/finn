@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	defaultFlowCategories = []string{"salary", "other income", "purchase", "rent expense", "loan given", "loan returned"}
+	defaultFlowCategories = []string{"salary", "other income", "purchase", "flat rent", "loan given", "loan returned"}
 	defaultCurrencies     = []string{"RUB", "USD", "EUR", "UZS"}
 	defaultBalanceTags    = []string{"deposit", "cash", "stocks", "checking"}
 )

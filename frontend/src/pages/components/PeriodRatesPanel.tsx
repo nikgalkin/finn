@@ -33,12 +33,13 @@ export function PeriodRatesPanel({
           <h3 style={{ margin: 0, fontSize: '1rem' }}>Period</h3>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium text-center">Month (YYYY-MM)</div>
+          <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium text-center">Month</div>
           <input
-            className="input w-full text-center"
+            className="input w-full text-center cash-flow-month-input"
+            type="month"
             value={currentMonth}
             onChange={event => onMonthChange(event.target.value)}
-            placeholder="YYYY-MM"
+            aria-label="Snapshot month"
             style={{ textAlign: 'center', height: '36px' }}
           />
         </div>

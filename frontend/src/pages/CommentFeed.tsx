@@ -6,6 +6,7 @@ import type { CommentItem, FlowDecomposition } from '../lib/finance';
 import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
+import { useFlowEntries } from '../hooks/useFlowEntries';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments } from '../lib/finance';
@@ -503,6 +504,7 @@ export default function CommentFeed() {
   const [mode, setMode] = useState<FeedMode>('all');
   const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
   const [onlyChanges, setOnlyChanges] = useState(true);
+  const { entries: flowEntries } = useFlowEntries(Boolean(settings.cashFlow?.enabled && diffModalData));
   useEscapeToDashboard({ blocked: Boolean(diffModalData) });
 
   const feedItems = useMemo(() => buildHighlightItems(snapshots, baseCurrency), [snapshots, baseCurrency]);
@@ -697,6 +699,8 @@ export default function CommentFeed() {
           current={diffModalData.current}
           previous={diffModalData.previous}
           snapshots={snapshots}
+          cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
+          flowEntries={flowEntries}
           onlyChanges={onlyChanges}
           onOnlyChangesChange={setOnlyChanges}
           onClose={() => setDiffModalData(null)}

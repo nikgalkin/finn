@@ -52,7 +52,8 @@ type FlowPeriodRequest struct {
 }
 
 type FlowImportRequest struct {
-	Entries []FlowEntryRequest `json:"entries"`
+	Entries         []FlowEntryRequest `json:"entries"`
+	AllowDuplicates bool               `json:"allowDuplicates"`
 }
 
 type FlowImportResult struct {
@@ -237,9 +238,11 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 		result := FlowImportResult{}
 		for _, entry := range normalizedEntries {
 			key := flowEntryKey(entry)
-			if _, exists := existingKeys[key]; exists {
-				result.Skipped++
-				continue
+			if !importRequest.AllowDuplicates {
+				if _, exists := existingKeys[key]; exists {
+					result.Skipped++
+					continue
+				}
 			}
 			if _, err := tx.Exec(`
 				INSERT INTO flow_entries (month, direction, counterparty, currency, amount, tax_rate, category, comment)
@@ -248,7 +251,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 				rollbackWithError(http.StatusInternalServerError, err.Error())
 				return
 			}
-			existingKeys[key] = struct{}{}
+			if !importRequest.AllowDuplicates {
+				existingKeys[key] = struct{}{}
+			}
 			result.Imported++
 		}
 

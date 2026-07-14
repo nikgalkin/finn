@@ -1,12 +1,15 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Clock, MessageSquare, Save } from 'lucide-react';
+import { ArrowDownUp, ArrowLeft, Clock, MessageSquare, Save } from 'lucide-react';
 import { StickyPageHeader } from './StickyPageHeader';
 
 type SnapshotEditorHeaderProps = {
   title: string;
   durationSeconds: number;
   hasMonthlyComment: boolean;
+  cashFlowEnabled: boolean;
+  cashFlowLoading: boolean;
   onOpenMonthlyComment: () => void;
+  onOpenCashFlow: () => void;
   onSave: () => void;
 };
 
@@ -35,7 +38,10 @@ export function SnapshotEditorHeader({
   title,
   durationSeconds,
   hasMonthlyComment,
+  cashFlowEnabled,
+  cashFlowLoading,
   onOpenMonthlyComment,
+  onOpenCashFlow,
   onSave
 }: SnapshotEditorHeaderProps) {
   return (
@@ -51,6 +57,11 @@ export function SnapshotEditorHeader({
         </div>
       </div>
       <div className="flex items-center gap-4">
+        {cashFlowEnabled && (
+          <button className="btn" onClick={onOpenCashFlow} disabled={cashFlowLoading} title="Edit Cash Flow for this snapshot month">
+            <ArrowDownUp size={17} /> {cashFlowLoading ? 'Opening…' : 'Cash Flow'}
+          </button>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.04)', padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--glass-border)', fontSize: '14px', fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent)' }}>
           <Clock size={16} />
           <span>{formatTimer(durationSeconds)}</span>

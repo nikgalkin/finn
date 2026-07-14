@@ -8,13 +8,15 @@ type FlowCsvImportModalProps = {
   preview: FlowCsvPreview;
   importing: boolean;
   error: string;
+  importDuplicates: boolean;
+  onImportDuplicatesChange: (value: boolean) => void;
   onClose: () => void;
   onImport: () => void;
 };
 
 const formatAmount = (amount: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(amount);
 
-export function FlowCsvImportModal({ preview, importing, error, onClose, onImport }: FlowCsvImportModalProps) {
+export function FlowCsvImportModal({ preview, importing, error, importDuplicates, onImportDuplicatesChange, onClose, onImport }: FlowCsvImportModalProps) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || importing) return;
@@ -27,6 +29,8 @@ export function FlowCsvImportModal({ preview, importing, error, onClose, onImpor
 
   const months = new Set(preview.entries.map(entry => entry.month)).size;
   const shownEntries = preview.entries.slice(0, 100);
+  const duplicatesByIndex = new Map(preview.duplicates.map(duplicate => [duplicate.entryIndex, duplicate]));
+  const importCount = importDuplicates ? preview.entries.length : preview.entries.length - preview.duplicates.length;
 
   return createPortal(
     <div className="cash-flow-modal-backdrop" role="presentation">
@@ -34,7 +38,7 @@ export function FlowCsvImportModal({ preview, importing, error, onClose, onImpor
         <header className="cash-flow-period-header">
           <div>
             <h3 id="cash-flow-import-title">Import Cash Flow CSV</h3>
-            <p>{preview.fileName}</p>
+            <p>{preview.fileName} · semicolon-separated (;)</p>
           </div>
           <button className="btn cash-flow-icon-button" onClick={onClose} disabled={importing} title="Close" aria-label="Close"><X size={17} /></button>
         </header>
@@ -51,25 +55,54 @@ export function FlowCsvImportModal({ preview, importing, error, onClose, onImpor
           ) : (
             <>
               <div className="cash-flow-import-summary">
-                <span><strong>{preview.entries.length}</strong> entries</span>
+                <span><strong>{preview.entries.length}</strong> rows</span>
                 <span><strong>{months}</strong> month{months === 1 ? '' : 's'}</span>
-                <span>Existing entries stay intact; exact duplicates are skipped.</span>
+                <span><strong>{importCount}</strong> will be imported</span>
+                {preview.duplicates.length > 0 && (
+                  <span className="cash-flow-import-duplicate-count">
+                    <strong>{preview.duplicates.length}</strong> exact duplicate{preview.duplicates.length === 1 ? '' : 's'} {importDuplicates ? 'will also be imported' : 'will be skipped'}
+                  </span>
+                )}
               </div>
+              {preview.duplicates.length > 0 && (
+                <label className="cash-flow-import-duplicates-toggle">
+                  <input
+                    type="checkbox"
+                    checked={importDuplicates}
+                    onChange={event => onImportDuplicatesChange(event.target.checked)}
+                    disabled={importing}
+                  />
+                  <span>
+                    <strong>Import exact duplicates</strong>
+                    <small>Create separate movements for rows already saved or repeated in this file.</small>
+                  </span>
+                </label>
+              )}
               <div className="cash-flow-import-preview">
                 <table className="table">
-                  <thead><tr><th>Month</th><th>Direction</th><th>Counterparty</th><th>Gross amount</th><th>Tax</th><th>Category</th><th>Comment</th></tr></thead>
+                  <thead><tr><th>Status</th><th>Month</th><th>Direction</th><th>Counterparty</th><th>Gross amount</th><th>Tax</th><th>Category</th><th>Comment</th></tr></thead>
                   <tbody>
-                    {shownEntries.map((entry, index) => (
-                      <tr key={`${entry.month}-${entry.counterparty}-${index}`}>
-                        <td>{entry.month}</td>
-                        <td className={entry.direction === 'in' ? 'text-success' : 'text-danger'}>{entry.direction}</td>
-                        <td>{entry.counterparty}</td>
-                        <td>{formatAmount(entry.amount)} {entry.currency}</td>
-                        <td>{entry.taxRate ? `${formatAmount(entry.taxRate)}%` : '—'}</td>
-                        <td>{entry.category || '—'}</td>
-                        <td className="cash-flow-import-comment">{entry.comment || '—'}</td>
-                      </tr>
-                    ))}
+                    {shownEntries.map((entry, index) => {
+                      const duplicate = duplicatesByIndex.get(index);
+                      return (
+                        <tr key={`${entry.month}-${entry.counterparty}-${index}`} className={duplicate ? 'is-duplicate' : undefined}>
+                          <td>
+                            {duplicate ? (
+                              <span className="cash-flow-import-status is-duplicate">
+                                {duplicate.reason === 'existing' ? 'Already saved' : 'Repeated row'}
+                              </span>
+                            ) : <span className="cash-flow-import-status">New</span>}
+                          </td>
+                          <td>{entry.month}</td>
+                          <td className={entry.direction === 'in' ? 'text-success' : 'text-danger'}>{entry.direction}</td>
+                          <td>{entry.counterparty}</td>
+                          <td>{formatAmount(entry.amount)} {entry.currency}</td>
+                          <td>{entry.taxRate ? `${formatAmount(entry.taxRate)}%` : '—'}</td>
+                          <td>{entry.category || '—'}</td>
+                          <td className="cash-flow-import-comment">{entry.comment || '—'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -81,9 +114,9 @@ export function FlowCsvImportModal({ preview, importing, error, onClose, onImpor
 
         <footer className="cash-flow-period-footer">
           <button className="btn" onClick={onClose} disabled={importing}>Cancel</button>
-          <button className="btn btn-primary" onClick={onImport} disabled={importing || preview.errors.length > 0 || preview.entries.length === 0}>
+          <button className="btn btn-primary" onClick={onImport} disabled={importing || preview.errors.length > 0 || importCount === 0}>
             {importing ? <Spinner size={15} /> : <FileUp size={15} />}
-            {importing ? 'Importing...' : `Import ${preview.entries.length} entries`}
+            {importing ? 'Importing...' : `Import ${importCount} entries`}
           </button>
         </footer>
       </section>

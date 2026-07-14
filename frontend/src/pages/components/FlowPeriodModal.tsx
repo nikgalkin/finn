@@ -30,6 +30,7 @@ type FlowPeriodModalProps = {
   settings: AppSettings;
   appendBlank?: boolean;
   focusEntryID?: number;
+  lockMonth?: boolean;
   saving: boolean;
   error: string;
   onMonthChange: (month: string) => void;
@@ -77,6 +78,7 @@ export function FlowPeriodModal({
   settings,
   appendBlank = false,
   focusEntryID,
+  lockMonth = false,
   saving,
   error,
   onMonthChange,
@@ -202,7 +204,8 @@ export function FlowPeriodModal({
                 event.preventDefault();
                 commitMonthInput(event.currentTarget);
               }}
-              disabled={saving}
+              disabled={saving || lockMonth}
+              title={lockMonth ? 'This month is linked to the snapshot period.' : undefined}
             />
             <button type="button" className="btn cash-flow-icon-button" onClick={requestClose} disabled={saving} title="Close"><X size={18} /></button>
           </div>
@@ -265,7 +268,7 @@ export function FlowPeriodModal({
                 <span className="cash-flow-period-tax-label">
                   Tax
                   {draft.direction === 'in' && Number(draft.taxRate) > 0 && Number(draft.amount) > 0 && (
-                    <small>−{new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(Number(draft.amount) * Number(draft.taxRate) / 100)} {draft.currency}</small>
+                    <small>−{new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(draft.amount) * Number(draft.taxRate) / 100)} {draft.currency}</small>
                   )}
                 </span>
                 {draft.direction === 'in' ? (
