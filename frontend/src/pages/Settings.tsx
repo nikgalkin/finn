@@ -55,6 +55,7 @@ export default function Settings() {
   const { settings, setSettings, loading } = useSettings();
   const navigate = useNavigate();
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [validationIssues, setValidationIssues] = useState<SettingsValidationIssue[]>([]);
   const [archiveImpact, setArchiveImpact] = useState<ArchiveImpact | null>(null);
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
@@ -144,6 +145,38 @@ export default function Settings() {
     confirmMessage: 'Settings have unsaved changes. Leave without saving?',
     onConfirmRequired: () => setShowLeaveConfirm(true)
   });
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  useEffect(() => {
+    const handleInternalLinkClick = (event: MouseEvent) => {
+      if (!isDirty || showLeaveConfirm || event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const anchor = (event.target as Element | null)?.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === '_blank') return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin || !url.hash.startsWith('#/')) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingNavigation(url.hash.slice(1));
+      setShowLeaveConfirm(true);
+    };
+
+    document.addEventListener('click', handleInternalLinkClick, true);
+    return () => document.removeEventListener('click', handleInternalLinkClick, true);
+  }, [isDirty, showLeaveConfirm]);
 
   const handleSave = () => {
     const issues: SettingsValidationIssue[] = [
@@ -797,8 +830,11 @@ export default function Settings() {
       {showLeaveConfirm && (
         <ConfirmLeaveModal
           message="Settings have unsaved changes. Leave without saving?"
-          onCancel={() => setShowLeaveConfirm(false)}
-          onConfirm={() => navigate('/')}
+          onCancel={() => {
+            setShowLeaveConfirm(false);
+            setPendingNavigation(null);
+          }}
+          onConfirm={() => navigate(pendingNavigation || '/')}
         />
       )}
       {validationIssues.length > 0 && (
