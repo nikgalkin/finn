@@ -39,6 +39,7 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 * **Adaptive Currency Scaling:** Smart cross-rate rendering that automatically cross-converts and realigns low-nominal currencies (like UZS) relative to your asset base to avoid skewed flat-line visuals.
 * **Math in Inputs:** Balance inputs support on-the-fly math evaluations. Type `15000 + 5000` directly into the input field, and it will compute the total instantly.
 * **Local & Secure:** All data is stored locally in an SQLite database. No third-party cloud syncing, no telemetry.
+* **Multi-Target Backups:** Create encrypted or raw backups in independent local and cloud-synced folders, with per-target retention and status reporting.
 * **Local AI Assistant with Prompt Fallback:** Chat with a local model through LM Studio or another loopback OpenAI-compatible server. If no model is connected, Finn can prepare and copy the same request with selected snapshots and precomputed metrics for use elsewhere.
 
 ## 🛠 Tech Stack
@@ -54,7 +55,6 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 │   ├── install.sh        # Linux/macOS install script
 │   ├── install.ps1       # Windows PowerShell install script
 │   └── up.sh             # Universal hot-rebuild startup script for dev purposes
-│   └── gen-key.sh        # Generate secret for backup ciphering
 ├── frontend/             # React SPA (Vite ecosystem)
 │   ├── src/              # Frontend source code (Pages, Components, Shared Hooks)
 │   └── package.json      
@@ -89,6 +89,81 @@ We use a universal Bash script that automatically builds the React frontend, com
    ```
 
 The script features **smart caching**: it will only rebuild the frontend or recompile the backend if it detects changes in your source files, making subsequent startups lightning fast! ⚡️
+
+## 💾 Backups
+
+Backups are disabled by default and Finn does not create a default target automatically. To enable them, create `~/.finn/config.yaml` (or `config.yaml` in the current working directory) and configure at least one target:
+
+```yaml
+backup:
+  enabled: true
+  only_if_changed: true
+  interval_hours: 12
+  targets:
+    - name: local_storage
+      path: "$HOME/.finn/backups"
+      retention: 10
+```
+
+Each target is independent, so a local directory can be combined with Google Drive or another synced folder:
+
+```yaml
+    - name: google_drive
+      path: "$HOME/Library/CloudStorage/GoogleDrive-account/My Drive/FinnBackups"
+      retention: 10
+```
+
+* `only_if_changed` avoids creating another file when the logical database contents have not changed.
+* `interval_hours` controls scheduled backups while Finn is running. Finn also runs a synchronized backup during normal shutdown.
+* `retention` is applied per target and defaults to `10` when omitted or set to a non-positive value.
+* Target paths support environment variables such as `$HOME`.
+
+Finn reports each target separately:
+
+* **Green — Backup created:** the file was written, read back successfully, and retention completed.
+* **Blue — Already up to date:** the existing backup matches the current database.
+* **Orange — Backup created with warnings:** the file was written, but Finn could not verify it or inspect/rotate the directory. The new copy exists, but old backups may not be cleaned up.
+* **Red — Failed:** Finn could not write a backup file to that target.
+
+For cloud-backed folders, the process that launches Finn needs both read and write access. On macOS, Terminal and the VS Code integrated terminal can have different privacy permissions. If reading is denied but writing is allowed, Finn still attempts to create the backup and reports the target in orange.
+
+### Encryption and recovery
+
+Set `backup.cipher_key` in `~/.finn/config.yaml` to encrypt new backups with AES-256-GCM. Generate a 256-bit random key directly with Finn:
+
+```shell
+finn backup generate-key
+```
+
+The command prints the generated key together with a ready-to-copy configuration snippet. Copy the value into the persistent configuration rather than a shell session:
+
+```yaml
+backup:
+  enabled: true
+  cipher_key: "paste-the-generated-key-here"
+```
+
+Restrict access to the configuration file because it contains the key:
+
+```shell
+chmod 600 ~/.finn/config.yaml
+```
+
+For automation, `finn backup generate-key --raw` prints only the Base64 key.
+
+Keep this key somewhere safe: encrypted backups cannot be recovered without it. Without `backup.cipher_key`, Finn writes unencrypted `.db` files and logs a warning.
+
+List configured targets and their readable backup files:
+
+```shell
+finn backup list
+```
+
+Restore an encrypted `.enc` or unencrypted `.db` backup before starting Finn normally:
+
+```shell
+finn backup restore /path/to/finn_backup_file.enc
+```
 
 ## 🤖 Local AI Assistant (Experimental)
 

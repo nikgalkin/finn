@@ -3,11 +3,27 @@ package main
 import (
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestGenerateBackupCipherKey(t *testing.T) {
+	key, err := generateBackupCipherKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		t.Fatalf("generated key is not valid base64: %v", err)
+	}
+	if len(decoded) != 32 {
+		t.Fatalf("generated key contains %d bytes, want 32", len(decoded))
+	}
+}
 
 func newBackupTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -163,6 +179,84 @@ func TestRunBackupJobReportsPartialTargetFailure(t *testing.T) {
 	}
 	if report.Targets[0].Status != "created" || report.Targets[1].Status != "failed" {
 		t.Fatalf("unexpected target results: %+v", report.Targets)
+	}
+}
+
+func TestRunBackupJobCreatesBackupWithWarningInWriteOnlyTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permission bits are not enforced consistently on Windows")
+	}
+
+	db := newBackupTestDB(t)
+	targetDir := filepath.Join(t.TempDir(), "write-only")
+	if err := os.Mkdir(targetDir, 0300); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(targetDir, 0700) })
+	if _, err := os.ReadDir(targetDir); err == nil {
+		t.Skip("test environment can read a directory without read permission")
+	}
+
+	cfg := &Config{Backup: BackupConfig{
+		Enabled: true,
+		Targets: []BackupTarget{{Name: "write-only", Path: targetDir, Retention: 10}},
+	}}
+	report := RunBackupJob(cfg, db)
+
+	if report.Status != backupStatusPartial {
+		t.Fatalf("backup status = %q, want %q: %+v", report.Status, backupStatusPartial, report)
+	}
+	if report.Targets[0].Status != "created_with_warning" || !strings.Contains(report.Targets[0].Error, "old backups may not be cleaned up") {
+		t.Fatalf("unexpected target result: %+v", report.Targets[0])
+	}
+
+	if err := os.Chmod(targetDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if got := backupFileCount(t, targetDir); got != 1 {
+		t.Fatalf("backup count = %d, want 1 for a writable target", got)
+	}
+}
+
+func TestRunBackupJobReportsOnlyWriteOnlyTargetWithWarning(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permission bits are not enforced consistently on Windows")
+	}
+
+	db := newBackupTestDB(t)
+	healthyTarget := t.TempDir()
+	unreadableTarget := filepath.Join(t.TempDir(), "write-only")
+	if err := os.Mkdir(unreadableTarget, 0300); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(unreadableTarget, 0700) })
+	if _, err := os.ReadDir(unreadableTarget); err == nil {
+		t.Skip("test environment can read a directory without read permission")
+	}
+
+	cfg := &Config{Backup: BackupConfig{
+		Enabled: true,
+		Targets: []BackupTarget{
+			{Name: "healthy", Path: healthyTarget, Retention: 10},
+			{Name: "write-only", Path: unreadableTarget, Retention: 10},
+		},
+	}}
+	report := RunBackupJob(cfg, db)
+
+	if report.Status != backupStatusPartial {
+		t.Fatalf("backup status = %q, want %q: %+v", report.Status, backupStatusPartial, report)
+	}
+	if report.Targets[0].Status != "created" || report.Targets[1].Status != "created_with_warning" {
+		t.Fatalf("unexpected target results: %+v", report.Targets)
+	}
+	if got := backupFileCount(t, healthyTarget); got != 1 {
+		t.Fatalf("healthy backup count = %d, want 1", got)
+	}
+	if err := os.Chmod(unreadableTarget, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if got := backupFileCount(t, unreadableTarget); got != 1 {
+		t.Fatalf("write-only backup count = %d, want 1", got)
 	}
 }
 

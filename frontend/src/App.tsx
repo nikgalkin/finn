@@ -17,7 +17,7 @@ const AIChat = lazy(() => import('./pages/AIChat'));
 type BackupTargetResult = {
   name: string;
   path: string;
-  status: 'current' | 'created' | 'failed';
+  status: 'current' | 'created' | 'created_with_warning' | 'failed';
   error?: string;
 };
 
@@ -30,6 +30,7 @@ type BackupReport = {
 const backupSummary = (report: BackupReport | null) => {
   switch (report?.status) {
     case 'success': return 'Backups completed successfully.';
+    case 'partial': return 'Backup files were created, but some targets need attention.';
     case 'skipped': return 'The database has not changed. Existing backups are up to date.';
     case 'disabled': return 'Backups are disabled in the configuration.';
     case 'bypassed': return 'Finn was stopped without completing a backup.';
@@ -133,36 +134,37 @@ function App() {
         </p>
         {!!shutdownBackup?.targets?.length && (
           <div style={{ marginTop: '20px', display: 'grid', gap: '8px', width: 'min(560px, 90vw)' }}>
-            {shutdownBackup.targets.map(target => (
-              <div
-                key={`${target.name}-${target.path}`}
-                className="glass-panel"
-                style={{
-                  padding: '12px 16px',
-                  textAlign: 'left',
-                  borderColor: target.status === 'created'
-                    ? 'rgba(34, 197, 94, 0.45)'
-                    : target.status === 'current'
-                      ? 'rgba(59, 130, 246, 0.45)'
-                      : 'rgba(239, 68, 68, 0.45)'
-                }}
-              >
-                <strong style={{ color: 'var(--text-primary)' }}>{target.name}</strong>
-                <span
+            {shutdownBackup.targets.map(target => {
+              const presentation = target.status === 'created'
+                ? { color: 'var(--success)', border: 'rgba(34, 197, 94, 0.45)', label: 'Backup created' }
+                : target.status === 'current'
+                  ? { color: 'var(--accent)', border: 'rgba(59, 130, 246, 0.45)', label: 'Already up to date' }
+                  : target.status === 'created_with_warning'
+                    ? { color: 'var(--warning)', border: 'rgba(245, 158, 11, 0.5)', label: 'Backup created with warnings' }
+                    : { color: 'var(--danger)', border: 'rgba(239, 68, 68, 0.45)', label: 'Failed' };
+              return (
+                <div
+                  key={`${target.name}-${target.path}`}
+                  className="glass-panel"
                   style={{
-                    float: 'right',
-                    color: target.status === 'created'
-                      ? 'var(--success)'
-                      : target.status === 'current'
-                        ? 'var(--accent)'
-                        : 'var(--danger)'
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    borderColor: presentation.border
                   }}
                 >
-                  <span aria-hidden="true" style={{ marginRight: '7px' }}>●</span>
-                  {target.status === 'created' ? 'Backup created' : target.status === 'current' ? 'Already up to date' : 'Failed'}
-                </span>
-              </div>
-            ))}
+                  <strong style={{ color: 'var(--text-primary)' }}>{target.name}</strong>
+                  <span style={{ float: 'right', color: presentation.color }}>
+                    <span aria-hidden="true" style={{ marginRight: '7px' }}>●</span>
+                    {presentation.label}
+                  </span>
+                  {target.error && (
+                    <div style={{ marginTop: '8px', paddingRight: '8px', color: presentation.color, fontSize: '12px', lineHeight: 1.45 }}>
+                      {target.error}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
         <p style={{ marginTop: '16px' }}>You can close this tab.</p>

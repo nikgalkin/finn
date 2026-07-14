@@ -58,6 +58,8 @@ export default function Settings() {
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
   const [aiProbing, setAIProbing] = useState(false);
   const initialSettingsHash = useRef('');
+  const listBodyRefs = useRef<Record<SettingsListKey, HTMLDivElement | null>>({ currencies: null, tags: null });
+  const pendingListScroll = useRef<SettingsListKey | null>(null);
   const currentSettingsHash = useMemo(() => JSON.stringify(settings), [settings]);
   const isDirty = !!initialSettingsHash.current && initialSettingsHash.current !== currentSettingsHash;
   const duplicateOrganizations = useMemo(() => (
@@ -86,6 +88,16 @@ export default function Settings() {
       initialSettingsHash.current = currentSettingsHash;
     }
   }, [currentSettingsHash, loading]);
+
+  useEffect(() => {
+    const list = pendingListScroll.current;
+    if (!list) return;
+    pendingListScroll.current = null;
+
+    const container = listBodyRefs.current[list];
+    if (!container || container.scrollTop + container.clientHeight >= container.scrollHeight - 1) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [settings.currencies.length, settings.tags?.length]);
 
   const probeLocalAI = async (localAI = settings.localAI) => {
     if (!localAI) return;
@@ -189,6 +201,7 @@ export default function Settings() {
   };
 
   const addToList = (list: SettingsListKey) => {
+    pendingListScroll.current = list;
     if (list === 'currencies') {
       setSettings({
         ...settings,
@@ -308,7 +321,10 @@ export default function Settings() {
           <Plus size={14} /> Add
         </button>
       </div>
-      <div style={listBodyStyle}>
+      <div
+        ref={element => { listBodyRefs.current[list] = element; }}
+        style={listBodyStyle}
+      >
         {(settings[list] || []).map((item, i) => {
           const isCurrency = list === 'currencies';
           const isAuto = isCurrency && (settings.autoFetchCurrencies || []).includes(item);

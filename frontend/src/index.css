@@ -8,6 +8,7 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --danger: #ef4444;
   --success: #22c55e;
+  --warning: #f59e0b;
   --diff-positive: rgba(18, 192, 82, 0.85);
   --diff-negative: rgba(214, 60, 60, 0.925);
   --page-background-image: radial-gradient(circle at 50% -20%, #1e3a8a 0%, var(--bg-color) 40%);

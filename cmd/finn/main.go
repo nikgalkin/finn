@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -10,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -47,78 +45,20 @@ func openBrowser(url string) {
 }
 
 func main() {
-	// Define CLI flags
-	noOpen := flag.Bool("no-open", false, "Disable automatic browser opening on startup")
-	showVersion := flag.Bool("version", false, "Print the application version and exit")
-	runDemo := flag.Bool("demo", false, "Run application with an isolated sample database (finn-demo.db)")
-	forceDemo := flag.Bool("force-demo", false, "Force overwrite existing finn-demo.db with fresh sample data")
-	restorePath := flag.String("restore", "", "Path to encrypted (.enc) or raw (.db) backup file to recover data from")
-	showBackups := flag.Bool("show-backups", false, "Print configured backup target paths and exit")
-
-	flag.BoolVar(showVersion, "v", false, "Print the application version and exit (shorthand)")
-	flag.BoolVar(showBackups, "b", false, "Print configured backup target paths and exit (shorthand)")
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Printf("%s version %s (%s/%s)\n", "finn", version, runtime.GOOS, runtime.GOARCH)
-		os.Exit(0)
+	if err := newRootCommand().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
 
-	// Load unified configuration settings (Viper + ENV)
+func runApp(opts appOptions) error {
 	cfg := LoadConfig()
 
-	if *showBackups {
-		fmt.Println("📂 Configured Backup Targets & Files:")
-		if len(cfg.Backup.Targets) == 0 {
-			fmt.Println("   (No backup targets configured or backup is disabled)")
-		} else {
-			for _, target := range cfg.Backup.Targets {
-				fmt.Printf("\n🎯 Target [%s]: %s (Retention: %d)\n", target.Name, target.Path, target.Retention)
-
-				files, err := os.ReadDir(target.Path)
-				if err != nil {
-					fmt.Printf("   ⚠️  Failed to read directory: %v\n", err)
-					continue
-				}
-
-				var foundAny bool
-				for _, f := range files {
-					if !f.IsDir() && strings.HasPrefix(f.Name(), backupPrefix) {
-						fullPath := filepath.Join(target.Path, f.Name())
-
-						info, err := f.Info()
-						if err == nil {
-							fmt.Printf("   📄 %s  (%d KB)  [%s]\n",
-								fullPath,
-								info.Size()/1024,
-								info.ModTime().Format("2006-01-02 15:04:05"),
-							)
-						} else {
-							fmt.Printf("   📄 %s\n", fullPath)
-						}
-						foundAny = true
-					}
-				}
-
-				if !foundAny {
-					fmt.Println("   (No backup files found in this directory yet)")
-				}
-			}
-		}
-		os.Exit(0)
-	}
-
-	// Handle standalone restore triggers before initializing standard processes
-	if *restorePath != "" {
-		RunRestoreJob(cfg, *restorePath)
-		os.Exit(0)
-	}
-
 	// If --force-demo is active, it automatically implies --demo mode
-	isDemoMode := *runDemo || *forceDemo
+	isDemoMode := opts.demo || opts.forceDemo
 
 	// Handle force overwrite logic before initializing the database
-	if *forceDemo {
+	if opts.forceDemo {
 		handleForceDemoCleanup()
 	}
 
@@ -200,7 +140,7 @@ func main() {
 	}()
 	log.Printf("Server starting on %s (Version: %s)\n", url, version)
 
-	if !*noOpen && cfg.App.OpenBrowser {
+	if !opts.noOpen && cfg.App.OpenBrowser {
 		go openBrowser(url)
 	} else {
 		log.Println("⚠️  Automatic browser opening is disabled.")
@@ -223,4 +163,5 @@ func main() {
 	}
 
 	log.Println("👋 Shutdown: Systems safely cleared. Server offline. Goodbye!")
+	return nil
 }

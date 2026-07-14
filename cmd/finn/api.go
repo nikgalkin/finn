@@ -67,7 +67,7 @@ func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBack
 		}
 
 		backupReport := runShutdownBackup()
-		if backupReport.Status == backupStatusFailed || backupReport.Status == backupStatusPartial {
+		if backupReport.Status == backupStatusFailed {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "backup_failed", "backup": backupReport})
 			return
 		}
