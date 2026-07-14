@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowLeft, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
+import { Archive, ArrowDownUp, ArrowLeft, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../types';
 import type { LocalAISettings, LocalAIStatus, Snapshot } from '../types';
 import { isValidCountryCode } from '../lib/countries';
-import { useSettings } from '../hooks/useSettings';
+import { SETTINGS_UPDATED_EVENT, useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { ArchiveOrganizationModal } from './components/ArchiveOrganizationModal';
@@ -15,6 +15,8 @@ import { SettingsValidationModal } from './components/SettingsValidationModal';
 import type { SettingsValidationIssue } from './components/SettingsValidationModal';
 
 type SettingsListKey = 'currencies' | 'tags';
+type FlowSettingsListKey = 'sources' | 'categories';
+type ScrollableSettingsListKey = SettingsListKey | FlowSettingsListKey | 'organizations';
 
 type ArchiveImpact = {
   index: number;
@@ -26,7 +28,7 @@ type ArchiveImpact = {
 
 const listGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' };
 const listBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '260px', overflowY: 'auto' as const, paddingRight: '4px' };
-const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px' };
+const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '372px', overflowY: 'auto' as const, paddingRight: '4px', scrollBehavior: 'smooth' as const };
 const compactButtonStyle = { padding: '6px 12px', fontSize: '13px' };
 const iconButtonStyle = { padding: '8px' };
 const inputRowStyle = { height: '36px' };
@@ -53,11 +55,20 @@ export default function Settings() {
   const { settings, setSettings, loading } = useSettings();
   const navigate = useNavigate();
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [validationIssues, setValidationIssues] = useState<SettingsValidationIssue[]>([]);
   const [archiveImpact, setArchiveImpact] = useState<ArchiveImpact | null>(null);
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
   const [aiProbing, setAIProbing] = useState(false);
   const initialSettingsHash = useRef('');
+  const scrollBodyRefs = useRef<Record<ScrollableSettingsListKey, HTMLDivElement | null>>({
+    currencies: null,
+    tags: null,
+    organizations: null,
+    sources: null,
+    categories: null
+  });
+  const pendingScroll = useRef<ScrollableSettingsListKey | null>(null);
   const currentSettingsHash = useMemo(() => JSON.stringify(settings), [settings]);
   const isDirty = !!initialSettingsHash.current && initialSettingsHash.current !== currentSettingsHash;
   const duplicateOrganizations = useMemo(() => (
@@ -65,6 +76,8 @@ export default function Settings() {
   ), [settings.organizations]);
   const duplicateCurrencies = useMemo(() => findDuplicateValues(settings.currencies), [settings.currencies]);
   const duplicateTags = useMemo(() => findDuplicateValues(settings.tags || []), [settings.tags]);
+  const duplicateFlowSources = useMemo(() => findDuplicateValues(settings.cashFlow?.sources || []), [settings.cashFlow?.sources]);
+  const duplicateFlowCategories = useMemo(() => findDuplicateValues(settings.cashFlow?.categories || []), [settings.cashFlow?.categories]);
   const duplicateOrganizationNames = useMemo(() => (
     new Set(duplicateOrganizations.map(item => item.normalized))
   ), [duplicateOrganizations]);
@@ -86,6 +99,16 @@ export default function Settings() {
       initialSettingsHash.current = currentSettingsHash;
     }
   }, [currentSettingsHash, loading]);
+
+  useEffect(() => {
+    const list = pendingScroll.current;
+    if (!list) return;
+    pendingScroll.current = null;
+
+    const container = scrollBodyRefs.current[list];
+    if (!container || container.scrollTop + container.clientHeight >= container.scrollHeight - 1) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [settings.cashFlow?.categories.length, settings.cashFlow?.sources.length, settings.currencies.length, settings.organizations.length, settings.tags?.length]);
 
   const probeLocalAI = async (localAI = settings.localAI) => {
     if (!localAI) return;
@@ -123,6 +146,38 @@ export default function Settings() {
     onConfirmRequired: () => setShowLeaveConfirm(true)
   });
 
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  useEffect(() => {
+    const handleInternalLinkClick = (event: MouseEvent) => {
+      if (!isDirty || showLeaveConfirm || event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const anchor = (event.target as Element | null)?.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === '_blank') return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin || !url.hash.startsWith('#/')) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingNavigation(url.hash.slice(1));
+      setShowLeaveConfirm(true);
+    };
+
+    document.addEventListener('click', handleInternalLinkClick, true);
+    return () => document.removeEventListener('click', handleInternalLinkClick, true);
+  }, [isDirty, showLeaveConfirm]);
+
   const handleSave = () => {
     const issues: SettingsValidationIssue[] = [
       ...duplicateOrganizations.map(item => ({
@@ -139,6 +194,16 @@ export default function Settings() {
         section: 'Balance tag',
         value: item.display,
         message: 'This balance tag is listed more than once.'
+      })),
+      ...duplicateFlowCategories.map(item => ({
+        section: 'Cash Flow category',
+        value: item.display,
+        message: 'This Cash Flow category is listed more than once.'
+      })),
+      ...duplicateFlowSources.map(item => ({
+        section: 'Cash Flow source',
+        value: item.display,
+        message: 'This Cash Flow source is listed more than once.'
       })),
       ...settings.organizations
         .filter(organization => !isValidCountryCode(organization.country))
@@ -157,7 +222,18 @@ export default function Settings() {
       organizations: settings.organizations.map(organization => ({
         ...organization,
         country: organization.country?.trim().toUpperCase() || undefined
-      }))
+      })),
+      cashFlow: {
+        enabled: settings.cashFlow?.enabled ?? false,
+        sources: (settings.cashFlow?.sources || []).map(source => source.trim()).filter(Boolean),
+        taxRates: Object.fromEntries((settings.cashFlow?.sources || []).flatMap(source => {
+          const normalizedSource = source.trim();
+          if (!normalizedSource) return [];
+          const rate = Number(settings.cashFlow?.taxRates?.[source] ?? 0);
+          return [[normalizedSource, Number.isFinite(rate) ? Math.max(0, Math.min(100, rate)) : 0]];
+        })),
+        categories: (settings.cashFlow?.categories || []).map(category => category.trim()).filter(Boolean)
+      }
     };
     fetch(`${API_URL}/settings`, {
       method: 'POST',
@@ -168,6 +244,7 @@ export default function Settings() {
       if (res.ok) {
         setSettings(normalizedSettings);
         initialSettingsHash.current = JSON.stringify(normalizedSettings);
+        window.dispatchEvent(new CustomEvent(SETTINGS_UPDATED_EVENT, { detail: normalizedSettings }));
         alert('Settings saved!');
       }
       else alert('Failed to save');
@@ -189,6 +266,7 @@ export default function Settings() {
   };
 
   const addToList = (list: SettingsListKey) => {
+    pendingScroll.current = list;
     if (list === 'currencies') {
       setSettings({
         ...settings,
@@ -221,6 +299,7 @@ export default function Settings() {
   };
 
   const addOrganization = () => {
+    pendingScroll.current = 'organizations';
     setSettings({ ...settings, organizations: [...settings.organizations, { name: '' }] });
   };
 
@@ -295,6 +374,73 @@ export default function Settings() {
     });
   };
 
+  const updateCashFlow = (patch: Partial<NonNullable<typeof settings.cashFlow>>) => {
+    setSettings({
+      ...settings,
+      cashFlow: {
+        enabled: false,
+        sources: [],
+        taxRates: {},
+        categories: [],
+        ...(settings.cashFlow || {}),
+        ...patch
+      }
+    });
+  };
+
+  const updateFlowCategory = (index: number, value: string) => {
+    const categories = [...(settings.cashFlow?.categories || [])];
+    categories[index] = value;
+    updateCashFlow({ categories });
+  };
+
+  const updateFlowSource = (index: number, value: string) => {
+    const sources = [...(settings.cashFlow?.sources || [])];
+    const previousValue = sources[index];
+    sources[index] = value;
+    const taxRates = { ...(settings.cashFlow?.taxRates || {}) };
+    if (previousValue !== value && Object.hasOwn(taxRates, previousValue)) {
+      taxRates[value] = taxRates[previousValue];
+      delete taxRates[previousValue];
+    }
+    updateCashFlow({ sources, taxRates });
+  };
+
+  const updateFlowSourceTaxRate = (source: string, value: string) => {
+    const parsed = Number(value);
+    updateCashFlow({
+      taxRates: {
+        ...(settings.cashFlow?.taxRates || {}),
+        [source]: Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0
+      }
+    });
+  };
+
+  const addFlowCategory = () => {
+    pendingScroll.current = 'categories';
+    updateCashFlow({ categories: [...(settings.cashFlow?.categories || []), ''] });
+  };
+
+  const addFlowSource = () => {
+    pendingScroll.current = 'sources';
+    updateCashFlow({ sources: [...(settings.cashFlow?.sources || []), ''] });
+  };
+
+  const removeFlowCategory = (index: number) => {
+    const categories = [...(settings.cashFlow?.categories || [])];
+    categories.splice(index, 1);
+    updateCashFlow({ categories });
+  };
+
+  const removeFlowSource = (index: number) => {
+    const sources = [...(settings.cashFlow?.sources || [])];
+    const removedSource = sources[index];
+    sources.splice(index, 1);
+    const taxRates = { ...(settings.cashFlow?.taxRates || {}) };
+    delete taxRates[removedSource];
+    updateCashFlow({ sources, taxRates });
+  };
+
   const chatModels = (aiStatus?.models || []).filter(model => {
     const value = `${model.id} ${model.type || ''}`.toLowerCase();
     return !value.includes('embed') && !value.includes('rerank') && !value.includes('whisper');
@@ -308,7 +454,10 @@ export default function Settings() {
           <Plus size={14} /> Add
         </button>
       </div>
-      <div style={listBodyStyle}>
+      <div
+        ref={element => { scrollBodyRefs.current[list] = element; }}
+        style={listBodyStyle}
+      >
         {(settings[list] || []).map((item, i) => {
           const isCurrency = list === 'currencies';
           const isAuto = isCurrency && (settings.autoFetchCurrencies || []).includes(item);
@@ -360,7 +509,7 @@ export default function Settings() {
           <Plus size={14} /> Add
         </button>
       </div>
-      <div style={organizationListBodyStyle}>
+      <div ref={element => { scrollBodyRefs.current.organizations = element; }} style={organizationListBodyStyle}>
         {activeOrganizations.map(({ organization, index }) => {
           const isDuplicate = duplicateOrganizationNames.has(normalizeListValue(organization.name));
           return (
@@ -416,7 +565,7 @@ export default function Settings() {
   if (loading) return <PageLoader label="Loading settings" />;
 
   return (
-    <div>
+    <div data-unsaved-changes={isDirty ? 'true' : undefined}>
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link title="Back to dashboard" to="/" className="btn"><ArrowLeft size={18} /></Link>
@@ -472,102 +621,220 @@ export default function Settings() {
         {renderListSection('Balance Tags', 'tags', 'e.g. Safety Cushion, Crypto')}
       </div>
 
-      <details className="glass-panel" style={{ marginTop: '16px', padding: 0 }}>
+      <details className="glass-panel" open={settings.cashFlow?.enabled} style={{ marginTop: '16px', padding: 0 }}>
+        <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
+          <ArrowDownUp size={17} />
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Cash Flow</span>
+          <span style={{ fontSize: '12px' }}>External incoming and outgoing money movements</span>
+        </summary>
+        <div className="cash-flow-settings-body">
+          <div className="cash-flow-settings-status">
+            <span>Reusable suggestions for the period editor.</span>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.cashFlow?.enabled ?? false}
+                onChange={event => updateCashFlow({ enabled: event.target.checked })}
+                style={{ width: '17px', height: '17px', accentColor: 'var(--accent)' }}
+              />
+              Enabled
+            </label>
+          </div>
+
+          <div className="cash-flow-settings-grid" style={{ opacity: settings.cashFlow?.enabled ? 1 : 0.55 }}>
+            <section className="cash-flow-settings-section">
+              <div className="cash-flow-settings-section-header">
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600 }}>Sources & recipients</div>
+                  <div className="cash-flow-settings-section-description">From/To suggestions with an optional default tax.</div>
+                </div>
+                <button className="btn" style={compactButtonStyle} onClick={addFlowSource} disabled={!settings.cashFlow?.enabled}>
+                  <Plus size={14} /> Add
+                </button>
+              </div>
+              {(settings.cashFlow?.sources || []).length > 0 && (
+                <div className="cash-flow-source-setting-labels" aria-hidden="true">
+                  <span>Name</span>
+                  <span>Default tax</span>
+                </div>
+              )}
+              <div
+                ref={element => { scrollBodyRefs.current.sources = element; }}
+                className="cash-flow-settings-list"
+              >
+                {(settings.cashFlow?.sources || []).map((source, index) => {
+                  const isDuplicate = duplicateFlowSources.some(item => item.normalized === normalizeListValue(source));
+                  return (
+                    <div key={index} className="cash-flow-source-setting-row">
+                      <input
+                        className="input"
+                        value={source}
+                        onChange={event => updateFlowSource(index, event.target.value)}
+                        disabled={!settings.cashFlow?.enabled}
+                        placeholder="e.g. Employer or landlord"
+                        style={isDuplicate ? { borderColor: 'var(--danger)' } : undefined}
+                      />
+                      <div className="cash-flow-tax-rate-setting">
+                        <input
+                          className="input"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          aria-label={`${source || `Source ${index + 1}`} default tax rate`}
+                          value={settings.cashFlow?.taxRates?.[source] ?? 0}
+                          onChange={event => updateFlowSourceTaxRate(source, event.target.value)}
+                          disabled={!settings.cashFlow?.enabled}
+                        />
+                        <span>%</span>
+                      </div>
+                      <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeFlowSource(index)} disabled={!settings.cashFlow?.enabled} title="Remove source">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {(settings.cashFlow?.sources || []).length === 0 && (
+                  <div className="cash-flow-settings-empty">No sources configured yet.</div>
+                )}
+              </div>
+            </section>
+
+            <section className="cash-flow-settings-section">
+              <div className="cash-flow-settings-section-header">
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600 }}>Categories</div>
+                  <div className="cash-flow-settings-section-description">Labels used to group incoming and outgoing movements.</div>
+                </div>
+                <button className="btn" style={compactButtonStyle} onClick={addFlowCategory} disabled={!settings.cashFlow?.enabled}>
+                  <Plus size={14} /> Add
+                </button>
+              </div>
+              <div
+                ref={element => { scrollBodyRefs.current.categories = element; }}
+                className="cash-flow-settings-list"
+              >
+                {(settings.cashFlow?.categories || []).map((category, index) => {
+                  const isDuplicate = duplicateFlowCategories.some(item => item.normalized === normalizeListValue(category));
+                  return (
+                    <div key={index} className="cash-flow-simple-setting-row">
+                      <input
+                        className="input"
+                        value={category}
+                        onChange={event => updateFlowCategory(index, event.target.value)}
+                        disabled={!settings.cashFlow?.enabled}
+                        placeholder="e.g. Debt repayment"
+                        style={isDuplicate ? { borderColor: 'var(--danger)' } : undefined}
+                      />
+                      <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeFlowCategory(index)} disabled={!settings.cashFlow?.enabled} title="Remove category">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {(settings.cashFlow?.categories || []).length === 0 && (
+                  <div className="cash-flow-settings-empty">No categories configured yet.</div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      </details>
+
+      <details className="glass-panel" open={settings.localAI?.enabled} style={{ marginTop: '16px', padding: 0 }}>
         <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
           <Server size={17} />
-          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Local AI (optional)</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Local AI</span>
           <span style={{ fontSize: '12px' }}>Connection settings and model selection</span>
         </summary>
-        <div style={{ padding: '2px 20px 20px' }}>
-        <div className="flex justify-between items-center" style={{ gap: '16px', marginBottom: '14px' }}>
-          <div>
-            <div className="flex items-center gap-2">
-              <Server size={18} color="var(--accent)" />
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Local AI</h3>
-            </div>
-            <p style={{ margin: '5px 0 0', color: 'var(--text-secondary)', fontSize: '13px' }}>
+        <div className="cash-flow-settings-body">
+          <div className="cash-flow-settings-status">
+            <span>
               Connect Finn to an OpenAI-compatible model server running on this computer.
-            </p>
+            </span>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.localAI?.enabled ?? false}
+                onChange={event => updateLocalAI({ enabled: event.target.checked })}
+                style={{ width: '17px', height: '17px', accentColor: 'var(--accent)' }}
+              />
+              Enabled
+            </label>
           </div>
-          <label className="flex items-center gap-2" style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '13px' }}>
-            <input
-              type="checkbox"
-              checked={settings.localAI?.enabled ?? false}
-              onChange={event => updateLocalAI({ enabled: event.target.checked })}
-              style={{ width: '17px', height: '17px', accentColor: 'var(--accent)' }}
-            />
-            Enabled
-          </label>
-        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px, 0.65fr) minmax(250px, 1.15fr) minmax(220px, 1fr) auto', gap: '10px', alignItems: 'end' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 500 }}>Provider</label>
-            <select
-              className="input"
-              value={settings.localAI?.provider || 'lmstudio'}
-              onChange={event => updateLocalAI({ provider: event.target.value as LocalAISettings['provider'] })}
-              disabled={!settings.localAI?.enabled}
-            >
-              <option value="lmstudio">LM Studio</option>
-              <option value="openai-compatible">OpenAI compatible</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 500 }}>Server URL</label>
-            <input
-              className="input"
-              value={settings.localAI?.baseUrl || 'http://127.0.0.1:1234/v1'}
-              onChange={event => updateLocalAI({ baseUrl: event.target.value })}
-              disabled={!settings.localAI?.enabled}
-              placeholder="http://127.0.0.1:1234/v1"
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 500 }}>Chat model</label>
-            <select
-              className="input"
-              value={settings.localAI?.model || ''}
-              onChange={event => updateLocalAI({ model: event.target.value })}
-              disabled={!settings.localAI?.enabled}
-            >
-              <option value="">Auto-select first chat model</option>
-              {chatModels.map(model => <option key={model.id} value={model.id}>{model.id}</option>)}
-              {!!settings.localAI?.model && !chatModels.some(model => model.id === settings.localAI?.model) && (
-                <option value={settings.localAI.model}>{settings.localAI.model}</option>
-              )}
-            </select>
-          </div>
-          <button
-            className="btn"
-            onClick={() => void probeLocalAI()}
-            disabled={aiProbing || !settings.localAI?.enabled}
-            style={{ minHeight: '36px' }}
-          >
-            {aiProbing ? <Spinner label="Checking local AI server" size={15} /> : <RefreshCw size={15} />} Test
-          </button>
-        </div>
+          <div className="local-ai-settings-content" style={{ opacity: settings.localAI?.enabled ? 1 : 0.55 }}>
+            <div className="local-ai-settings-grid">
+              <div className="cash-flow-field">
+                <label>Provider</label>
+                <select
+                  className="input"
+                  value={settings.localAI?.provider || 'lmstudio'}
+                  onChange={event => updateLocalAI({ provider: event.target.value as LocalAISettings['provider'] })}
+                  disabled={!settings.localAI?.enabled}
+                >
+                  <option value="lmstudio">LM Studio</option>
+                  <option value="openai-compatible">OpenAI compatible</option>
+                </select>
+              </div>
+              <div className="cash-flow-field">
+                <label>Server URL</label>
+                <input
+                  className="input"
+                  value={settings.localAI?.baseUrl || 'http://127.0.0.1:1234/v1'}
+                  onChange={event => updateLocalAI({ baseUrl: event.target.value })}
+                  disabled={!settings.localAI?.enabled}
+                  placeholder="http://127.0.0.1:1234/v1"
+                />
+              </div>
+              <div className="cash-flow-field">
+                <label>Chat model</label>
+                <select
+                  className="input"
+                  value={settings.localAI?.model || ''}
+                  onChange={event => updateLocalAI({ model: event.target.value })}
+                  disabled={!settings.localAI?.enabled}
+                >
+                  <option value="">Auto-select first chat model</option>
+                  {chatModels.map(model => <option key={model.id} value={model.id}>{model.id}</option>)}
+                  {!!settings.localAI?.model && !chatModels.some(model => model.id === settings.localAI?.model) && (
+                    <option value={settings.localAI.model}>{settings.localAI.model}</option>
+                  )}
+                </select>
+              </div>
+              <button
+                className="btn"
+                onClick={() => void probeLocalAI()}
+                disabled={aiProbing || !settings.localAI?.enabled}
+              >
+                {aiProbing ? <Spinner label="Checking local AI server" size={15} /> : <RefreshCw size={15} />} Test
+              </button>
+            </div>
 
-        {settings.localAI?.enabled && (
-          <div style={{ marginTop: '13px', fontSize: '12px', color: aiStatus?.connected ? 'var(--success)' : aiStatus ? 'var(--danger)' : 'var(--text-secondary)' }}>
-            {aiProbing
-              ? <Spinner label="Checking local AI server" size={14} />
-              : aiStatus?.connected
-                ? `Connected · ${aiStatus.selectedModel || 'model auto-selected'} · ${chatModels.length} chat model${chatModels.length === 1 ? '' : 's'} available`
-                : aiStatus?.error || 'Save settings, start LM Studio Server, then test the connection.'}
+            {settings.localAI?.enabled && (
+              <div className="local-ai-settings-status" style={{ color: aiStatus?.connected ? 'var(--success)' : aiStatus ? 'var(--danger)' : 'var(--text-secondary)' }}>
+                {aiProbing
+                  ? <Spinner label="Checking local AI server" size={14} />
+                  : aiStatus?.connected
+                    ? `Connected · ${aiStatus.selectedModel || 'model auto-selected'} · ${chatModels.length} chat model${chatModels.length === 1 ? '' : 's'} available`
+                    : aiStatus?.error || 'Save settings, start LM Studio Server, then test the connection.'}
+              </div>
+            )}
+            <div className="local-ai-settings-privacy">
+              For privacy, Finn accepts loopback addresses only. The financial dataset is sent directly from the Go backend to the local server.
+            </div>
           </div>
-        )}
-        <div style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '11px' }}>
-          For privacy, Finn accepts loopback addresses only. The financial dataset is sent directly from the Go backend to the local server.
-        </div>
         </div>
       </details>
 
       {showLeaveConfirm && (
         <ConfirmLeaveModal
           message="Settings have unsaved changes. Leave without saving?"
-          onCancel={() => setShowLeaveConfirm(false)}
-          onConfirm={() => navigate('/')}
+          onCancel={() => {
+            setShowLeaveConfirm(false);
+            setPendingNavigation(null);
+          }}
+          onConfirm={() => navigate(pendingNavigation || '/')}
         />
       )}
       {validationIssues.length > 0 && (

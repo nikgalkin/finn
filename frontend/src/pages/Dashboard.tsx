@@ -6,6 +6,7 @@ import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
+import { useFlowEntries } from '../hooks/useFlowEntries';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
 import { PageLoader } from './components/PageLoader';
@@ -68,6 +69,7 @@ export default function Dashboard() {
   const [activeViewNotes, setActiveViewNotes] = useState<ParsedSnapshot | null>(null);
   const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
   const [onlyChanges, setOnlyChanges] = useState(true);
+  const { entries: flowEntries } = useFlowEntries(Boolean(settings.cashFlow?.enabled && diffModalData));
 
   const navigate = useNavigate();
   const latestSnapshot = useMemo(() => snapshots.length > 0 ? snapshots[snapshots.length - 1] : null, [snapshots]);
@@ -251,6 +253,20 @@ export default function Dashboard() {
 
       {loading ? (
         <PageLoader label="Loading dashboard" />
+      ) : snapshots.length === 0 ? (
+        <section className="glass-panel dashboard-empty-state">
+          <div className="dashboard-empty-state-icon" aria-hidden="true">
+            <TrendingUp size={26} />
+          </div>
+          <div>
+            <h3>Start your financial history</h3>
+            <p>Click New Snapshot to record where you are today and begin tracking changes over time.</p>
+          </div>
+          <Link to="/snapshot/new" className="btn btn-primary" title="New Snapshot (N)">
+            New Snapshot
+          </Link>
+          <span className="dashboard-empty-state-hint">You can also press N</span>
+        </section>
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
@@ -512,6 +528,8 @@ export default function Dashboard() {
           current={diffModalData.current}
           previous={diffModalData.previous}
           snapshots={snapshots}
+          cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
+          flowEntries={flowEntries}
           onlyChanges={onlyChanges}
           onOnlyChangesChange={setOnlyChanges}
           onClose={() => setDiffModalData(null)}

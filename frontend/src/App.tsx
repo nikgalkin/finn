@@ -1,23 +1,25 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Bot, Keyboard, Power } from 'lucide-react';
+import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Bot, Keyboard, Power, ArrowDownUp } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import SnapshotEdit from './pages/SnapshotEdit';
 import CommentFeed from './pages/CommentFeed';
 import GraphsPage from './pages/GraphsPage';
 import Settings from './pages/Settings';
+import CashFlow from './pages/CashFlow';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
-import { isTextInputTarget } from './lib/hotkeys';
+import { getNavigationHotkey, isTextInputTarget } from './lib/hotkeys';
 import { AppFooter } from './pages/components/AppFooter';
 import { PageLoader } from './pages/components/PageLoader';
 import { API_URL } from './types';
+import { useSettings } from './hooks/useSettings';
 
 const AIChat = lazy(() => import('./pages/AIChat'));
 
 type BackupTargetResult = {
   name: string;
   path: string;
-  status: 'current' | 'created' | 'failed';
+  status: 'current' | 'created' | 'created_with_warning' | 'failed';
   error?: string;
 };
 
@@ -30,6 +32,7 @@ type BackupReport = {
 const backupSummary = (report: BackupReport | null) => {
   switch (report?.status) {
     case 'success': return 'Backups completed successfully.';
+    case 'partial': return 'Backup files were created, but some targets need attention.';
     case 'skipped': return 'The database has not changed. Existing backups are up to date.';
     case 'disabled': return 'Backups are disabled in the configuration.';
     case 'bypassed': return 'Finn was stopped without completing a backup.';
@@ -38,6 +41,7 @@ const backupSummary = (report: BackupReport | null) => {
 };
 
 function App() {
+  const { settings } = useSettings();
   const [showHotkeysHelp, setShowHotkeysHelp] = useState(false);
   const [shuttingDown, setShuttingDown] = useState(false);
   const [shutdownComplete, setShutdownComplete] = useState(false);
@@ -57,18 +61,11 @@ function App() {
         event.preventDefault();
         setShowHotkeysHelp(true);
       } else if (!showHotkeysHelp && !document.querySelector('[data-hotkeys-guard="true"]')) {
-        const routes: Record<string, string> = {
-          KeyN: '/snapshot/new',
-          KeyG: '/graphs',
-          KeyF: '/feed',
-          KeyA: '/assistant',
-          KeyS: '/settings'
-        };
-        const route = routes[event.code];
-        const isSafeNavigationPage = ['/', '/feed', '/graphs', '/assistant'].includes(location.pathname);
-        if (route && isSafeNavigationPage) {
+        const hotkey = getNavigationHotkey(event);
+        if (hotkey && hotkey.route !== location.pathname) {
           event.preventDefault();
-          navigate(route);
+          if (document.querySelector('[data-unsaved-changes="true"]') && !window.confirm('Leave this page and discard unsaved changes?')) return;
+          navigate(hotkey.route);
         }
       }
     };
@@ -133,36 +130,37 @@ function App() {
         </p>
         {!!shutdownBackup?.targets?.length && (
           <div style={{ marginTop: '20px', display: 'grid', gap: '8px', width: 'min(560px, 90vw)' }}>
-            {shutdownBackup.targets.map(target => (
-              <div
-                key={`${target.name}-${target.path}`}
-                className="glass-panel"
-                style={{
-                  padding: '12px 16px',
-                  textAlign: 'left',
-                  borderColor: target.status === 'created'
-                    ? 'rgba(34, 197, 94, 0.45)'
-                    : target.status === 'current'
-                      ? 'rgba(59, 130, 246, 0.45)'
-                      : 'rgba(239, 68, 68, 0.45)'
-                }}
-              >
-                <strong style={{ color: 'var(--text-primary)' }}>{target.name}</strong>
-                <span
+            {shutdownBackup.targets.map(target => {
+              const presentation = target.status === 'created'
+                ? { color: 'var(--success)', border: 'rgba(34, 197, 94, 0.45)', label: 'Backup created' }
+                : target.status === 'current'
+                  ? { color: 'var(--accent)', border: 'rgba(59, 130, 246, 0.45)', label: 'Already up to date' }
+                  : target.status === 'created_with_warning'
+                    ? { color: 'var(--warning)', border: 'rgba(245, 158, 11, 0.5)', label: 'Backup created with warnings' }
+                    : { color: 'var(--danger)', border: 'rgba(239, 68, 68, 0.45)', label: 'Failed' };
+              return (
+                <div
+                  key={`${target.name}-${target.path}`}
+                  className="glass-panel"
                   style={{
-                    float: 'right',
-                    color: target.status === 'created'
-                      ? 'var(--success)'
-                      : target.status === 'current'
-                        ? 'var(--accent)'
-                        : 'var(--danger)'
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    borderColor: presentation.border
                   }}
                 >
-                  <span aria-hidden="true" style={{ marginRight: '7px' }}>●</span>
-                  {target.status === 'created' ? 'Backup created' : target.status === 'current' ? 'Already up to date' : 'Failed'}
-                </span>
-              </div>
-            ))}
+                  <strong style={{ color: 'var(--text-primary)' }}>{target.name}</strong>
+                  <span style={{ float: 'right', color: presentation.color }}>
+                    <span aria-hidden="true" style={{ marginRight: '7px' }}>●</span>
+                    {presentation.label}
+                  </span>
+                  {target.error && (
+                    <div style={{ marginTop: '8px', paddingRight: '8px', color: presentation.color, fontSize: '12px', lineHeight: 1.45 }}>
+                      {target.error}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
         <p style={{ marginTop: '16px' }}>You can close this tab.</p>
@@ -197,6 +195,11 @@ function App() {
           <Link to="/assistant" className="btn" style={{ color: 'var(--text-secondary)' }}>
             <Bot size={18} /> Assistant
           </Link>
+          {settings.cashFlow?.enabled && (
+            <Link to="/flow" className="btn" style={{ color: 'var(--text-secondary)' }}>
+              <ArrowDownUp size={18} /> Cash Flow
+            </Link>
+          )}
           <Link to="/graphs" className="btn" style={{ color: 'var(--text-secondary)' }}>
             <BarChart3 size={18} /> Graphs
           </Link>
@@ -218,6 +221,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/feed" element={<CommentFeed />} />
           <Route path="/graphs" element={<GraphsPage />} />
+          <Route path="/flow" element={<CashFlow />} />
           <Route path="/assistant" element={<Suspense fallback={<PageLoader label="Loading assistant" />}><AIChat /></Suspense>} />
         </Routes>
       </main>

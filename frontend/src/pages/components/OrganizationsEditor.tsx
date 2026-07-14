@@ -2,7 +2,7 @@ import type { MutableRefObject } from 'react';
 import { Copy, List, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import type { AppSettings, Balance, Organization } from '../../types';
 import { getCountryByAlpha3, getCountryDisplayName } from '../../lib/countries';
-import { evaluateNumberExpression } from '../../lib/numberExpression';
+import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
 import { MultiTagSelect } from './MultiTagSelect';
 import type { ActiveSnapshotComment } from './SnapshotCommentModal';
@@ -33,33 +33,9 @@ const getIconStyle = (hasComment: boolean) => ({
   transition: 'color 0.2s'
 });
 
-const amountFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 const cellStyle = { padding: '4px 6px 4px 0' };
 const headerStyle = { padding: '10px 5px', textTransform: 'uppercase' as const, fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' as const };
 const tableHeaders = [['20%', 'Currency'], ['35%', 'Tags'], ['35%', 'Amount'], ['10%', '']] as const;
-const formatAmount = (amount: Balance['amount']) => amount === 0 ? '' : typeof amount === 'number' ? amountFormatter.format(amount) : amount;
-
-const amountFieldHelp = (
-  <div>
-    <div style={{ fontWeight: 700, marginBottom: '8px' }}>Amount field capabilities</div>
-    <div style={{ marginBottom: '8px' }}>
-      The value is calculated when you press Enter or leave the field.
-    </div>
-    <div style={{ marginBottom: '4px', fontWeight: 700 }}>Basic math</div>
-    <div style={{ marginBottom: '8px' }}>
-      Use +, -, *, / and parentheses. Examples: 1200 + 350, (100 + 20) * 3, -500.
-    </div>
-    <div style={{ marginBottom: '4px', fontWeight: 700 }}>Number shortcuts</div>
-    <div>
-      k = 3 zeros (1k = 1,000){'\n'}
-      kk or m = 6 zeros (1kk = 1m = 1,000,000){'\n'}
-      b = 9 zeros (1b = 1,000,000,000){'\n'}
-      mm = 12 zeros (1mm = 1,000,000,000,000){'\n\n'}
-      Shortcuts are case-insensitive and work inside expressions, for example 1m + 250k or 1.5k * 2.
-    </div>
-  </div>
-);
-
 export function OrganizationsEditor({
   activeDropdownOrgId,
   isNew,
@@ -97,7 +73,7 @@ export function OrganizationsEditor({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <h3 style={{ margin: 0 }}>Organizations & Accounts</h3>
-            <HelpTooltip text={amountFieldHelp} ariaLabel="Amount field help" width={400} />
+            <HelpTooltip text={<AmountFieldHelp />} ariaLabel="Amount field help" width={400} />
           </div>
           {isNew && organizations.length === 0 && (
             <div className="flex gap-2 ml-4">
@@ -233,23 +209,9 @@ export function OrganizationsEditor({
                         />
                       </td>
                       <td style={cellStyle}>
-                        <input
-                          type="text"
-                          className="input"
-                          value={formatAmount(balance.amount)}
-                          placeholder="0"
-                          onChange={event => onUpdateBalance(org.id, index, 'amount', event.target.value)}
-                          onBlur={event => {
-                            const calculated = evaluateNumberExpression(event.target.value);
-                            onUpdateBalance(org.id, index, 'amount', calculated);
-                          }}
-                          onKeyDown={event => {
-                            if (event.key === 'Enter') {
-                              const calculated = evaluateNumberExpression((event.target as HTMLInputElement).value);
-                              onUpdateBalance(org.id, index, 'amount', calculated);
-                              (event.target as HTMLInputElement).blur();
-                            }
-                          }}
+                        <AmountInput
+                          value={balance.amount}
+                          onChange={value => onUpdateBalance(org.id, index, 'amount', value)}
                         />
                       </td>
                       <td className="text-right" style={{ ...cellStyle, paddingRight: 0 }}>

@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { API_URL } from '../types';
-import type { Balance } from '../types';
+import type { Balance, FlowEntry } from '../types';
 import { DraftRestoreBanner } from './components/DraftRestoreBanner';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { OrganizationsEditor } from './components/OrganizationsEditor';
@@ -11,6 +11,8 @@ import { PeriodRatesPanel } from './components/PeriodRatesPanel';
 import { SnapshotCommentModal } from './components/SnapshotCommentModal';
 import type { ActiveSnapshotComment } from './components/SnapshotCommentModal';
 import { SnapshotEditorHeader } from './components/SnapshotEditorHeader';
+import { FlowPeriodModal } from './components/FlowPeriodModal';
+import type { FlowPeriodDraft } from './components/FlowPeriodModal';
 import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
@@ -45,11 +47,15 @@ export default function SnapshotEdit() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [recentlyAddedOrgId, setRecentlyAddedOrgId] = useState<string | null>(null);
+  const [cashFlowEditor, setCashFlowEditor] = useState<{ month: string; entries: FlowEntry[] } | null>(null);
+  const [cashFlowLoading, setCashFlowLoading] = useState(false);
+  const [cashFlowSaving, setCashFlowSaving] = useState(false);
+  const [cashFlowError, setCashFlowError] = useState('');
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const addOrganizationScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialDataHash = useRef<string>('');
-  const draftKey = `finn_draft_${month || 'new'}`;
+  const draftKey = isCopy ? `finn_draft_copy_${sourceMonth}` : `finn_draft_${month || 'new'}`;
 
   const isDirty = useMemo(() => {
     if (!initialDataHash.current) return false;
@@ -62,11 +68,11 @@ export default function SnapshotEdit() {
     data,
     currentMonth,
     durationSeconds,
-    isNew
+    isNew: isNew || isCopy
   });
 
   useEscapeToDashboard({
-    blocked: !!activeComment || showLeaveConfirm,
+    blocked: !!activeComment || !!cashFlowEditor || cashFlowLoading || showLeaveConfirm,
     confirmWhen: isDirty,
     confirmMessage: 'This snapshot has unsaved changes. Leave without saving?',
     onConfirmRequired: () => setShowLeaveConfirm(true)
@@ -184,6 +190,61 @@ export default function SnapshotEdit() {
   const completeSave = () => {
     localStorage.removeItem(draftKey);
     navigate('/');
+  };
+
+  const openCashFlowEditor = async () => {
+    if (cashFlowLoading || !currentMonth) return;
+    setCashFlowLoading(true);
+    setCashFlowError('');
+    try {
+      const response = await fetch(`${API_URL}/flows`);
+      if (!response.ok) throw new Error('Could not load Cash Flow.');
+      const entries = await response.json() as FlowEntry[];
+      setCashFlowEditor({
+        month: currentMonth,
+        entries: (entries || [])
+          .filter(entry => entry.month === currentMonth)
+          .map(entry => ({ ...entry, taxRate: entry.taxRate || 0 }))
+          .sort((left, right) => right.id - left.id)
+      });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not load Cash Flow.');
+    } finally {
+      setCashFlowLoading(false);
+    }
+  };
+
+  const saveCashFlowPeriod = async (drafts: FlowPeriodDraft[]) => {
+    if (!cashFlowEditor || cashFlowSaving) return;
+    setCashFlowSaving(true);
+    setCashFlowError('');
+    try {
+      const response = await fetch(`${API_URL}/flows/months/${cashFlowEditor.month}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: drafts.map(draft => ({
+            id: draft.id,
+            direction: draft.direction,
+            counterparty: draft.counterparty,
+            currency: draft.currency,
+            amount: Number(draft.amount),
+            taxRate: draft.direction === 'in' ? Number(draft.taxRate) : 0,
+            category: draft.category,
+            comment: draft.comment
+          }))
+        })
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || 'Could not save the Cash Flow period.');
+      }
+      setCashFlowEditor(null);
+    } catch (error) {
+      setCashFlowError(error instanceof Error ? error.message : 'Could not save the Cash Flow period.');
+    } finally {
+      setCashFlowSaving(false);
+    }
   };
 
   const handleSave = () => {
@@ -335,7 +396,7 @@ export default function SnapshotEdit() {
         if (currency === base) {
           newRates[currency] = 1;
         } else if (Number.isFinite(fetchedRate) && fetchedRate > 0) {
-          newRates[currency] = parseFloat((1 / fetchedRate).toFixed(6));
+          newRates[currency] = 1 / fetchedRate;
         }
       });
 
@@ -602,7 +663,7 @@ export default function SnapshotEdit() {
   if (loading) return <PageLoader label="Loading snapshot" />;
 
   return (
-    <div>
+    <div data-unsaved-changes={isDirty ? 'true' : undefined}>
       {draftToRestore && (
         <DraftRestoreBanner
           draftTimestamp={draftToRestore.timestamp}
@@ -625,9 +686,32 @@ export default function SnapshotEdit() {
         title={isNew ? 'New Snapshot' : isCopy ? `New Snapshot (copy of ${sourceMonth})` : `Edit Snapshot ${month}`}
         durationSeconds={durationSeconds}
         hasMonthlyComment={!!data.comment}
+        cashFlowEnabled={!!settings.cashFlow?.enabled}
+        cashFlowLoading={cashFlowLoading}
         onOpenMonthlyComment={() => setActiveComment({ type: 'month', text: data.comment || '', initialText: data.comment || '', title: 'Monthly Note' })}
+        onOpenCashFlow={() => void openCashFlowEditor()}
         onSave={handleSave}
       />
+
+      {cashFlowEditor && (
+        <FlowPeriodModal
+          key={`snapshot-cash-flow-${cashFlowEditor.month}`}
+          month={cashFlowEditor.month}
+          entries={cashFlowEditor.entries}
+          settings={settings}
+          appendBlank={cashFlowEditor.entries.length === 0}
+          lockMonth
+          saving={cashFlowSaving}
+          error={cashFlowError}
+          onMonthChange={() => undefined}
+          onClose={() => {
+            if (cashFlowSaving) return;
+            setCashFlowEditor(null);
+            setCashFlowError('');
+          }}
+          onSave={drafts => void saveCashFlowPeriod(drafts)}
+        />
+      )}
 
       <PeriodRatesPanel
         currentMonth={currentMonth}

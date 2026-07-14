@@ -6,12 +6,15 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -116,6 +119,43 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 	}
 	rows.Close()
 
+	rows, err = db.Query(`
+		SELECT id, month, direction, counterparty, currency, amount, tax_rate, category, comment
+		FROM flow_entries
+		ORDER BY id
+	`)
+	if err != nil {
+		return "", err
+	}
+	for rows.Next() {
+		var id int64
+		var month, direction, counterparty, currency, category, comment string
+		var amount, taxRate float64
+		if err := rows.Scan(&id, &month, &direction, &counterparty, &currency, &amount, &taxRate, &category, &comment); err != nil {
+			rows.Close()
+			return "", err
+		}
+		_, _ = h.Write([]byte{'F'})
+		var number [8]byte
+		binary.BigEndian.PutUint64(number[:], uint64(id))
+		_, _ = h.Write(number[:])
+		writeFingerprintString(h, month)
+		writeFingerprintString(h, direction)
+		writeFingerprintString(h, counterparty)
+		writeFingerprintString(h, currency)
+		binary.BigEndian.PutUint64(number[:], math.Float64bits(amount))
+		_, _ = h.Write(number[:])
+		binary.BigEndian.PutUint64(number[:], math.Float64bits(taxRate))
+		_, _ = h.Write(number[:])
+		writeFingerprintString(h, category)
+		writeFingerprintString(h, comment)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return "", err
+	}
+	rows.Close()
+
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
@@ -139,10 +179,13 @@ func fingerprintFromBackupName(name string) string {
 	return strings.ToLower(fingerprint)
 }
 
-func latestBackupFingerprint(target BackupTarget) string {
+func latestBackupFingerprint(target BackupTarget) (string, error) {
 	files, err := os.ReadDir(target.Path)
 	if err != nil {
-		return ""
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to read backup directory: %w", err)
 	}
 
 	var latestName string
@@ -153,7 +196,7 @@ func latestBackupFingerprint(target BackupTarget) string {
 		}
 		info, err := file.Info()
 		if err != nil {
-			continue
+			return "", fmt.Errorf("failed to inspect backup file %q: %w", file.Name(), err)
 		}
 		if latestName == "" || info.ModTime().After(latestModTime) || (info.ModTime().Equal(latestModTime) && file.Name() > latestName) {
 			latestName = file.Name()
@@ -161,23 +204,45 @@ func latestBackupFingerprint(target BackupTarget) string {
 		}
 	}
 
-	return fingerprintFromBackupName(latestName)
+	return fingerprintFromBackupName(latestName), nil
 }
 
-func backupFilePath(target BackupTarget, timestamp, fingerprint, extension string) string {
+func backupFilename(timestamp, fingerprint, extension string, sequence int) string {
 	shortFingerprint := fingerprint[:backupHashLength]
-	filename := fmt.Sprintf("%s%s_%s.%s", backupPrefix, timestamp, shortFingerprint, extension)
-	targetFile := filepath.Join(target.Path, filename)
-	if _, err := os.Stat(targetFile); err != nil {
-		return targetFile
+	if sequence == 1 {
+		return fmt.Sprintf("%s%s_%s.%s", backupPrefix, timestamp, shortFingerprint, extension)
 	}
+	return fmt.Sprintf("%s%s_%d_%s.%s", backupPrefix, timestamp, sequence, shortFingerprint, extension)
+}
 
-	for sequence := 2; ; sequence++ {
-		filename = fmt.Sprintf("%s%s_%d_%s.%s", backupPrefix, timestamp, sequence, shortFingerprint, extension)
-		targetFile = filepath.Join(target.Path, filename)
-		if _, err := os.Stat(targetFile); err != nil {
-			return targetFile
+func generateBackupCipherKey() (string, error) {
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		return "", fmt.Errorf("failed to generate random backup key: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(key), nil
+}
+
+func writeBackupFile(target BackupTarget, timestamp, fingerprint, extension string, data []byte) (string, error) {
+	for sequence := 1; ; sequence++ {
+		targetFile := filepath.Join(target.Path, backupFilename(timestamp, fingerprint, extension, sequence))
+		file, err := os.OpenFile(targetFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if errors.Is(err, os.ErrExist) {
+			continue
 		}
+		if err != nil {
+			return "", err
+		}
+		if _, err := file.Write(data); err != nil {
+			_ = file.Close()
+			_ = os.Remove(targetFile)
+			return "", err
+		}
+		if err := file.Close(); err != nil {
+			_ = os.Remove(targetFile)
+			return "", err
+		}
+		return targetFile, nil
 	}
 }
 
@@ -233,25 +298,25 @@ func decryptData(ciphertext []byte, passphrase string) ([]byte, error) {
 }
 
 // rotateBackups keeps only the N newest backups in the specified target directory
-func rotateBackups(target BackupTarget) {
+func rotateBackups(target BackupTarget) error {
 	files, err := os.ReadDir(target.Path)
 	if err != nil {
-		log.Printf("⚠️  Rotation [%s]: Failed to read directory: %v\n", target.Name, err)
-		return
+		return fmt.Errorf("failed to read directory: %w", err)
 	}
 
 	var backupFiles []os.FileInfo
 	for _, f := range files {
 		if !f.IsDir() && strings.HasPrefix(f.Name(), backupPrefix) {
 			info, err := f.Info()
-			if err == nil {
-				backupFiles = append(backupFiles, info)
+			if err != nil {
+				return fmt.Errorf("failed to inspect backup file %q: %w", f.Name(), err)
 			}
+			backupFiles = append(backupFiles, info)
 		}
 	}
 
 	if len(backupFiles) <= target.Retention {
-		return
+		return nil
 	}
 
 	sort.Slice(backupFiles, func(i, j int) bool {
@@ -265,21 +330,36 @@ func rotateBackups(target BackupTarget) {
 	for i := 0; i < overflowCount; i++ {
 		fileToDelete := filepath.Join(target.Path, backupFiles[i].Name())
 		if err := os.Remove(fileToDelete); err != nil {
-			log.Printf("⚠️  Rotation [%s]: Failed to delete old backup %s: %v\n", target.Name, backupFiles[i].Name(), err)
-		} else {
-			log.Printf("🗑️  Rotation [%s]: Deleted obsolete backup: %s\n", target.Name, backupFiles[i].Name())
+			return fmt.Errorf("failed to delete old backup %q: %w", backupFiles[i].Name(), err)
 		}
+		log.Printf("🗑️  Rotation [%s]: Deleted obsolete backup: %s\n", target.Name, backupFiles[i].Name())
 	}
+
+	return nil
+}
+
+func verifyBackupFile(path string, expected []byte) error {
+	actual, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read written backup: %w", err)
+	}
+	if sha256.Sum256(actual) != sha256.Sum256(expected) {
+		return fmt.Errorf("written backup contents do not match the source data")
+	}
+	return nil
 }
 
 func finalizeBackupReport(report BackupReport) BackupReport {
-	var current, created, failed int
+	var current, created, warnings, failed int
 	for _, target := range report.Targets {
 		switch target.Status {
 		case "current":
 			current++
 		case "created":
 			created++
+		case "created_with_warning":
+			created++
+			warnings++
 		case "failed":
 			failed++
 		}
@@ -290,6 +370,8 @@ func finalizeBackupReport(report BackupReport) BackupReport {
 		report.Status = backupStatusPartial
 	case failed > 0:
 		report.Status = backupStatusFailed
+	case warnings > 0:
+		report.Status = backupStatusPartial
 	case created > 0:
 		report.Status = backupStatusSuccess
 	default:
@@ -334,14 +416,19 @@ func RunBackupJob(cfg *Config, db *sql.DB) BackupReport {
 	pendingCount := 0
 	for i, target := range cfg.Backup.Targets {
 		status := "pending"
-		storedFingerprint := latestBackupFingerprint(target)
-		if cfg.Backup.OnlyIfChanged && storedFingerprint != "" && strings.HasPrefix(fingerprint, storedFingerprint) {
+		storedFingerprint, inspectErr := latestBackupFingerprint(target)
+		var targetError string
+		if inspectErr != nil {
+			targetError = fmt.Sprintf("could not inspect existing backups before creating a new one: %v", inspectErr)
+			pendingCount++
+			log.Printf("⚠️  Backup [Target %s]: Cannot inspect %s; write will still be attempted: %v\n", target.Name, target.Path, inspectErr)
+		} else if cfg.Backup.OnlyIfChanged && storedFingerprint != "" && strings.HasPrefix(fingerprint, storedFingerprint) {
 			status = "current"
 			log.Printf("⏭️  Backup [Target %s]: Database is unchanged; keeping the existing backup.\n", target.Name)
 		} else {
 			pendingCount++
 		}
-		report.Targets[i] = BackupTargetResult{Name: target.Name, Path: target.Path, Status: status}
+		report.Targets[i] = BackupTargetResult{Name: target.Name, Path: target.Path, Status: status, Error: targetError}
 	}
 	if !cfg.Backup.OnlyIfChanged {
 		log.Println("ℹ️  Backup: only_if_changed is disabled; creating a new backup regardless of database changes.")
@@ -411,26 +498,43 @@ func RunBackupJob(cfg *Config, db *sql.DB) BackupReport {
 
 	timestamp := time.Now().Format(backupTimeFormat)
 	for i, target := range cfg.Backup.Targets {
-		if report.Targets[i].Status == "current" {
+		if report.Targets[i].Status != "pending" {
 			continue
+		}
+		var warnings []string
+		if report.Targets[i].Error != "" {
+			warnings = append(warnings, report.Targets[i].Error)
 		}
 		if err := os.MkdirAll(target.Path, 0755); err != nil {
 			log.Printf("⚠️  Backup [Target %s]: Directory creation skipped at %s: %v\n", target.Name, target.Path, err)
 			report.Targets[i].Status = "failed"
-			report.Targets[i].Error = fmt.Sprintf("failed to create backup directory: %v", err)
+			report.Targets[i].Error = strings.Join(append(warnings, fmt.Sprintf("failed to create backup directory: %v", err)), "; ")
 			continue
 		}
 
-		targetFile := backupFilePath(target, timestamp, fingerprint, extension)
-		if err := os.WriteFile(targetFile, finalData, 0600); err != nil {
-			log.Printf("❌ Backup [Target %s]: File write failed at %s: %v\n", target.Name, targetFile, err)
+		targetFile, err := writeBackupFile(target, timestamp, fingerprint, extension, finalData)
+		if err != nil {
+			log.Printf("❌ Backup [Target %s]: File write failed at %s: %v\n", target.Name, target.Path, err)
 			report.Targets[i].Status = "failed"
-			report.Targets[i].Error = fmt.Sprintf("failed to write backup file: %v", err)
-		} else {
-			log.Printf("✅ Backup [Target %s]: Saved to %s\n", target.Name, targetFile)
-			report.Targets[i].Status = "created"
-			rotateBackups(target)
+			report.Targets[i].Error = strings.Join(append(warnings, fmt.Sprintf("failed to write backup file: %v", err)), "; ")
+			continue
 		}
+		if err := verifyBackupFile(targetFile, finalData); err != nil {
+			log.Printf("⚠️  Backup [Target %s]: Read-back verification failed at %s: %v\n", target.Name, targetFile, err)
+			warnings = append(warnings, fmt.Sprintf("backup was written but read-back verification failed: %v", err))
+		}
+		if err := rotateBackups(target); err != nil {
+			log.Printf("⚠️  Rotation [%s]: %v\n", target.Name, err)
+			warnings = append(warnings, fmt.Sprintf("old backups may not be cleaned up: %v", err))
+		}
+		if len(warnings) > 0 {
+			log.Printf("⚠️  Backup [Target %s]: Saved to %s with warnings\n", target.Name, targetFile)
+			report.Targets[i].Status = "created_with_warning"
+			report.Targets[i].Error = strings.Join(warnings, "; ")
+			continue
+		}
+		log.Printf("✅ Backup [Target %s]: Saved and verified at %s\n", target.Name, targetFile)
+		report.Targets[i].Status = "created"
 	}
 
 	return finalizeBackupReport(report)
@@ -468,7 +572,7 @@ func RunRestoreJob(cfg *Config, backupFilePath string) {
 
 	if filepath.Ext(backupFilePath) == "."+extEncrypted {
 		if cfg.Backup.CipherKey == "" {
-			log.Fatalf("❌ Restore CRITICAL: File is encrypted, but FINN_BACKUP_CIPHER_KEY environment variable is empty!\n")
+			log.Fatalf("❌ Restore CRITICAL: File is encrypted, but backup.cipher_key is empty!\n")
 		}
 		log.Println("🔓 Restore: Decrypting dataset via AES-256-GCM...")
 		decrypted, err := decryptData(backupBytes, cfg.Backup.CipherKey)

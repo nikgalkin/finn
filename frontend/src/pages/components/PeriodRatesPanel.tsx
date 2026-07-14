@@ -1,5 +1,6 @@
 import { Calendar, Plus, RefreshCw } from 'lucide-react';
 import type { AppSettings, SnapshotData } from '../../types';
+import { AmountInput } from './AmountInput';
 import { Spinner } from './PageLoader';
 
 type PeriodRatesPanelProps = {
@@ -32,12 +33,13 @@ export function PeriodRatesPanel({
           <h3 style={{ margin: 0, fontSize: '1rem' }}>Period</h3>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium text-center">Month (YYYY-MM)</div>
+          <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium text-center">Month</div>
           <input
-            className="input w-full text-center"
+            className="input w-full text-center cash-flow-month-input"
+            type="month"
             value={currentMonth}
             onChange={event => onMonthChange(event.target.value)}
-            placeholder="YYYY-MM"
+            aria-label="Snapshot month"
             style={{ textAlign: 'center', height: '36px' }}
           />
         </div>
@@ -72,17 +74,11 @@ export function PeriodRatesPanel({
           {Object.entries(rates).map(([currency, rate]) => (
             <div key={currency} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
               <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium">{currency}</div>
-              <input
-                type="number"
-                className="input w-full"
-                value={rate === 0 ? '' : rate}
-                placeholder="0"
-                onWheel={event => (event.target as HTMLInputElement).blur()}
-                onChange={event => {
-                  const val = event.target.value;
-                  onRateChange(currency, val === '' ? 0 : (val.endsWith('.') ? val : parseFloat(val)));
-                }}
-                style={{ height: '36px' }}
+              <AmountInput
+                value={rate}
+                onChange={value => onRateChange(currency, value)}
+                maximumFractionDigits={2}
+                ariaLabel={`${currency} exchange rate`}
               />
             </div>
           ))}

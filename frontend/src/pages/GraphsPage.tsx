@@ -7,22 +7,11 @@ import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { calculateFlowDecomposition, calculateTotals, convertAmount } from '../lib/finance';
 import { GraphsAnalyticsSections } from './components/graphs/GraphsAnalyticsSections';
-import { SearchableSelect } from './components/graphs/SearchableSelect';
 import { PageLoader } from './components/PageLoader';
 import { StickyPageHeader } from './components/StickyPageHeader';
+import { TimeframeControl } from './components/TimeframeControl';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
-const QUICK_PERIODS = [
-  ['2', '2M'],
-  ['3', '3M'],
-  ['6', '6M'],
-  ['ytd', 'YTD'],
-  ['12', '1Y'],
-  ['24', '2Y'],
-  ['all', 'ALL']
-] as const;
-const QUICK_PERIOD_LABELS = QUICK_PERIODS.map(([, label]) => label);
-
 const getSignedPercent = (current: number, previous: number) => {
   if (previous === 0) return 0;
   return ((current - previous) / previous) * 100;
@@ -39,7 +28,6 @@ export default function GraphsPage() {
   });
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
-  const [quickPeriod, setQuickPeriod] = useState('all');
   const [lastClick, setLastClick] = useState<{ key: string; time: number } | null>(null);
 
   useEffect(() => {
@@ -421,40 +409,6 @@ export default function GraphsPage() {
     return Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(value);
   };
 
-  const handleQuickPeriod = (period: string) => {
-    if (availableMonths.length === 0) return;
-
-    const latestMonth = availableMonths[availableMonths.length - 1];
-    setQuickPeriod(period);
-    setEndMonth(latestMonth);
-
-    if (period === 'all') {
-      setStartMonth(availableMonths[0]);
-      return;
-    }
-
-    const [year, month] = latestMonth.split('-').map(Number);
-    const date = period === 'ytd' ? new Date(year, 0, 1) : new Date(year, month - Number(period), 1);
-    const computedStart = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    setStartMonth(computedStart < availableMonths[0] ? availableMonths[0] : computedStart);
-  };
-
-  const handleManualStartChange = (value: string) => {
-    setQuickPeriod('custom');
-    setStartMonth(value);
-  };
-
-  const handleManualEndChange = (value: string) => {
-    setQuickPeriod('custom');
-    setEndMonth(value);
-  };
-
-  const selectedQuickPeriodLabel = QUICK_PERIODS.find(([value]) => value === quickPeriod)?.[1] || 'Custom';
-  const handleQuickPeriodLabelChange = (label: string) => {
-    const period = QUICK_PERIODS.find(([, periodLabel]) => periodLabel === label)?.[0];
-    if (period) handleQuickPeriod(period);
-  };
-
   const isAnythingHidden = useMemo(() => {
     return Object.entries(hiddenBalances).some(([key, value]) => {
       if (key === 'untagged') return false;
@@ -483,24 +437,15 @@ export default function GraphsPage() {
             </button>
           )}
 
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'rgba(255,255,255,0.03)',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: '1px solid var(--glass-border)',
-            fontSize: '14px',
-            boxSizing: 'border-box',
-            height: '38px'
-          }}>
-            <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Timeframe:</span>
-            <SearchableSelect value={selectedQuickPeriodLabel} onChange={handleQuickPeriodLabelChange} options={QUICK_PERIOD_LABELS} placeholder="Period" showSearch={false} width="84px" dropdownWidth="96px" />
-            <SearchableSelect value={startMonth} onChange={handleManualStartChange} options={availableMonths} placeholder="Start" />
-            <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: 'bold' }}>➔</span>
-            <SearchableSelect value={effectiveEndMonth} onChange={handleManualEndChange} options={availableMonths.filter(month => !startMonth || month >= startMonth)} placeholder="End" />
-          </div>
+          <TimeframeControl
+            availableMonths={availableMonths}
+            startMonth={startMonth}
+            endMonth={effectiveEndMonth}
+            onChange={(start, end) => {
+              setStartMonth(start);
+              setEndMonth(end);
+            }}
+          />
         </div>
       </StickyPageHeader>
 

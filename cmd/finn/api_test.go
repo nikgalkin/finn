@@ -87,3 +87,34 @@ func TestShutdownIsAbortedWhenBackupFails(t *testing.T) {
 	case <-time.After(300 * time.Millisecond):
 	}
 }
+
+func TestShutdownProceedsWhenBackupIsPartial(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	shutdownRequested := make(chan struct{}, 1)
+	setupAPI(router, nil, func() {
+		shutdownRequested <- struct{}{}
+	}, func() BackupReport {
+		return BackupReport{
+			Status: backupStatusPartial,
+			Targets: []BackupTargetResult{
+				{Name: "local", Status: "created"},
+				{Name: "cloud", Status: "created_with_warning", Error: "rotation failed"},
+			},
+		}
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/api/shutdown", nil)
+	request.RemoteAddr = "127.0.0.1:41000"
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("shutdown response status = %d, want %d; body: %s", response.Code, http.StatusAccepted, response.Body.String())
+	}
+	select {
+	case <-shutdownRequested:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown was not requested after a partial backup")
+	}
+}

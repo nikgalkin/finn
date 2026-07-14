@@ -96,7 +96,7 @@ func LoadConfig() *Config {
 	}
 
 	if config.Backup.Enabled && config.Backup.CipherKey == "" {
-		log.Println("⚠️  BACKUP WARNING: Backup is enabled, but FINN_BACKUP_CIPHER_KEY is empty! Encryption will be bypassed.")
+		log.Println("⚠️  BACKUP WARNING: Backup is enabled, but backup.cipher_key is empty! Encryption will be bypassed.")
 	}
 
 	return &config
