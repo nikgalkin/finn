@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -10,6 +12,41 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+var (
+	defaultFlowCategories = []string{"salary", "other income", "purchase", "rent expense", "loan given", "loan returned"}
+	defaultCurrencies     = []string{"RUB", "USD", "EUR", "UZS"}
+	defaultBalanceTags    = []string{"deposit", "cash", "stocks", "checking"}
+)
+
+func settingsWithDefaults(value string) (string, error) {
+	settings := make(map[string]any)
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return "", fmt.Errorf("decode settings: %w", err)
+	}
+
+	if currencies, exists := settings["currencies"]; !exists || currencies == nil {
+		settings["currencies"] = defaultCurrencies
+	}
+	if tags, exists := settings["tags"]; !exists || tags == nil {
+		settings["tags"] = defaultBalanceTags
+	}
+
+	cashFlow, ok := settings["cashFlow"].(map[string]any)
+	if !ok {
+		cashFlow = make(map[string]any)
+		settings["cashFlow"] = cashFlow
+	}
+	if categories, exists := cashFlow["categories"]; !exists || categories == nil {
+		cashFlow["categories"] = defaultFlowCategories
+	}
+
+	normalized, err := json.Marshal(settings)
+	if err != nil {
+		return "", fmt.Errorf("encode settings: %w", err)
+	}
+	return string(normalized), nil
+}
 
 type SnapshotRequest struct {
 	Month           string `json:"month" binding:"required"`
@@ -49,6 +86,7 @@ func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBack
 
 	api := r.Group("/api")
 	setupAIAPI(api, db)
+	setupFlowAPI(api, db)
 
 	api.POST("/shutdown", func(c *gin.Context) {
 		if !isLocalShutdownRequest(c.Request) {
@@ -192,12 +230,17 @@ func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBack
 		err := db.QueryRow("SELECT value FROM settings WHERE key = 'master_data'").Scan(&value)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				value = `{"organizations":["T-Bank","Alfabank","Anorbank","Sberbank","Cash"],
-        "currencies":["RUB","USD","EUR","USDT","UZS","BTC"],"autoFetchCurrencies":["USD","EUR","USDT","","UZS","BTC"]}`
+				value = `{"organizations":["AlfaBank","KapitalBank","Cash"],
+					"autoFetchCurrencies":["USD","EUR","UZS"]}`
 			} else {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
+		}
+		value, err = settingsWithDefaults(value)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 		c.JSON(http.StatusOK, gin.H{"value": value})
 	})

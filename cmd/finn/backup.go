@@ -14,6 +14,7 @@ import (
 	"hash"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -111,6 +112,43 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 		_, _ = h.Write([]byte{'C'})
 		writeFingerprintString(h, key)
 		writeFingerprintString(h, value)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return "", err
+	}
+	rows.Close()
+
+	rows, err = db.Query(`
+		SELECT id, month, direction, counterparty, currency, amount, tax_rate, category, comment
+		FROM flow_entries
+		ORDER BY id
+	`)
+	if err != nil {
+		return "", err
+	}
+	for rows.Next() {
+		var id int64
+		var month, direction, counterparty, currency, category, comment string
+		var amount, taxRate float64
+		if err := rows.Scan(&id, &month, &direction, &counterparty, &currency, &amount, &taxRate, &category, &comment); err != nil {
+			rows.Close()
+			return "", err
+		}
+		_, _ = h.Write([]byte{'F'})
+		var number [8]byte
+		binary.BigEndian.PutUint64(number[:], uint64(id))
+		_, _ = h.Write(number[:])
+		writeFingerprintString(h, month)
+		writeFingerprintString(h, direction)
+		writeFingerprintString(h, counterparty)
+		writeFingerprintString(h, currency)
+		binary.BigEndian.PutUint64(number[:], math.Float64bits(amount))
+		_, _ = h.Write(number[:])
+		binary.BigEndian.PutUint64(number[:], math.Float64bits(taxRate))
+		_, _ = h.Write(number[:])
+		writeFingerprintString(h, category)
+		writeFingerprintString(h, comment)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()

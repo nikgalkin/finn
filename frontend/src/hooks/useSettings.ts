@@ -2,12 +2,20 @@ import { useEffect, useState } from 'react';
 import { API_URL } from '../types';
 import type { AppSettings, ConfiguredOrganization } from '../types';
 
+export const SETTINGS_UPDATED_EVENT = 'finn-settings-updated';
+
 const defaultSettings: AppSettings = {
   organizations: [],
   currencies: [],
   tags: [],
   baseCurrency: 'RUB',
   secondaryCurrency: 'USD',
+  cashFlow: {
+    enabled: false,
+    sources: [],
+    taxRates: {},
+    categories: []
+  },
   localAI: {
     enabled: false,
     provider: 'lmstudio',
@@ -37,9 +45,16 @@ const normalizeSettings = (settings: StoredSettings): AppSettings => ({
   ...defaultSettings,
   ...settings,
   organizations: normalizeOrganizations(settings.organizations),
-  currencies: settings.currencies || [],
+  currencies: settings.currencies ?? [],
   autoFetchCurrencies: settings.autoFetchCurrencies || [],
-  tags: settings.tags || [],
+  tags: settings.tags ?? [],
+  cashFlow: {
+    ...defaultSettings.cashFlow!,
+    ...(settings.cashFlow || {}),
+    sources: settings.cashFlow?.sources || [],
+    taxRates: settings.cashFlow?.taxRates || {},
+    categories: settings.cashFlow?.categories ?? []
+  },
   localAI: {
     ...defaultSettings.localAI!,
     ...(settings.localAI || {})
@@ -53,6 +68,13 @@ export function useSettings() {
 
   useEffect(() => {
     let cancelled = false;
+
+    const handleSettingsUpdated = (event: Event) => {
+      const updatedSettings = (event as CustomEvent<StoredSettings>).detail;
+      if (updatedSettings) setSettings(normalizeSettings(updatedSettings));
+    };
+
+    window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
 
     fetch(`${API_URL}/settings`)
       .then(res => res.json())
@@ -71,6 +93,7 @@ export function useSettings() {
 
     return () => {
       cancelled = true;
+      window.removeEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
     };
   }, []);
 

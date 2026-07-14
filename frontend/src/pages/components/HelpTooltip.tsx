@@ -86,7 +86,7 @@ export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320
           role="tooltip"
           style={{
             position: 'fixed',
-            zIndex: 10000,
+            zIndex: 200000,
             top: `${position.top}px`,
             left: `${position.left}px`,
             width: `${width}px`,

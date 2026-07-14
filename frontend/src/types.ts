@@ -43,7 +43,29 @@ export type AppSettings = {
   baseCurrency?: string;
   secondaryCurrency?: string;
   tags?: string[]; // Balance analytical tagging infrastructure array
+  cashFlow?: CashFlowSettings;
   localAI?: LocalAISettings;
+};
+
+export type CashFlowSettings = {
+  enabled: boolean;
+  sources: string[];
+  taxRates: Record<string, number>;
+  categories: string[];
+};
+
+export type FlowDirection = 'in' | 'out';
+
+export type FlowEntry = {
+  id: number;
+  month: string;
+  direction: FlowDirection;
+  counterparty: string;
+  currency: string;
+  amount: number;
+  taxRate: number;
+  category: string;
+  comment: string;
 };
 
 export type LocalAISettings = {

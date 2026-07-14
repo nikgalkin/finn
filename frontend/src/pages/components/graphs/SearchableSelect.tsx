@@ -16,6 +16,7 @@ type SearchableSelectProps = {
   disabled?: boolean;
   textAlign?: 'left' | 'center';
   portal?: boolean;
+  portalZIndex?: number;
 };
 
 const triggerStyle = { padding: '4px 8px', background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' as const, height: '28px' };
@@ -24,7 +25,7 @@ const searchIconStyle = { position: 'absolute' as const, left: '8px', top: '50%'
 const searchInputStyle = { width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '4px', padding: '2px 6px 2px 22px', fontSize: '12px', color: 'var(--text-primary)', outline: 'none' };
 const optionsStyle = { overflowY: 'auto' as const, flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '2px' };
 
-export function SearchableSelect({ id, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false }: SearchableSelectProps) {
+export function SearchableSelect({ id, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false, portalZIndex = 10000 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0 });
@@ -89,7 +90,7 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
       ref={dropdownRef}
       className="glass-panel"
       style={portal
-        ? { ...dropdownStyle, position: 'fixed', top: `${portalPosition.top}px`, left: `${portalPosition.left}px`, transform: 'none', width: dropdownWidth, zIndex: 10000 }
+        ? { ...dropdownStyle, position: 'fixed', top: `${portalPosition.top}px`, left: `${portalPosition.left}px`, transform: 'none', width: dropdownWidth, zIndex: portalZIndex }
         : { ...dropdownStyle, top: `calc(${height} + 8px)`, width: dropdownWidth }}
     >
       {showSearch && (

@@ -251,6 +251,20 @@ export default function Dashboard() {
 
       {loading ? (
         <PageLoader label="Loading dashboard" />
+      ) : snapshots.length === 0 ? (
+        <section className="glass-panel dashboard-empty-state">
+          <div className="dashboard-empty-state-icon" aria-hidden="true">
+            <TrendingUp size={26} />
+          </div>
+          <div>
+            <h3>Start your financial history</h3>
+            <p>Click New Snapshot to record where you are today and begin tracking changes over time.</p>
+          </div>
+          <Link to="/snapshot/new" className="btn btn-primary" title="New Snapshot (N)">
+            New Snapshot
+          </Link>
+          <span className="dashboard-empty-state-hint">You can also press N</span>
+        </section>
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>

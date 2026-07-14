@@ -10,7 +10,7 @@ SELECT
 FROM settings
 JOIN json_each(settings.value, '$.organizations') AS organization
 WHERE settings.key = 'master_data'
-  AND json_type(organization.value) = 'object'
+  AND organization.type = 'object'
   AND coalesce(trim(json_extract(organization.value, '$.country')), '') <> '';
 
 CREATE TEMP TABLE migration_001_rebuilt_snapshots (

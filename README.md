@@ -33,6 +33,7 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 * **Monthly Snapshots:** Save the state of your balances across different organizations and accounts once a month.
 * **Flexible Multi-Currency Architecture:** Completely redesigned currency system. Set your preferred **Base** and **Secondary** currencies during initial setup to track your global assets seamlessly.
 * **Balance Tagging:** Label individual balances with custom tags (`cash`, `checking`, `stocks`, `deposit`) to categorize your portfolio by asset type or purpose.
+* **Optional Cash Flow Journal:** Enable a separate monthly log for external incoming and outgoing movements, including the cash side of debts, without tying entries to portfolio organizations. Existing data can be imported from a validated CSV preview.
 * **Advanced Analytics (FX Impact):** The analytics engine automatically separates organic growth (actual deposits/withdrawals) from paper growth (changes due to currency exchange rate fluctuations).
 * **Asset Structure Breakdown by Tags:** A new interactive chart utilizing a mathematical Golden Ratio color-spacing framework for beautiful, high-contrast, macro-level asset allocation mapping.
 * **Smart Relative Timeframes:** Clean timeframe presets (`6M`, `1Y`, `ALL`) along with a dynamic month-range input for flexible historical filtering.
@@ -46,6 +47,18 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 
 * **Backend:** Go, Gin framework, SQLite (using `json_extract` for advanced queries).
 * **Frontend:** React, React Router, Recharts (for data visualization), Lucide React (icons).
+
+## Cash Flow CSV format
+
+Cash Flow accepts UTF-8, comma-separated CSV files. Each row is one movement; existing entries are kept and exact duplicates are skipped.
+
+```csv
+month,direction,counterparty,amount,currency,tax_rate,category,comment
+2026-01,in,Acme,5000,USD,6,Salary,January salary
+2026-01,out,Landlord,85000,RUB,0,Rent,
+```
+
+Required headers are `month`, `direction`, `counterparty`, `amount`, and `currency`. The `tax_rate`, `category`, and `comment` columns are optional. Months use `YYYY-MM`, direction is `in` or `out`, amount is a positive gross value, and tax rate is a percentage from `0` to `100` that only applies to incoming entries.
 
 ## 📂 Project Structure
 
@@ -186,6 +199,7 @@ The Assistant page lets you limit context to the latest 1, 2, 3, 6, 12, or 24 mo
 
 * **Currency Choice:** Be sure to configure your Base Currency before adding your first historical data point to sync and lock your historical exchange rates correctly.
 * **Adding a Snapshot:** Click "New Snapshot". You can automatically copy balances from your previous month to save time. It also features automatic background session draft caching.
+* **Cash Flow:** Enable the optional section in Settings to add incoming and outgoing entries by month, counterparty, currency, amount, and category. Internal transfers between your own accounts are intentionally excluded.
 * **Isolating Legends:** Double-click on any item in the chart legends to instantly isolate that specific organization, currency, or asset tag. Single-click to toggle visibility.
 
 Overview:

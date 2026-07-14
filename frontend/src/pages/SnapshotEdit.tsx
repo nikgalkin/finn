@@ -335,7 +335,7 @@ export default function SnapshotEdit() {
         if (currency === base) {
           newRates[currency] = 1;
         } else if (Number.isFinite(fetchedRate) && fetchedRate > 0) {
-          newRates[currency] = parseFloat((1 / fetchedRate).toFixed(6));
+          newRates[currency] = 1 / fetchedRate;
         }
       });
 
@@ -602,7 +602,7 @@ export default function SnapshotEdit() {
   if (loading) return <PageLoader label="Loading snapshot" />;
 
   return (
-    <div>
+    <div data-unsaved-changes={isDirty ? 'true' : undefined}>
       {draftToRestore && (
         <DraftRestoreBanner
           draftTimestamp={draftToRestore.timestamp}

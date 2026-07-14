@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { NAVIGATION_HOTKEYS } from '../../lib/hotkeys';
 
 type HotkeysHelpModalProps = {
   onClose: () => void;
@@ -14,7 +15,7 @@ const keyStyle = { justifySelf: 'start', minWidth: '32px', textAlign: 'center' a
 const sections = [
   {
     title: 'Navigation',
-    rows: [['N', 'New snapshot'], ['A', 'Open assistant'], ['G', 'Open graphs'], ['F', 'Open feed'], ['S', 'Open settings'], ['H', 'Show this help']]
+    rows: [...NAVIGATION_HOTKEYS.map(hotkey => [hotkey.label, hotkey.description]), ['H', 'Show this help']]
   },
   {
     title: 'Dashboard',
