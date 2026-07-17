@@ -652,12 +652,10 @@ export default function Settings() {
                   <Plus size={14} /> Add
                 </button>
               </div>
-              {(settings.cashFlow?.sources || []).length > 0 && (
-                <div className="cash-flow-source-setting-labels" aria-hidden="true">
-                  <span>Name</span>
-                  <span>Default tax</span>
-                </div>
-              )}
+              <div className="cash-flow-source-setting-labels" aria-hidden="true">
+                <span>Name</span>
+                <span>Default tax</span>
+              </div>
               <div
                 ref={element => { scrollBodyRefs.current.sources = element; }}
                 className="cash-flow-settings-list"
@@ -710,6 +708,7 @@ export default function Settings() {
                   <Plus size={14} /> Add
                 </button>
               </div>
+              <div className="cash-flow-category-setting-label-spacer" aria-hidden="true" />
               <div
                 ref={element => { scrollBodyRefs.current.categories = element; }}
                 className="cash-flow-settings-list"
