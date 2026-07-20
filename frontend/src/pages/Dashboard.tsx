@@ -41,7 +41,7 @@ const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency
       </div>
 
       <ul style={{ listStyleType: 'none', padding: 0, margin: 0 }}>
-        {payload.map((item: any) => {
+        {payload.filter((item: any) => item.name === 'BASE' || item.name === 'SECONDARY').map((item: any) => {
           const isBase = item.name === 'BASE';
           const numValue = Number(item.value) || 0;
           const formattedValue = numValue.toLocaleString('en-US');
@@ -127,7 +127,7 @@ export default function Dashboard() {
   };
 
   const chartData = useMemo(() => {
-    return snapshots.map(s => {
+    const points = snapshots.map(s => {
       const totals = calculateTotals(s, baseCurrency, secondaryCurrency);
       return {
         name: s.month,
@@ -136,6 +136,7 @@ export default function Dashboard() {
         hasComment: hasAnyComments(s)
       };
     });
+    return points;
   }, [snapshots, baseCurrency, secondaryCurrency]);
 
   const CommentDot = (props: any) => {
@@ -143,8 +144,18 @@ export default function Dashboard() {
     if (payload && payload.hasComment) {
       return (
         <g key={cx} style={{ cursor: 'pointer' }}>
-          <circle cx={cx} cy={cy} r={7} fill="none" stroke="#3b82f6" strokeWidth={2} />
-          <circle cx={cx} cy={cy} r={4} fill="#3b82f6" />
+          <line
+            x1={cx}
+            y1={cy + 6}
+            x2={cx}
+            y2="calc(100% - 45px)"
+            stroke="#34d399"
+            strokeWidth={1}
+            strokeDasharray="3 5"
+            opacity={0.18}
+          />
+          <circle cx={cx} cy={cy} r={4.60} fill="var(--bg-color)" fillOpacity={0.62} stroke="#34d399" strokeWidth={2} strokeOpacity={0.68} />
+          <circle cx={cx} cy={cy} r={2.00} fill="#10b981" opacity={0.59} />
         </g>
       );
     }

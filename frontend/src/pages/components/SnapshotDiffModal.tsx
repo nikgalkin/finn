@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import type { FocusEvent, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { ArrowDownUp, Coins, ExternalLink, Folder, MessageSquare, X } from 'lucide-react';
+import { ArrowDownUp, ChevronDown, Coins, ExternalLink, Folder, MessageSquare, RefreshCw, X } from 'lucide-react';
 import { getCurrencyColor, getTagColor } from '../../types';
 import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
+import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
 import { FlowNetSummary } from './FlowNetSummary';
 import { SearchableSelect } from './graphs/SearchableSelect';
 
@@ -29,6 +30,17 @@ type DiffOrgNode = {
   comment?: string;
   balances: DiffBalanceNode[];
   hasChanges: boolean;
+};
+
+type DiffRateNode = {
+  key: string;
+  fromCurrency: string;
+  toCurrency: string;
+  previousRate: number | null;
+  currentRate: number | null;
+  delta: number | null;
+  deltaPercent: number | null;
+  status: DiffStatus;
 };
 
 type SnapshotDiffModalProps = {
@@ -55,6 +67,74 @@ const areTagsEqual = (left: string[], right: string[]) => {
   const leftSorted = [...left].sort();
   const rightSorted = [...right].sort();
   return leftSorted.every((tag, index) => tag === rightSorted[index]);
+};
+
+const formatRate = (value: number | null) => {
+  if (value === null) return '—';
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: Math.abs(value) < 0.01 ? 6 : 4
+  });
+};
+
+const buildRateDiffData = (
+  current: ParsedSnapshot,
+  previous: ParsedSnapshot | null,
+  onlyChanges: boolean
+): DiffRateNode[] => {
+  const referenceCurrency = inferRateReferenceCurrency(current.data.rates);
+  const currencies = new Set([
+    ...Object.keys(current.data.rates || {}),
+    ...Object.keys(previous?.data.rates || {})
+  ]);
+  currencies.delete(referenceCurrency);
+
+  const rateAt = (snapshot: ParsedSnapshot | null, currency: string) => {
+    if (!snapshot) return null;
+    const snapshotReference = inferRateReferenceCurrency(snapshot.data.rates, referenceCurrency);
+    const hasCurrency = currency === snapshotReference || Object.hasOwn(snapshot.data.rates, currency);
+    const hasReference = referenceCurrency === snapshotReference || Object.hasOwn(snapshot.data.rates, referenceCurrency);
+    if (!hasCurrency || !hasReference) return null;
+    const rate = convertAmount(1, currency, referenceCurrency, snapshot.data.rates);
+    return Number.isFinite(rate) && rate > 0 ? rate : null;
+  };
+
+  return Array.from(currencies)
+    .map(currency => {
+      const rawPreviousRate = rateAt(previous, currency);
+      const rawCurrentRate = rateAt(current, currency);
+      const orientationRate = rawCurrentRate ?? rawPreviousRate;
+      const orientation = orientExchangeRate(currency, referenceCurrency, orientationRate ?? 1);
+      const normalizeRate = (rate: number | null) => {
+        if (rate === null) return null;
+        return orientation.inverted ? 1 / rate : rate;
+      };
+      const previousRate = normalizeRate(rawPreviousRate);
+      const currentRate = normalizeRate(rawCurrentRate);
+      const displayedDelta = previousRate !== null && currentRate !== null ? currentRate - previousRate : null;
+      const displayedDeltaPercent = displayedDelta !== null && previousRate !== null && previousRate > 0
+        ? (displayedDelta / previousRate) * 100
+        : null;
+      const delta = displayedDelta !== null && orientation.inverted ? -displayedDelta : displayedDelta;
+      const deltaPercent = displayedDeltaPercent !== null && orientation.inverted ? -displayedDeltaPercent : displayedDeltaPercent;
+      let status: DiffStatus = 'stable';
+      if (previousRate === null && currentRate !== null) status = 'new';
+      else if (previousRate !== null && currentRate === null) status = 'deleted';
+      else if (delta !== null && delta > 1e-9) status = 'up';
+      else if (delta !== null && delta < -1e-9) status = 'down';
+      return {
+        key: currency,
+        fromCurrency: orientation.fromCurrency,
+        toCurrency: orientation.toCurrency,
+        previousRate,
+        currentRate,
+        delta,
+        deltaPercent,
+        status
+      };
+    })
+    .filter(rate => !onlyChanges || rate.status !== 'stable')
+    .sort((left, right) => left.key.localeCompare(right.key));
 };
 
 const renderTagPill = (tag: string, changed: boolean, removed = false) => {
@@ -258,6 +338,10 @@ export function SnapshotDiffModal({
     () => buildTreeDiffData(selectedCurrent, selectedPrevious, onlyChanges),
     [selectedCurrent, selectedPrevious, onlyChanges]
   );
+  const rateDiffData = useMemo(
+    () => buildRateDiffData(selectedCurrent, selectedPrevious, onlyChanges),
+    [onlyChanges, selectedCurrent, selectedPrevious]
+  );
   const selectedMonthFlowEntries = useMemo(
     () => flowEntries.filter(entry => entry.month === selectedCurrent.month && entry.entryType !== 'transfer'),
     [flowEntries, selectedCurrent.month]
@@ -371,6 +455,43 @@ export function SnapshotDiffModal({
               </div>
               <FlowNetSummary totals={selectedMonthFlowTotals} compact />
             </section>
+          )}
+
+          {rateDiffData.length > 0 && (
+            <details className="snapshot-diff-rates">
+              <summary className="snapshot-diff-rates-title">
+                <RefreshCw size={15} />
+                <strong>Exchange Rate Changes</strong>
+                <span>{rateDiffData.length} · {selectedPrevious?.month || '—'} → {selectedCurrent.month}</span>
+                <ChevronDown className="snapshot-diff-rates-chevron" size={15} />
+              </summary>
+              <div className="snapshot-diff-rate-list">
+                {rateDiffData.map(rate => {
+                  const deltaColor = rate.status === 'up' || rate.status === 'new'
+                    ? 'var(--diff-positive, hsl(142, 45%, 55%))'
+                    : rate.status === 'down' || rate.status === 'deleted'
+                      ? 'var(--diff-negative, hsl(0, 45%, 60%))'
+                      : 'var(--text-secondary)';
+                  const deltaSign = rate.delta !== null && rate.delta > 0 ? '+' : '';
+                  return (
+                    <div key={rate.key} className="snapshot-diff-rate-row">
+                      <strong style={{ color: getCurrencyColor(rate.fromCurrency) }}>{rate.fromCurrency} → {rate.toCurrency}</strong>
+                      <span className="snapshot-diff-rate-values">
+                        <b>{formatRate(rate.previousRate)}</b>
+                        <span>→</span>
+                        <b>{formatRate(rate.currentRate)}</b>
+                      </span>
+                      <span style={{ color: deltaColor, fontWeight: 750 }}>
+                        {rate.status === 'new' ? 'NEW' : rate.status === 'deleted' ? 'REMOVED' : rate.delta === null ? '—' : `${deltaSign}${formatRate(rate.delta)}`}
+                        {rate.deltaPercent !== null && (
+                          <small> ({deltaSign}{rate.deltaPercent.toFixed(2)}%)</small>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

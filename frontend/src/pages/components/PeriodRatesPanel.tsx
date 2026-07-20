@@ -77,7 +77,7 @@ export function PeriodRatesPanel({
               <AmountInput
                 value={rate}
                 onChange={value => onRateChange(currency, value)}
-                maximumFractionDigits={2}
+                maximumFractionDigits={8}
                 ariaLabel={`${currency} exchange rate`}
               />
             </div>

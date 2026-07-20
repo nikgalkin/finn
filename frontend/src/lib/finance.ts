@@ -81,6 +81,20 @@ export const convertAmount = (
   return (amount * sourceRate) / targetRate;
 };
 
+export const orientExchangeRate = (
+  fromCurrency: string,
+  toCurrency: string,
+  rate: number
+) => {
+  const inverted = Number.isFinite(rate) && rate > 0 && rate < 1;
+  return {
+    fromCurrency: inverted ? toCurrency : fromCurrency,
+    toCurrency: inverted ? fromCurrency : toCurrency,
+    rate: inverted ? 1 / rate : rate,
+    inverted
+  };
+};
+
 export const calculateTotals = (
   snapshot: ParsedSnapshot,
   baseCurrency: string,
