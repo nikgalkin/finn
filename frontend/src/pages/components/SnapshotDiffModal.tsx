@@ -8,6 +8,7 @@ import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
 import { FlowNetSummary } from './FlowNetSummary';
+import { ModalPortal } from './ModalPortal';
 import { SearchableSelect } from './graphs/SearchableSelect';
 
 type DiffStatus = 'new' | 'deleted' | 'up' | 'down' | 'stable';
@@ -54,7 +55,6 @@ type SnapshotDiffModalProps = {
   onClose: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0, zIndex: 10_000 } as const;
 const panelStyle = { width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflow: 'visible' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const balanceRowStyle = { display: 'grid', gridTemplateColumns: '68px minmax(130px, 1fr) 1fr 1fr 150px', alignItems: 'center', position: 'relative' as const, fontSize: '13px', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)', columnGap: '2px' };
 
@@ -399,13 +399,8 @@ export function SnapshotDiffModal({
     }
   };
 
-  return createPortal(
-    <div
-      className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      data-hotkeys-guard="true"
-      style={overlayStyle}
-      onClick={onClose}
-    >
+  return (
+    <ModalPortal className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" zIndex={10_000} onClose={onClose}>
       <div
         className="glass-panel flex flex-col"
         style={panelStyle}
@@ -652,7 +647,6 @@ export function SnapshotDiffModal({
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 }

@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { AlertTriangle, X } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 
 export type SettingsValidationIssue = {
   section: string;
@@ -13,7 +12,6 @@ type SettingsValidationModalProps = {
   onClose: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0, zIndex: 100000 } as const;
 const panelStyle = {
   width: '520px',
   maxWidth: '94vw',
@@ -25,27 +23,8 @@ const panelStyle = {
 } as const;
 
 export function SettingsValidationModal({ issues, onClose }: SettingsValidationModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      data-escape-guard="true"
-      data-hotkeys-guard="true"
-      style={overlayStyle}
-      onClick={onClose}
-    >
+  return (
+    <ModalPortal onClose={onClose} closeOnEscape>
       <div
         className="glass-panel"
         role="dialog"
@@ -90,7 +69,6 @@ export function SettingsValidationModal({ issues, onClose }: SettingsValidationM
           <button className="btn btn-primary" onClick={onClose} autoFocus>Review settings</button>
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 }

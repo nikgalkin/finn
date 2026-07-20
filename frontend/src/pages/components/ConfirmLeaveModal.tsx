@@ -1,5 +1,5 @@
-import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 
 type ConfirmLeaveModalProps = {
   message: string;
@@ -7,12 +7,11 @@ type ConfirmLeaveModalProps = {
   onConfirm: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0, zIndex: 100000 } as const;
 const panelStyle = { width: '440px', maxWidth: '92vw', padding: '20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 
 export function ConfirmLeaveModal({ message, onCancel, onConfirm }: ConfirmLeaveModalProps) {
-  return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-hotkeys-guard="true" style={overlayStyle} onClick={onCancel}>
+  return (
+    <ModalPortal onClose={onCancel}>
       <div className="glass-panel" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle size={20} style={{ color: '#eab308' }} />
@@ -26,7 +25,6 @@ export function ConfirmLeaveModal({ message, onCancel, onConfirm }: ConfirmLeave
           <button className="btn btn-danger" onClick={onConfirm}>Leave</button>
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 }

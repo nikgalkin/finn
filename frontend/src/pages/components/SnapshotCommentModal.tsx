@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 
 export type ActiveSnapshotComment = {
   type: 'month' | 'org' | 'balance';
@@ -46,17 +46,7 @@ export function CommentModal({
   saving = false,
   error = ''
 }: CommentModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || saving) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onClose, saving]);
+  useCloseOnEscape(onClose, { enabled: !saving, stopImmediatePropagation: false });
 
   return createPortal(
     <div

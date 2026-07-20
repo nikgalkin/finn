@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, FileUp, X } from 'lucide-react';
 import type { FlowCsvPreview } from '../../lib/flowCsv';
+import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { Spinner } from './PageLoader';
 
 type FlowCsvImportModalProps = {
@@ -17,15 +17,12 @@ type FlowCsvImportModalProps = {
 const formatAmount = (amount: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount);
 
 export function FlowCsvImportModal({ preview, importing, error, importDuplicates, onImportDuplicatesChange, onClose, onImport }: FlowCsvImportModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || importing) return;
-      event.preventDefault();
-      onClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [importing, onClose]);
+  useCloseOnEscape(onClose, {
+    enabled: !importing,
+    capture: false,
+    stopPropagation: false,
+    stopImmediatePropagation: false
+  });
 
   const months = new Set(preview.entries.map(entry => entry.month)).size;
   const shownEntries = preview.entries.slice(0, 100);

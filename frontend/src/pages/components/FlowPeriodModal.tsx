@@ -6,6 +6,7 @@ import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
 import { Spinner } from './PageLoader';
 import { QuickHoverTooltip } from './QuickHoverTooltip';
+import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { CommentModal } from './SnapshotCommentModal';
 import { SearchableSelect } from './graphs/SearchableSelect';
 
@@ -161,13 +162,12 @@ export function FlowPeriodModal({
     return () => window.clearTimeout(timer);
   }, [focusEntryID]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || commentEditor) return;
-      requestClose();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+  useCloseOnEscape(requestClose, {
+    enabled: !commentEditor,
+    capture: false,
+    preventDefault: false,
+    stopPropagation: false,
+    stopImmediatePropagation: false
   });
 
   const updateDraft = (clientID: string, patch: Partial<FlowPeriodDraft>) => {

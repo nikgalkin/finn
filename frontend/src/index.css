@@ -307,12 +307,11 @@ a {
   animation: quick-hover-in 70ms ease-out;
 }
 
-.timeframe-control {
+.timeframe-control,
+.ai-timeframe-control {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
-  padding: 8px 16px;
   box-sizing: border-box;
   border: 1px solid var(--glass-border);
   border-radius: 8px;
@@ -320,12 +319,19 @@ a {
   font-size: 14px;
 }
 
-.timeframe-control > span:first-child {
+.timeframe-control {
+  min-height: 38px;
+  padding: 8px 16px;
+}
+
+.timeframe-control > span:first-child,
+.ai-timeframe-control > span:first-child {
   color: var(--text-secondary);
   font-weight: 500;
 }
 
-.timeframe-control-arrow {
+.timeframe-control-arrow,
+.ai-timeframe-arrow {
   color: rgba(255, 255, 255, 0.2);
   font-weight: 700;
 }
@@ -839,10 +845,6 @@ a {
   grid-column: 11;
 }
 
-.cash-flow-period-remove {
-  grid-column: 12;
-}
-
 .cash-flow-period-row.is-transfer .cash-flow-period-transfer-from {
   grid-column: 3 / span 2;
 }
@@ -926,6 +928,7 @@ a {
 }
 
 .cash-flow-period-remove {
+  grid-column: 12;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1743,8 +1746,7 @@ a {
 }
 
 .ai-chat-heading-title,
-.ai-chat-header-actions,
-.ai-timeframe-control {
+.ai-chat-header-actions {
   display: flex;
   align-items: center;
 }
@@ -1770,24 +1772,8 @@ a {
 }
 
 .ai-timeframe-control {
-  gap: 8px;
   height: 38px;
   padding: 5px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  box-sizing: border-box;
-  font-size: 14px;
-}
-
-.ai-timeframe-control > span:first-child {
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.ai-timeframe-arrow {
-  color: rgba(255, 255, 255, 0.2);
-  font-weight: 700;
 }
 
 .ai-status-card {
@@ -2368,21 +2354,12 @@ a {
 }
 
 @media (max-width: 760px) {
-  .timeframe-control {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
   .cash-flow-modal-backdrop {
     align-items: stretch;
     padding: 8px;
   }
 
-  .cash-flow-period-modal {
-    width: 100%;
-    max-height: 100%;
-  }
-
+  .cash-flow-period-modal,
   .cash-flow-import-modal {
     width: 100%;
     max-height: 100%;
@@ -2431,19 +2408,14 @@ a {
     right: 10px;
   }
 
-  .cash-flow-source-setting-row {
-    grid-template-columns: minmax(0, 1fr) 82px 36px;
-  }
-
+  .cash-flow-source-setting-row,
   .cash-flow-source-setting-labels {
     grid-template-columns: minmax(0, 1fr) 82px 36px;
   }
 
-  .cash-flow-settings-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .local-ai-settings-grid {
+  .cash-flow-settings-grid,
+  .local-ai-settings-grid,
+  .ai-suggestions {
     grid-template-columns: 1fr;
   }
 
@@ -2457,7 +2429,10 @@ a {
   }
 
   .cash-flow-overview-summary,
-  .snapshot-diff-recorded-flow-heading {
+  .snapshot-diff-recorded-flow-heading,
+  .cash-flow-year-summary,
+  .ai-chat-page .sticky-page-header,
+  .ai-status-card {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -2468,40 +2443,26 @@ a {
     padding: 12px 14px;
   }
 
-  .cash-flow-year-summary {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .cash-flow-year-summary-actions {
     width: 100%;
     justify-content: space-between;
     flex-wrap: wrap;
   }
 
-  .cash-flow-period-group-actions {
+  .cash-flow-period-group-actions,
+  .ai-status-meta {
     flex-wrap: wrap;
   }
 
-  .ai-chat-page .sticky-page-header,
-  .ai-status-card {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .ai-chat-header-actions {
+  .timeframe-control,
+  .ai-chat-header-actions,
+  .ai-timeframe-control {
     width: 100%;
     flex-wrap: wrap;
   }
 
   .ai-timeframe-control {
-    width: 100%;
     height: auto;
-    flex-wrap: wrap;
-  }
-
-  .ai-status-meta {
-    flex-wrap: wrap;
   }
 
   .ai-status-controls {
@@ -2517,10 +2478,6 @@ a {
 
   .ai-context-modal-header {
     flex-direction: column;
-  }
-
-  .ai-suggestions {
-    grid-template-columns: 1fr;
   }
 
   .ai-message-list {

@@ -1,13 +1,11 @@
-import { useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { NAVIGATION_HOTKEYS } from '../../lib/hotkeys';
+import { ModalPortal } from './ModalPortal';
 
 type HotkeysHelpModalProps = {
   onClose: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0, zIndex: 100000 } as const;
 const panelStyle = { width: '460px', maxWidth: '92vw', padding: '20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const rowStyle = { display: 'grid', gridTemplateColumns: '72px 1fr', alignItems: 'center', gap: '12px', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' };
 const keyStyle = { justifySelf: 'start', minWidth: '32px', textAlign: 'center' as const, padding: '3px 8px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'rgba(15, 23, 42, 0.8)', fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)' };
@@ -28,22 +26,8 @@ const sections = [
 ];
 
 export function HotkeysHelpModal({ onClose }: HotkeysHelpModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onClose]);
-
-  return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-escape-guard="true" data-hotkeys-guard="true" style={overlayStyle} onClick={onClose}>
+  return (
+    <ModalPortal onClose={onClose} closeOnEscape>
       <div className="glass-panel" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 style={{ margin: 0, fontSize: '18px' }}>Keyboard Shortcuts</h3>
@@ -68,7 +52,6 @@ export function HotkeysHelpModal({ onClose }: HotkeysHelpModalProps) {
           ))}
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 }
