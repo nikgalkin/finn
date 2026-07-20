@@ -139,7 +139,7 @@ export default function SnapshotEdit() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [loading]);
+  }, [loading, setDurationSeconds]);
 
   useEffect(() => {
     if (!loading && settingsLoaded && !initialDataHash.current) {
@@ -185,7 +185,7 @@ export default function SnapshotEdit() {
         return prev;
       });
     }
-  }, [settings.currencies, settings.baseCurrency]);
+  }, [settings.currencies, settings.baseCurrency, setData]);
 
   const completeSave = () => {
     localStorage.removeItem(draftKey);

@@ -61,9 +61,34 @@ const normalizeSettings = (settings: StoredSettings): AppSettings => ({
   }
 });
 
+let cachedSettings: AppSettings | null = null;
+let settingsRequest: Promise<AppSettings> | null = null;
+
+const loadSettings = () => {
+  if (cachedSettings) return Promise.resolve(cachedSettings);
+
+  if (!settingsRequest) {
+    settingsRequest = fetch(`${API_URL}/settings`)
+      .then(response => {
+        if (!response.ok) throw new Error('Could not load settings.');
+        return response.json() as Promise<{ value: string }>;
+      })
+      .then(data => {
+        cachedSettings = normalizeSettings(JSON.parse(data.value));
+        return cachedSettings;
+      })
+      .catch(error => {
+        settingsRequest = null;
+        throw error;
+      });
+  }
+
+  return settingsRequest;
+};
+
 export function useSettings() {
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? defaultSettings);
+  const [loading, setLoading] = useState(() => cachedSettings === null);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
@@ -71,16 +96,18 @@ export function useSettings() {
 
     const handleSettingsUpdated = (event: Event) => {
       const updatedSettings = (event as CustomEvent<StoredSettings>).detail;
-      if (updatedSettings) setSettings(normalizeSettings(updatedSettings));
+      if (updatedSettings) {
+        cachedSettings = normalizeSettings(updatedSettings);
+        setSettings(cachedSettings);
+      }
     };
 
     window.addEventListener(SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
 
-    fetch(`${API_URL}/settings`)
-      .then(res => res.json())
-      .then(data => {
+    loadSettings()
+      .then(loadedSettings => {
         if (cancelled) return;
-        setSettings(normalizeSettings(JSON.parse(data.value)));
+        setSettings(loadedSettings);
       })
       .catch(err => {
         if (cancelled) return;

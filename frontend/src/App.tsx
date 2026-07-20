@@ -2,11 +2,6 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Bot, Keyboard, Power, ArrowDownUp } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
-import SnapshotEdit from './pages/SnapshotEdit';
-import CommentFeed from './pages/CommentFeed';
-import GraphsPage from './pages/GraphsPage';
-import Settings from './pages/Settings';
-import CashFlow from './pages/CashFlow';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { getNavigationHotkey, isTextInputTarget } from './lib/hotkeys';
 import { AppFooter } from './pages/components/AppFooter';
@@ -14,7 +9,13 @@ import { PageLoader } from './pages/components/PageLoader';
 import { API_URL } from './types';
 import { useSettings } from './hooks/useSettings';
 
-const AIChat = lazy(() => import('./pages/AIChat'));
+const loadDeferredRoutes = () => import('./pages/routeChunks/DeferredRoutes');
+const SnapshotEdit = lazy(() => loadDeferredRoutes().then(module => ({ default: module.SnapshotEdit })));
+const CommentFeed = lazy(() => loadDeferredRoutes().then(module => ({ default: module.CommentFeed })));
+const GraphsPage = lazy(() => loadDeferredRoutes().then(module => ({ default: module.GraphsPage })));
+const Settings = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Settings })));
+const CashFlow = lazy(() => loadDeferredRoutes().then(module => ({ default: module.CashFlow })));
+const AIChat = lazy(() => loadDeferredRoutes().then(module => ({ default: module.AIChat })));
 
 type BackupTargetResult = {
   name: string;
@@ -212,18 +213,20 @@ function App() {
         </div>
       </header>
       <main>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/snapshot" element={<SnapshotEdit />} />
-          <Route path="/snapshot/new" element={<SnapshotEdit />} />
-          <Route path="/snapshot/copy/:sourceMonth" element={<SnapshotEdit />} />
-          <Route path="/snapshot/:month" element={<SnapshotEdit />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/feed" element={<CommentFeed />} />
-          <Route path="/graphs" element={<GraphsPage />} />
-          <Route path="/flow" element={<CashFlow />} />
-          <Route path="/assistant" element={<Suspense fallback={<PageLoader label="Loading assistant" />}><AIChat /></Suspense>} />
-        </Routes>
+        <Suspense fallback={<PageLoader label="Loading page" />}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/snapshot" element={<SnapshotEdit />} />
+            <Route path="/snapshot/new" element={<SnapshotEdit />} />
+            <Route path="/snapshot/copy/:sourceMonth" element={<SnapshotEdit />} />
+            <Route path="/snapshot/:month" element={<SnapshotEdit />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/feed" element={<CommentFeed />} />
+            <Route path="/graphs" element={<GraphsPage />} />
+            <Route path="/flow" element={<CashFlow />} />
+            <Route path="/assistant" element={<AIChat />} />
+          </Routes>
+        </Suspense>
       </main>
       <AppFooter />
       {showHotkeysHelp && (

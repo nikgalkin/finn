@@ -25,7 +25,7 @@ export function useSnapshotDraft({
     if (savedDraft) {
       try {
         setDraftToRestore(JSON.parse(savedDraft));
-      } catch (e) {
+      } catch {
         localStorage.removeItem(draftKey);
       }
     }
