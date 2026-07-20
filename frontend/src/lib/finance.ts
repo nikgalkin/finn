@@ -1,4 +1,4 @@
-import type { Balance, ParsedSnapshot, Organization } from '../types';
+import type { Balance, FlowEntry, ParsedSnapshot, Organization } from '../types';
 
 export type SnapshotTotals = {
   totalBase: number;
@@ -8,6 +8,26 @@ export type SnapshotTotals = {
 export type FlowDecomposition = {
   organicDelta: number;
   fxImpactDelta: number;
+};
+
+export type EstimatedCapitalReturn = {
+  externalFlow: number;
+  result: number;
+  ratePercent: number | null;
+};
+
+export type TaggedCapitalReturn = {
+  tag: string;
+  openingCapital: number;
+  assignedFlow: number;
+  result: number;
+  ratePercent: number | null;
+};
+
+export type TaggedCapitalReturnBreakdown = {
+  returns: TaggedCapitalReturn[];
+  assignedExternalEntries: number;
+  totalExternalEntries: number;
 };
 
 export type CommentItem = {
@@ -109,6 +129,14 @@ export const calculateCurrencyTotals = (snapshot: ParsedSnapshot) => {
   return totals;
 };
 
+export const calculateSnapshotTotalAtRates = (
+  snapshot: ParsedSnapshot,
+  rates: Record<string, number | string>,
+  baseCurrency: string
+) => Object.entries(calculateCurrencyTotals(snapshot)).reduce((total, [currency, amount]) => (
+  total + convertAmount(amount, currency, baseCurrency, rates)
+), 0);
+
 export const calculateFlowDecomposition = (
   current: ParsedSnapshot,
   previous: ParsedSnapshot | null,
@@ -142,6 +170,138 @@ export const calculateFlowDecomposition = (
 
     return result;
   }, { organicDelta: 0, fxImpactDelta: 0 });
+};
+
+export const calculateNetExternalFlow = (
+  entries: FlowEntry[],
+  rates: Record<string, number | string>,
+  baseCurrency: string
+) => entries.reduce((total, entry) => {
+  if (entry.entryType === 'transfer') return total;
+  const tax = entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0;
+  const signedNetAmount = entry.direction === 'in' ? entry.amount - tax : -entry.amount;
+  return total + convertAmount(signedNetAmount, entry.currency, baseCurrency, rates);
+}, 0);
+
+export const calculateEstimatedCapitalReturn = (
+  organicDelta: number,
+  previousCapitalAtCurrentRates: number,
+  externalFlow: number
+): EstimatedCapitalReturn => {
+  const result = organicDelta - externalFlow;
+  // Balance changes and Cash Flow are valued at current snapshot rates, so the
+  // opening capital must use the same rates. Cash Flow only has month precision,
+  // therefore movements are assumed to happen halfway through the month.
+  const averageInvestedCapital = previousCapitalAtCurrentRates + externalFlow / 2;
+  const ratePercent = averageInvestedCapital > 0 ? (result / averageInvestedCapital) * 100 : null;
+  return { externalFlow, result, ratePercent };
+};
+
+const balanceAccountKey = (account: string, currency: string) => `${account}\u001f${currency}`;
+const analyticalTags = (tags?: string[]) => tags && tags.length > 0 ? tags.filter(Boolean) : ['untagged'];
+
+export const calculateTaggedCapitalReturns = (
+  current: ParsedSnapshot,
+  previous: ParsedSnapshot,
+  entries: FlowEntry[],
+  baseCurrency: string
+): TaggedCapitalReturnBreakdown => {
+  type AccountBalance = { amount: number; tags: string[] };
+  const collectBalances = (snapshot: ParsedSnapshot) => {
+    const balances = new Map<string, AccountBalance>();
+    snapshot.data.organizations.forEach(organization => {
+      organization.balances.forEach(balance => {
+        if (!organization.name || !balance.currency) return;
+        const key = balanceAccountKey(organization.name, balance.currency);
+        const existing = balances.get(key);
+        const amount = toNumber(balance.amount);
+        const tags = analyticalTags(balance.tags);
+        balances.set(key, {
+          amount: (existing?.amount || 0) + amount,
+          tags: Array.from(new Set([...(existing?.tags || []), ...tags]))
+        });
+      });
+    });
+    return balances;
+  };
+
+  const currentBalances = collectBalances(current);
+  const previousBalances = collectBalances(previous);
+  const accountTags = new Map<string, string[]>();
+  [previous, current].forEach(snapshot => {
+    snapshot.data.organizations.forEach(organization => {
+      if (!organization.name) return;
+      const tags = organization.balances.flatMap(balance => balance.tags?.filter(Boolean) || []);
+      accountTags.set(organization.name, Array.from(new Set([...(accountTags.get(organization.name) || []), ...tags])));
+    });
+  });
+  const assignedFlows = new Map<string, number>();
+  const addAssignedFlow = (account: string, currency: string, amount: number) => {
+    if (!account || !currency || amount === 0) return;
+    const key = balanceAccountKey(account, currency);
+    assignedFlows.set(key, (assignedFlows.get(key) || 0) + convertAmount(amount, currency, baseCurrency, current.data.rates));
+  };
+
+  let totalExternalEntries = 0;
+  let assignedExternalEntries = 0;
+  entries.forEach(entry => {
+    if (entry.entryType === 'transfer') {
+      addAssignedFlow(entry.account, entry.currency, -entry.amount);
+      addAssignedFlow(entry.toAccount, entry.toCurrency, entry.toAmount);
+      return;
+    }
+    totalExternalEntries += 1;
+    if (!entry.account) return;
+    assignedExternalEntries += 1;
+    const tax = entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0;
+    addAssignedFlow(entry.account, entry.currency, entry.direction === 'in' ? entry.amount - tax : -entry.amount);
+  });
+
+  const totals = new Map<string, { openingCapital: number; assignedFlow: number; result: number }>();
+  const addToTag = (tag: string, field: 'openingCapital' | 'assignedFlow' | 'result', value: number) => {
+    const total = totals.get(tag) || { openingCapital: 0, assignedFlow: 0, result: 0 };
+    total[field] += value;
+    totals.set(tag, total);
+  };
+
+  const allKeys = new Set([...currentBalances.keys(), ...previousBalances.keys(), ...assignedFlows.keys()]);
+  allKeys.forEach(key => {
+    const separator = key.lastIndexOf('\u001f');
+    const account = key.slice(0, separator);
+    const currency = key.slice(separator + 1);
+    const currentBalance = currentBalances.get(key);
+    const previousBalance = previousBalances.get(key);
+    const tags = currentBalance?.tags.length
+      ? currentBalance.tags
+      : previousBalance?.tags.length
+        ? previousBalance.tags
+        : accountTags.get(account)?.length
+          ? accountTags.get(account)!
+          : ['untagged'];
+    const tagShare = 1 / tags.length;
+    // Keep the return denominator in the same valuation basis as organicDelta
+    // and assignedFlow, while FX impact remains a separate reconciliation item.
+    const openingCapital = convertAmount(previousBalance?.amount || 0, currency, baseCurrency, current.data.rates);
+    const organicDelta = convertAmount((currentBalance?.amount || 0) - (previousBalance?.amount || 0), currency, baseCurrency, current.data.rates);
+    const assignedFlow = assignedFlows.get(key) || 0;
+
+    tags.forEach(tag => {
+      addToTag(tag, 'openingCapital', openingCapital * tagShare);
+      addToTag(tag, 'assignedFlow', assignedFlow * tagShare);
+      addToTag(tag, 'result', (organicDelta - assignedFlow) * tagShare);
+    });
+  });
+
+  const returns = Array.from(totals.entries()).map(([tag, total]) => {
+    const averageCapital = total.openingCapital + total.assignedFlow / 2;
+    return {
+      tag,
+      ...total,
+      ratePercent: averageCapital > 0 ? (total.result / averageCapital) * 100 : null
+    };
+  }).sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
+
+  return { returns, assignedExternalEntries, totalExternalEntries };
 };
 
 export const hasAnyComments = (snapshot: ParsedSnapshot) => {

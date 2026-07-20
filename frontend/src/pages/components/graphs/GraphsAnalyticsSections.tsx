@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Activity, ArrowLeftRight, BarChart3, ChevronDown, Clock, Grid, Landmark, Layers, LineChart as LineChartIcon, ListFilter, Percent, TrendingUp } from 'lucide-react';
-import { AreaChart, Area, LineChart, Line, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
 import { HelpTooltip } from '../HelpTooltip';
 
@@ -28,24 +28,46 @@ type ConcentrationStat = {
   percent: number;
 };
 
+type CapitalReturnSummary = {
+  organicChange: number;
+  externalFlow: number;
+  result: number;
+  ratePercent: number;
+};
+
+type TagReturnStat = {
+  tag: string;
+  result: number;
+  ratePercent: number | null;
+};
+
+export type LegendGroup = 'currencies' | 'organizations' | 'tags';
+export type HiddenLegendSeries = Record<LegendGroup, Record<string, boolean>>;
+
 type GraphsAnalyticsSectionsProps = {
   baseCurrency: string;
+  cashFlowEnabled: boolean;
+  capitalReturnSummary?: CapitalReturnSummary;
   activeCurrencies: string[];
   allOrganizations: string[];
   allUsedCurrencies: string[];
   allUsedTags: string[];
   chartColors: string[];
   concentrationStats: ConcentrationStat[];
+  cashFlowMonthlyData: ChartDatum[];
+  cashFlowEventsData: ChartDatum[];
   currencyDistributionData: ChartDatum[];
   currencyRatesData: ChartDatum[];
   decompositionData: ChartDatum[];
   flowChartData: ChartDatum[];
-  hiddenBalances: Record<string, boolean>;
+  hiddenSeries: HiddenLegendSeries;
   latestSnapshotMonth?: string;
   netWorthData: ChartDatum[];
   orgTrendData: ChartDatum[];
   summaryStats: SummaryStat[];
   tagDistributionData: ChartDatum[];
+  tagReturnCoverage: { assigned: number; total: number };
+  tagReturnStats: TagReturnStat[];
   topCurrencyMovers: MoverDatum[];
   topOrganizationMovers: MoverDatum[];
   topTagMovers: MoverDatum[];
@@ -53,12 +75,12 @@ type GraphsAnalyticsSectionsProps = {
   uxMetricsData: ChartDatum[];
   formatCompact: (value: number) => string;
   formatFriendlyTime: (seconds: number) => string;
-  handleLegendClickSmart: (event: any, allKeys: string[]) => void;
+  handleLegendClickSmart: (group: LegendGroup, event: any, allKeys: string[]) => void;
 };
 
 const LEGEND_STYLE = { cursor: 'pointer', fontSize: '12px', userSelect: 'none' as const };
 const CARD_STYLE = { height: '350px', display: 'flex', flexDirection: 'column' as const };
-const GRID_2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '24px' };
+const GRID_2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' };
 const SECTION_TITLE_STYLE = { color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' };
 const TOOLTIP_STYLE = { backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 };
 
@@ -211,6 +233,29 @@ const OrgCustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+const CashFlowEventTooltip = ({ active, payload, baseCurrency }: any) => {
+  if (!active || !payload || !payload.length) return null;
+  const event = payload[0].payload;
+
+  return (
+    <div className="custom-tooltip shadow-2xl" style={{ ...TOOLTIP_STYLE, padding: '11px 14px', fontSize: '12px', minWidth: '220px', maxWidth: '300px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '9px', paddingBottom: '7px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+        <strong style={{ color: event.fill }}>{event.category}</strong>
+        <span style={{ color: 'var(--text-secondary)', fontWeight: 700 }}>{event.month}</span>
+      </div>
+      <div style={{ color: event.fill, fontSize: '17px', fontWeight: 850, marginBottom: '8px' }}>
+        {formatSigned(Number(event.amount))} {baseCurrency}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '5px 10px', color: 'var(--text-secondary)' }}>
+        {event.counterparty && <><span>Counterparty</span><strong style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{event.counterparty}</strong></>}
+        {Number(event.taxAmount) > 0 && <><span>Gross incoming</span><strong style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{formatMoney(Number(event.grossAmount), baseCurrency)}</strong></>}
+        {Number(event.taxAmount) > 0 && <><span>Tax</span><strong style={{ color: '#f97316', textAlign: 'right' }}>−{formatMoney(Number(event.taxAmount), baseCurrency)}</strong></>}
+      </div>
+      {event.comment && <div style={{ marginTop: '9px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{event.comment}</div>}
+    </div>
+  );
+};
+
 const SummaryCard = ({ stat }: { stat: SummaryStat }) => {
   const color = stat.label === 'Net worth' ? 'var(--text-primary)' : getDeltaColor(stat.value);
 
@@ -274,22 +319,28 @@ const MoversList = ({ title, icon, data, baseCurrency, help }: { title: string; 
 
 export function GraphsAnalyticsSections({
   baseCurrency,
+  cashFlowEnabled,
+  capitalReturnSummary,
   activeCurrencies,
   allOrganizations,
   allUsedCurrencies,
   allUsedTags,
   chartColors,
   concentrationStats,
+  cashFlowMonthlyData,
+  cashFlowEventsData,
   currencyDistributionData,
   currencyRatesData,
   decompositionData,
   flowChartData,
-  hiddenBalances,
+  hiddenSeries,
   latestSnapshotMonth,
   netWorthData,
   orgTrendData,
   summaryStats,
   tagDistributionData,
+  tagReturnCoverage,
+  tagReturnStats,
   topCurrencyMovers,
   topOrganizationMovers,
   topTagMovers,
@@ -317,10 +368,67 @@ export function GraphsAnalyticsSections({
   return (
     <>
       <section>
-        <h3 className="mb-4" style={SECTION_TITLE_STYLE}>PERIOD SNAPSHOT</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
           {summaryStats.map(stat => <SummaryCard key={stat.label} stat={stat} />)}
         </div>
+        {cashFlowEnabled && capitalReturnSummary && (
+          <div style={{ ...GRID_2, marginTop: '12px' }}>
+            <div className="glass-panel" style={{ padding: '18px 20px' }}>
+              <ChartTitle
+                icon={<TrendingUp size={16} style={{ color: '#10b981' }} />}
+                help="This is a reconciliation, not a broker statement. Balance changes are measured without FX impact; recorded external money is removed, leaving the estimated earnings of unlogged instruments."
+              >
+                How estimated capital earnings are calculated
+              </ChartTitle>
+              <div className="capital-return-formula">
+                <div><span>Balance change excluding FX</span><strong>{formatSigned(capitalReturnSummary.organicChange)} {baseCurrency}</strong></div>
+                <div><span>Minus net external Cash Flow</span><strong>{formatSigned(capitalReturnSummary.externalFlow)} {baseCurrency}</strong></div>
+                <div className="is-result"><span>Estimated capital earnings</span><strong style={{ color: getDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong></div>
+              </div>
+              <div className="capital-return-rate">
+                <span>Time-weighted return for selected period (not annualized)</span>
+                <strong style={{ color: getDeltaColor(capitalReturnSummary.ratePercent) }}>{capitalReturnSummary.ratePercent > 0 ? '+' : ''}{capitalReturnSummary.ratePercent.toFixed(2)}%</strong>
+              </div>
+              <div className="capital-return-transfer-note">
+                Internal transfers do not change net external Cash Flow. Any value difference between their sent and received legs remains in the balance reconciliation; both legs are mapped to their accounts for tag attribution.
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '18px 20px' }}>
+              <ChartTitle
+                icon={<Layers size={16} style={{ color: '#14b8a6' }} />}
+                help="A movement can be attributed to a deposit or stock tag only when its Own account is selected in Cash Flow. The amount is money earned across the selected months. The percentage is a time-weighted return: it follows a virtual unit of money through every month while ignoring deposits and withdrawals. Their signs can therefore differ when the invested balance changes."
+              >
+                Estimated earnings by balance tag
+              </ChartTitle>
+              <div className="capital-return-tag-list">
+                {tagReturnStats.map(item => (
+                  <div key={item.tag} className="capital-return-tag-row">
+                    <span style={{ color: item.tag === 'untagged' ? 'var(--text-secondary)' : getTagColor(item.tag) }}>{item.tag}</span>
+                    <strong style={{ color: getDeltaColor(item.result) }}>{formatSigned(item.result)} {baseCurrency}</strong>
+                    <strong style={{ color: item.ratePercent === null ? 'var(--text-secondary)' : getDeltaColor(item.ratePercent) }}>
+                      {item.ratePercent === null ? '—' : `${item.ratePercent > 0 ? '+' : ''}${item.ratePercent.toFixed(2)}%`}
+                    </strong>
+                  </div>
+                ))}
+                {tagReturnStats.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Choose at least two snapshots to estimate earnings by tag.</div>}
+              </div>
+              {tagReturnStats.length > 0 && (
+                <div className="capital-return-transfer-note">
+                  Amount is money earned. Time-weighted return follows a virtual 1 {baseCurrency} through every month, ignoring deposits and withdrawals. Their signs can differ when the invested balance changes.
+                </div>
+              )}
+              {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned < tagReturnCoverage.total && (
+                <div className="capital-return-coverage-warning">
+                  {tagReturnCoverage.assigned} of {tagReturnCoverage.total} external movements are assigned to an own account. Assign the rest in Cash Flow for a trustworthy deposit or stock breakdown.
+                </div>
+              )}
+              {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned === tagReturnCoverage.total && (
+                <div className="capital-return-coverage-complete">All external movements in this period are assigned to accounts.</div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       <section>
@@ -366,9 +474,11 @@ export function GraphsAnalyticsSections({
           <div className="glass-panel" style={{ ...CARD_STYLE, gridColumn: 'span 2' }}>
             <ChartTitle
               icon={<ArrowLeftRight size={16} style={{ color: '#10b981' }} />}
-              help={`Splits each snapshot change into organic flow and exchange-rate impact. Organic flow uses balance amount changes at current rates; FX impact applies rate changes to previous balances.`}
+              help={cashFlowEnabled
+                ? `Reconciles each snapshot change into recorded external Cash Flow, estimated unrecorded capital return, and exchange-rate impact. Internal transfers are excluded from Cash Flow.`
+                : `Splits each snapshot change into organic flow and exchange-rate impact. Enable Cash Flow to separate external movements from estimated capital return.`}
             >
-              Deposits & FX Impact Monthly Changes ({baseCurrency})
+              {cashFlowEnabled ? 'Capital Return Decomposition' : 'Organic Flow & FX Impact'} ({baseCurrency})
             </ChartTitle>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={decompositionData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
@@ -377,8 +487,18 @@ export function GraphsAnalyticsSections({
                 <YAxis stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(val) => formatMoney(Number(val), baseCurrency)} />
                 <Legend wrapperStyle={{ fontSize: '12px', userSelect: 'none' }} />
-                <Bar dataKey="Deposits" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="FX Impact" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                {cashFlowEnabled ? (
+                  <>
+                    <Bar dataKey="External flow" stackId="change" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Capital earnings" stackId="change" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="FX Impact" stackId="change" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </>
+                ) : (
+                  <>
+                    <Bar dataKey="Organic flow" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="FX Impact" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </>
+                )}
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -429,9 +549,9 @@ export function GraphsAnalyticsSections({
                   style={{ fontSize: '12px' }}
                 />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={allocationFormatter} />
-                <Legend onClick={(event) => handleLegendClickSmart(event, allUsedCurrencies)} wrapperStyle={LEGEND_STYLE} />
+                <Legend onClick={(event) => handleLegendClickSmart('currencies', event, allUsedCurrencies)} wrapperStyle={LEGEND_STYLE} />
                 {allUsedCurrencies.map(currency => (
-                  <Bar key={currency} dataKey={currency} stackId="currency_stack" fill={getCurrencyColor(currency)} hide={hiddenBalances[currency]} />
+                  <Bar key={currency} dataKey={currency} stackId="currency_stack" fill={getCurrencyColor(currency)} hide={hiddenSeries.currencies[currency]} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
@@ -450,9 +570,9 @@ export function GraphsAnalyticsSections({
                 <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
                 <YAxis stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
                 <Tooltip content={<OrgCustomTooltip />} />
-                <Legend onClick={(event) => handleLegendClickSmart(event, allOrganizations)} wrapperStyle={LEGEND_STYLE} />
+                <Legend onClick={(event) => handleLegendClickSmart('organizations', event, allOrganizations)} wrapperStyle={LEGEND_STYLE} />
                 {allOrganizations.map((orgName, idx) => (
-                  <Area key={orgName} type="monotone" dataKey={orgName} stackId="1" stroke={chartColors[idx % chartColors.length]} fill={chartColors[idx % chartColors.length]} fillOpacity={0.4} hide={hiddenBalances[orgName]} />
+                  <Area key={orgName} type="monotone" dataKey={orgName} stackId="1" stroke={chartColors[idx % chartColors.length]} fill={chartColors[idx % chartColors.length]} fillOpacity={0.4} hide={hiddenSeries.organizations[orgName]} />
                 ))}
               </AreaChart>
             </ResponsiveContainer>
@@ -477,9 +597,9 @@ export function GraphsAnalyticsSections({
                   style={{ fontSize: '12px' }}
                 />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={allocationFormatter} />
-                <Legend onClick={(event) => handleLegendClickSmart(event, allUsedTags)} wrapperStyle={LEGEND_STYLE} />
+                <Legend onClick={(event) => handleLegendClickSmart('tags', event, allUsedTags)} wrapperStyle={LEGEND_STYLE} />
                 {allUsedTags.map(tag => (
-                  <Bar key={tag} dataKey={tag} stackId="tags_stack" fill={tag === 'untagged' ? '#475569' : getTagColor(tag)} hide={hiddenBalances[tag]} />
+                  <Bar key={tag} dataKey={tag} stackId="tags_stack" fill={tag === 'untagged' ? '#475569' : getTagColor(tag)} hide={hiddenSeries.tags[tag]} />
                 ))}
               </BarChart>
             </ResponsiveContainer>
@@ -606,20 +726,100 @@ export function GraphsAnalyticsSections({
                   return [`${num} ${baseCurrency}`, name];
                 }}
               />
-              <Legend onClick={(event) => handleLegendClickSmart(event, activeCurrencies)} wrapperStyle={LEGEND_STYLE} />
+              <Legend onClick={(event) => handleLegendClickSmart('currencies', event, activeCurrencies)} wrapperStyle={LEGEND_STYLE} />
               {activeCurrencies.map(currency => {
                 const samplePoint = currencyRatesData[0];
                 const isHighNominal = samplePoint && samplePoint[`${currency}_isInverted`] === true;
                 const yAxisId = isHighNominal ? 'right' : 'left';
 
                 return (
-                  <Line key={currency} yAxisId={yAxisId} type="monotone" dataKey={currency} stroke={getCurrencyColor(currency)} strokeWidth={2} dot={{ r: 3 }} hide={hiddenBalances[currency]} />
+                  <Line key={currency} yAxisId={yAxisId} type="monotone" dataKey={currency} stroke={getCurrencyColor(currency)} strokeWidth={2} dot={{ r: 3 }} hide={hiddenSeries.currencies[currency]} />
                 );
               })}
             </LineChart>
           </ResponsiveContainer>
         </div>
       </details>
+
+      {cashFlowEnabled && (
+        <details className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
+          <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', cursor: 'pointer', userSelect: 'none', listStyle: 'none', borderBottom: '1px solid var(--glass-border)' }}>
+            <ArrowLeftRight size={16} style={{ color: '#3b82f6' }} />
+            <span style={{ fontWeight: 800 }}>Cash Flow</span>
+            <HelpTooltip text={`Shows recorded external Cash Flow converted to ${baseCurrency} with each month's snapshot rates. Internal transfers are excluded from income, spending, savings rate, and event analysis.`} />
+            <ChevronDown size={16} style={{ marginLeft: 'auto', color: 'var(--text-secondary)' }} />
+          </summary>
+          <div style={{ ...GRID_2, padding: '20px' }}>
+            <div style={{ ...CARD_STYLE, height: '320px' }}>
+              <ChartTitle
+                icon={<ArrowLeftRight size={16} style={{ color: '#3b82f6' }} />}
+                help={`Shows after-tax incoming and spending converted to ${baseCurrency} with each month's snapshot rates. The line is how much remained after spending. Internal transfers are excluded.`}
+              >
+                Monthly Cash Flow ({baseCurrency})
+              </ChartTitle>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cashFlowMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
+                  <YAxis stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => formatMoney(Number(value), baseCurrency)} />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
+                  <Bar dataKey="After-tax income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Spending" fill="#ef4444" radius={[0, 0, 4, 4]} />
+                  <Line type="monotone" dataKey="Net saved" stroke="#60a5fa" strokeWidth={3} dot={{ r: 3, fill: 'var(--bg-color)', strokeWidth: 2 }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ ...CARD_STYLE, height: '320px' }}>
+              <ChartTitle
+                icon={<Percent size={16} style={{ color: '#60a5fa' }} />}
+                help="Monthly share of after-tax income left after spending. The bars show each month; the line is a rolling three-month average. Months without incoming money have no rate. Internal transfers are excluded."
+              >
+                Savings Rate
+              </ChartTitle>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cashFlowMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
+                  <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => `${Math.round(value)}%`} style={{ fontSize: '12px' }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]} />
+                  <Legend wrapperStyle={LEGEND_STYLE} />
+                  <ReferenceLine y={0} stroke="rgba(148, 163, 184, 0.55)" />
+                  <Bar dataKey="Savings rate" fill="#10b981" radius={[4, 4, 0, 0]}>
+                    {cashFlowMonthlyData.map(point => (
+                      <Cell key={point.month} fill={Number(point['Savings rate']) >= 0 ? '#10b981' : '#ef4444'} />
+                    ))}
+                  </Bar>
+                  <Line type="monotone" dataKey="3M average" stroke="#60a5fa" strokeWidth={3} connectNulls dot={{ r: 3, fill: 'var(--bg-color)', strokeWidth: 2 }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div style={{ ...CARD_STYLE, height: '380px', gridColumn: '1 / -1' }}>
+              <ChartTitle
+                icon={<Activity size={16} style={{ color: '#a78bfa' }} />}
+                help={`Shows every external movement in the selected period. Incoming events are green and above zero; spending is red and below zero. Bubble size reflects the amount. Incoming points use the after-tax value, while the tooltip also shows gross incoming and tax. Internal transfers are excluded.`}
+              >
+                Cash Flow Events ({baseCurrency})
+              </ChartTitle>
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 12, right: 18, left: 0, bottom: 12 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis type="category" dataKey="month" name="Month" stroke="var(--text-secondary)" allowDuplicatedCategory={false} style={{ fontSize: '12px' }} />
+                  <YAxis type="number" dataKey="amount" name="Amount" stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
+                  <ZAxis type="number" dataKey="magnitude" range={[70, 520]} />
+                  <Tooltip content={<CashFlowEventTooltip baseCurrency={baseCurrency} />} cursor={{ strokeDasharray: '3 3' }} />
+                  <ReferenceLine y={0} stroke="rgba(148, 163, 184, 0.55)" />
+                  <Scatter data={cashFlowEventsData} name="Cash Flow event" fill="#10b981">
+                    {cashFlowEventsData.map(point => <Cell key={point.id} fill={point.fill} />)}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </details>
+      )}
 
       <details className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
         <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', cursor: 'pointer', userSelect: 'none', listStyle: 'none', borderBottom: '1px solid var(--glass-border)' }}>
@@ -674,6 +874,7 @@ export function GraphsAnalyticsSections({
           </div>
         </div>
       </details>
+
     </>
   );
 }

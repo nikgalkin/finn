@@ -21,12 +21,17 @@ export function AmountFieldHelp() {
         Use +, -, *, / and parentheses. Examples: 1200 + 350, (100 + 20) * 3, -500.
       </div>
       <div style={{ marginBottom: '4px', fontWeight: 700 }}>Number shortcuts</div>
+      <div style={{ marginBottom: '8px' }}>
+        Thousands are grouped with spaces. Both 1.5 and 1,5 are accepted as decimals.{`\n\n`}
+        k = 3 zeros (1k = 1 000){'\n'}
+        kk or m = 6 zeros (1kk = 1m = 1 000 000){'\n'}
+        b = 9 zeros (1b = 1 000 000 000){'\n'}
+        mm = 12 zeros (1mm = 1 000 000 000 000){'\n\n'}
+        Shortcuts are case-insensitive and work inside expressions, for example 1m + 250k or 1,5k * 2.
+      </div>
+      <div style={{ marginBottom: '4px', fontWeight: 700 }}>One month of annual interest</div>
       <div>
-        k = 3 zeros (1k = 1,000){'\n'}
-        kk or m = 6 zeros (1kk = 1m = 1,000,000){'\n'}
-        b = 9 zeros (1b = 1,000,000,000){'\n'}
-        mm = 12 zeros (1mm = 1,000,000,000,000){'\n\n'}
-        Shortcuts are case-insensitive and work inside expressions, for example 1m + 250k or 1.5k * 2.
+        Add or subtract a trailing annual rate with %. Example: 100 + 12% = 101, calculated as 100 + (100 × 12% ÷ 12). The shortcut always applies one month of interest to the expression before it.
       </div>
     </div>
   );
@@ -36,10 +41,8 @@ const formatAmount = (amount: number | string, maximumFractionDigits: number) =>
   if (amount === 0) return '';
   const numericAmount = typeof amount === 'number' ? amount : Number(amount);
   if (!Number.isFinite(numericAmount)) return amount;
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(numericAmount);
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(numericAmount).replace(/,/g, ' ');
 };
-
-const rawAmount = (amount: number | string) => amount === 0 ? '' : String(amount);
 
 export function AmountInput({
   value,
@@ -49,16 +52,16 @@ export function AmountInput({
   ariaLabel = 'Amount'
 }: AmountInputProps) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(() => rawAmount(value));
+  const [draft, setDraft] = useState(() => formatAmount(value, maximumFractionDigits));
 
   useEffect(() => {
-    if (!editing) setDraft(rawAmount(value));
-  }, [editing, value]);
+    if (!editing) setDraft(formatAmount(value, maximumFractionDigits));
+  }, [editing, maximumFractionDigits, value]);
 
   const commitValue = (rawValue: string) => {
     const committed = evaluateNumberExpression(rawValue);
     setEditing(false);
-    setDraft(rawAmount(committed));
+    setDraft(formatAmount(committed, maximumFractionDigits));
     onChange(committed);
   };
 
@@ -68,13 +71,10 @@ export function AmountInput({
       inputMode="decimal"
       className="input"
       aria-label={ariaLabel}
-      value={editing ? draft : formatAmount(value, maximumFractionDigits)}
+      value={draft}
       placeholder="0"
       required={required}
-      onFocus={() => {
-        setDraft(rawAmount(value));
-        setEditing(true);
-      }}
+      onFocus={() => setEditing(true)}
       onChange={event => {
         setDraft(event.target.value);
         onChange(event.target.value);

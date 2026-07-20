@@ -120,7 +120,7 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 	rows.Close()
 
 	rows, err = db.Query(`
-		SELECT id, month, direction, counterparty, currency, amount, tax_rate, category, comment
+		SELECT id, month, entry_type, direction, counterparty, account, currency, amount, tax_rate, category, comment, to_account, to_currency, to_amount
 		FROM flow_entries
 		ORDER BY id
 	`)
@@ -129,9 +129,9 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 	}
 	for rows.Next() {
 		var id int64
-		var month, direction, counterparty, currency, category, comment string
-		var amount, taxRate float64
-		if err := rows.Scan(&id, &month, &direction, &counterparty, &currency, &amount, &taxRate, &category, &comment); err != nil {
+		var month, entryType, direction, counterparty, account, currency, category, comment, toAccount, toCurrency string
+		var amount, taxRate, toAmount float64
+		if err := rows.Scan(&id, &month, &entryType, &direction, &counterparty, &account, &currency, &amount, &taxRate, &category, &comment, &toAccount, &toCurrency, &toAmount); err != nil {
 			rows.Close()
 			return "", err
 		}
@@ -140,8 +140,10 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 		binary.BigEndian.PutUint64(number[:], uint64(id))
 		_, _ = h.Write(number[:])
 		writeFingerprintString(h, month)
+		writeFingerprintString(h, entryType)
 		writeFingerprintString(h, direction)
 		writeFingerprintString(h, counterparty)
+		writeFingerprintString(h, account)
 		writeFingerprintString(h, currency)
 		binary.BigEndian.PutUint64(number[:], math.Float64bits(amount))
 		_, _ = h.Write(number[:])
@@ -149,6 +151,10 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 		_, _ = h.Write(number[:])
 		writeFingerprintString(h, category)
 		writeFingerprintString(h, comment)
+		writeFingerprintString(h, toAccount)
+		writeFingerprintString(h, toCurrency)
+		binary.BigEndian.PutUint64(number[:], math.Float64bits(toAmount))
+		_, _ = h.Write(number[:])
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -207,12 +213,43 @@ func latestBackupFingerprint(target BackupTarget) (string, error) {
 	return fingerprintFromBackupName(latestName), nil
 }
 
+func compactBackupVersion(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(strings.ToLower(value), "v") {
+		value = value[1:]
+	}
+	var label strings.Builder
+	lastWasSeparator := false
+	for _, character := range value {
+		isLetter := character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z'
+		isDigit := character >= '0' && character <= '9'
+		if character == '.' {
+			continue
+		}
+		if isLetter || isDigit || character == '-' {
+			label.WriteRune(character)
+			lastWasSeparator = character == '-'
+			continue
+		}
+		if label.Len() > 0 && !lastWasSeparator {
+			label.WriteByte('-')
+			lastWasSeparator = true
+		}
+	}
+	compact := strings.Trim(label.String(), "-")
+	if compact == "" {
+		compact = "dev"
+	}
+	return "v" + compact
+}
+
 func backupFilename(timestamp, fingerprint, extension string, sequence int) string {
 	shortFingerprint := fingerprint[:backupHashLength]
+	versionLabel := compactBackupVersion(version)
 	if sequence == 1 {
-		return fmt.Sprintf("%s%s_%s.%s", backupPrefix, timestamp, shortFingerprint, extension)
+		return fmt.Sprintf("%s%s_%s_%s.%s", backupPrefix, timestamp, versionLabel, shortFingerprint, extension)
 	}
-	return fmt.Sprintf("%s%s_%d_%s.%s", backupPrefix, timestamp, sequence, shortFingerprint, extension)
+	return fmt.Sprintf("%s%s_%d_%s_%s.%s", backupPrefix, timestamp, sequence, versionLabel, shortFingerprint, extension)
 }
 
 func generateBackupCipherKey() (string, error) {

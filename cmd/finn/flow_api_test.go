@@ -23,13 +23,18 @@ func newFlowAPITestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 		CREATE TABLE flow_entries (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			month TEXT NOT NULL,
+			entry_type TEXT NOT NULL DEFAULT 'external' CHECK (entry_type IN ('external', 'transfer')),
 			direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
 			counterparty TEXT NOT NULL,
+			account TEXT NOT NULL DEFAULT '',
 			currency TEXT NOT NULL,
 			amount REAL NOT NULL CHECK (amount > 0),
 			tax_rate REAL NOT NULL DEFAULT 0 CHECK (tax_rate >= 0 AND tax_rate <= 100),
 			category TEXT NOT NULL DEFAULT '',
-			comment TEXT NOT NULL DEFAULT ''
+			comment TEXT NOT NULL DEFAULT '',
+			to_account TEXT NOT NULL DEFAULT '',
+			to_currency TEXT NOT NULL DEFAULT '',
+			to_amount REAL NOT NULL DEFAULT 0 CHECK (to_amount >= 0)
 		)
 	`); err != nil {
 		db.Close()
@@ -65,7 +70,7 @@ func TestFlowAPICRUD(t *testing.T) {
 	if err := json.Unmarshal(created.Body.Bytes(), &entry); err != nil {
 		t.Fatal(err)
 	}
-	if entry.ID == 0 || entry.Counterparty != "Acme" || entry.Currency != "USD" || entry.TaxRate != 6 {
+	if entry.ID == 0 || entry.EntryType != "external" || entry.Counterparty != "Acme" || entry.Currency != "USD" || entry.TaxRate != 6 {
 		t.Fatalf("created entry = %+v, want normalized fields and id", entry)
 	}
 
@@ -98,6 +103,24 @@ func TestFlowAPICRUD(t *testing.T) {
 	deleted := performFlowRequest(router, http.MethodDelete, "/api/flows/"+strconv.FormatInt(entry.ID, 10), "")
 	if deleted.Code != http.StatusOK {
 		t.Fatalf("delete status = %d, want %d", deleted.Code, http.StatusOK)
+	}
+}
+
+func TestFlowAPIStoresTransferAsCashFlowMovement(t *testing.T) {
+	router, _ := newFlowAPITestRouter(t)
+	created := performFlowRequest(router, http.MethodPost, "/api/flows", `{
+		"month":"2026-07", "entryType":"transfer", "account":" Alfa ", "toAccount":"Broker",
+		"currency":"rub", "toCurrency":"usd", "amount":100000, "toAmount":1100, "comment":" P2P "
+	}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create transfer status = %d, want %d; body: %s", created.Code, http.StatusCreated, created.Body.String())
+	}
+	var transfer FlowEntry
+	if err := json.Unmarshal(created.Body.Bytes(), &transfer); err != nil {
+		t.Fatal(err)
+	}
+	if transfer.EntryType != "transfer" || transfer.Direction != "out" || transfer.Account != "Alfa" || transfer.ToAccount != "Broker" || transfer.Currency != "RUB" || transfer.ToCurrency != "USD" || transfer.ToAmount != 1100 {
+		t.Fatalf("created transfer = %+v, want normalized transfer fields", transfer)
 	}
 }
 

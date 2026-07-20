@@ -33,7 +33,9 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 * **Monthly Snapshots:** Save the state of your balances across different organizations and accounts once a month.
 * **Flexible Multi-Currency Architecture:** Completely redesigned currency system. Set your preferred **Base** and **Secondary** currencies during initial setup to track your global assets seamlessly.
 * **Balance Tagging:** Label individual balances with custom tags (`cash`, `checking`, `stocks`, `deposit`) to categorize your portfolio by asset type or purpose.
-* **Optional Cash Flow Journal:** Enable a separate monthly log for external incoming and outgoing movements, including the cash side of debts, without tying entries to portfolio organizations. Existing data can be imported from a validated CSV preview.
+* **Optional Cash Flow Journal:** Keep incoming, outgoing, and internal transfer movements in one monthly journal. External movements can optionally be assigned to one of your own accounts, and existing data can be imported from a validated CSV preview.
+* **Integrated Transfers & Currency Exchanges:** A Cash Flow movement can move separate sent and received amounts between your accounts, so P2P exchanges remain visible without becoming income or spending.
+* **Estimated Capital Return:** Analytics reconciles balance change, recorded external flow, and FX impact into an approximate earnings amount and rate. Account-assigned movements also enable a breakdown by balance tags such as `deposit` and `stocks`.
 * **Advanced Analytics (FX Impact):** The analytics engine automatically separates organic growth (actual deposits/withdrawals) from paper growth (changes due to currency exchange rate fluctuations).
 * **Asset Structure Breakdown by Tags:** A new interactive chart utilizing a mathematical Golden Ratio color-spacing framework for beautiful, high-contrast, macro-level asset allocation mapping.
 * **Smart Relative Timeframes:** Clean timeframe presets (`6M`, `1Y`, `ALL`) along with a dynamic month-range input for flexible historical filtering.
@@ -53,12 +55,17 @@ powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.c
 Cash Flow accepts UTF-8 CSV files separated with semicolons (`;`). Decimal values may use either a dot or a comma. Each row is one movement. The preview marks rows that already exist or repeat inside the file; exact duplicates are skipped by default and can be explicitly included with the import checkbox.
 
 ```csv
-month;direction;counterparty;amount;currency;tax_rate;category;comment
-2026-01;in;Acme;5000;USD;6;Salary;January salary
-2026-01;out;Landlord;85000;RUB;0;Rent;
+month;entry_type;direction;counterparty;account;amount;currency;tax_rate;category;comment;to_account;to_amount;to_currency
+2026-01;external;in;Acme;Broker;5000;USD;6;Salary;January salary;;;
+2026-01;external;out;Landlord;Bank;85000;RUB;0;Rent;;;;
+2026-01;transfer;;;Bank;116850.77;RUB;;;Exchange to USD;Broker;1500.258;USD
 ```
 
-Required headers are `month`, `direction`, `counterparty`, `amount`, and `currency`. The `tax_rate`, `category`, and `comment` columns are optional. Months use `YYYY-MM`, direction is `in` or `out`, amount is a positive gross value, and tax rate is a percentage from `0` to `100` that only applies to incoming entries.
+Every row requires `month`, `amount`, and `currency`; months use `YYYY-MM` and amounts are positive. `entry_type` is optional and defaults to `external`.
+
+For an external movement, `direction` must be `in` or `out` and `counterparty` is required. `account` is optional and should match an organization name when the movement needs to participate in return estimates by balance tag. `tax_rate` is a percentage from `0` to `100` that only applies to incoming entries; `category` and `comment` are optional.
+
+For a transfer, set `entry_type` to `transfer`. The `account`, `amount`, and `currency` fields describe what was sent; `to_account`, `to_amount`, and `to_currency` describe what was received. Source and destination must differ by account or currency. Leave `direction`, `counterparty`, `tax_rate`, and `category` empty; `comment` remains optional. Transfers stay in the journal but are excluded from income and spending.
 
 ## 📂 Project Structure
 
@@ -131,6 +138,8 @@ Each target is independent, so a local directory can be combined with Google Dri
 * `retention` is applied per target and defaults to `10` when omitted or set to a non-positive value.
 * Target paths support environment variables such as `$HOME`.
 
+Backup filenames include the Finn version that created them without dots, for example `finn_backup_2026_07_20_183000_v140_<fingerprint>.enc`. Local development builds use `vdev`.
+
 Finn reports each target separately:
 
 * **Green — Backup created:** the file was written, read back successfully, and retention completed.
@@ -199,7 +208,7 @@ The Assistant page lets you limit context to the latest 1, 2, 3, 6, 12, or 24 mo
 
 * **Currency Choice:** Be sure to configure your Base Currency before adding your first historical data point to sync and lock your historical exchange rates correctly.
 * **Adding a Snapshot:** Click "New Snapshot". You can automatically copy balances from your previous month to save time. It also features automatic background session draft caching.
-* **Cash Flow:** Enable the optional section in Settings to add incoming and outgoing entries by month, counterparty, currency, amount, and category. Internal transfers between your own accounts are intentionally excluded.
+* **Cash Flow:** Enable the optional section in Settings to add incoming, outgoing, and transfer movements by month. Transfers live in the same journal but are excluded from income and spending. Assign external movements to an own account when you want return estimates for a specific `deposit`, `stocks`, or other balance tag.
 * **Isolating Legends:** Double-click on any item in the chart legends to instantly isolate that specific organization, currency, or asset tag. Single-click to toggle visibility.
 
 Overview:

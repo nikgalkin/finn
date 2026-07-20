@@ -8,7 +8,7 @@ type FlowNetSummaryProps = {
 };
 
 const formatNumber = (value: number) => new Intl.NumberFormat('en-US', {
-  maximumFractionDigits: 8
+  maximumFractionDigits: 1
 }).format(value);
 
 const formatTaxNumber = (value: number) => new Intl.NumberFormat('en-US', {
@@ -22,7 +22,7 @@ export function FlowNetSummary({ totals, label = 'Recorded net', compact = false
     <div className={`cash-flow-net-summary${compact ? ' is-compact' : ''}`}>
       {label && <span className="cash-flow-net-label">{label}</span>}
       {totals.map(([currency, total]) => {
-        const displayedNet = Math.round(Math.abs(total.net));
+        const displayedNet = Math.round(Math.abs(total.net) * 10) / 10;
         const state = displayedNet === 0 ? 'is-neutral' : total.net > 0 ? 'is-positive' : 'is-negative';
         const sign = displayedNet === 0 ? '' : total.net > 0 ? '+' : '−';
         const details = [
@@ -36,7 +36,7 @@ export function FlowNetSummary({ totals, label = 'Recorded net', compact = false
           <QuickHoverTooltip key={currency} text={details}>
             <span className={`cash-flow-net-pill ${state}`} tabIndex={0}>
               <strong>{currency}</strong>
-              <i>{sign}{new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(displayedNet)}</i>
+              <i>{sign}{new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(displayedNet)}</i>
             </span>
           </QuickHoverTooltip>
         );

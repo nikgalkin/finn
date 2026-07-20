@@ -204,7 +204,15 @@ export default function SnapshotEdit() {
         month: currentMonth,
         entries: (entries || [])
           .filter(entry => entry.month === currentMonth)
-          .map(entry => ({ ...entry, taxRate: entry.taxRate || 0 }))
+          .map(entry => ({
+            ...entry,
+            entryType: entry.entryType || 'external' as const,
+            account: entry.account || '',
+            taxRate: entry.taxRate || 0,
+            toAccount: entry.toAccount || '',
+            toCurrency: entry.toCurrency || '',
+            toAmount: entry.toAmount || 0
+          }))
           .sort((left, right) => right.id - left.id)
       });
     } catch (error) {
@@ -225,13 +233,18 @@ export default function SnapshotEdit() {
         body: JSON.stringify({
           entries: drafts.map(draft => ({
             id: draft.id,
+            entryType: draft.entryType,
             direction: draft.direction,
             counterparty: draft.counterparty,
+            account: draft.account,
             currency: draft.currency,
             amount: Number(draft.amount),
-            taxRate: draft.direction === 'in' ? Number(draft.taxRate) : 0,
+            taxRate: draft.entryType === 'external' && draft.direction === 'in' ? Number(draft.taxRate) : 0,
             category: draft.category,
-            comment: draft.comment
+            comment: draft.comment,
+            toAccount: draft.toAccount,
+            toCurrency: draft.toCurrency,
+            toAmount: Number(draft.toAmount || 0)
           }))
         })
       });

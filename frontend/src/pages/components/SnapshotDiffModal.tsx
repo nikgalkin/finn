@@ -259,7 +259,7 @@ export function SnapshotDiffModal({
     [selectedCurrent, selectedPrevious, onlyChanges]
   );
   const selectedMonthFlowEntries = useMemo(
-    () => flowEntries.filter(entry => entry.month === selectedCurrent.month),
+    () => flowEntries.filter(entry => entry.month === selectedCurrent.month && entry.entryType !== 'transfer'),
     [flowEntries, selectedCurrent.month]
   );
   const selectedMonthFlowTotals = useMemo(
