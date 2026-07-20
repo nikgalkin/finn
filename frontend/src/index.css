@@ -1476,12 +1476,41 @@ a {
   text-transform: uppercase;
 }
 
-.snapshot-diff-period-note p {
+.snapshot-diff-period-note-comment p {
   margin: 0;
   color: var(--text-primary);
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.snapshot-diff-period-note-comment:not(.is-expanded) p {
+  max-height: 4.35em;
+  overflow: hidden;
+}
+
+.snapshot-diff-period-note-comment.is-expandable {
+  cursor: pointer;
+  outline: none;
+}
+
+.snapshot-diff-period-note-comment.is-expandable:not(.is-expanded) p {
+  -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 58%, transparent 100%);
+}
+
+.snapshot-diff-period-note-comment.is-expandable:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.45);
+}
+
+.snapshot-diff-period-note-comment > span {
+  display: inline-block;
+  margin-top: 3px;
+  color: #60a5fa;
+  font-size: 10px;
+  font-weight: 750;
+  user-select: none;
 }
 
 .snapshot-diff-rates {

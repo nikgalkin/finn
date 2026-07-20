@@ -1,6 +1,6 @@
+import { useEffect, useState } from 'react';
 import { Calendar, Plus, RefreshCw } from 'lucide-react';
 import type { AppSettings, SnapshotData } from '../../types';
-import { AmountInput } from './AmountInput';
 import { Spinner } from './PageLoader';
 
 type PeriodRatesPanelProps = {
@@ -14,6 +14,98 @@ type PeriodRatesPanelProps = {
   onMonthChange: (month: string) => void;
   onRateChange: (currency: string, value: string | number) => void;
 };
+
+const toExchangeRateNumber = (value: number | string) => {
+  if (typeof value === 'number') return value;
+  const normalized = value.trim().replace(/\s+/g, '').replace(',', '.');
+  return normalized ? Number(normalized) : 0;
+};
+
+const formatExchangeRate = (value: number) => {
+  if (value === 0 || !Number.isFinite(value)) return '';
+  const displayedValue = value > 0 && value < 1 ? 1 / value : value;
+  return new Intl.NumberFormat('en-US', {
+    useGrouping: false,
+    maximumFractionDigits: 1
+  }).format(displayedValue);
+};
+
+const parseExchangeRate = (value: string) => {
+  const normalized = value.trim().replace(/\s+/g, '').replace(',', '.');
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : value;
+};
+
+type ExchangeRateInputProps = {
+  currency: string;
+  referenceCurrency: string;
+  value: number | string;
+  onChange: (value: number | string) => void;
+};
+
+function ExchangeRateInput({ currency, referenceCurrency, value, onChange }: ExchangeRateInputProps) {
+  const numericValue = toExchangeRateNumber(value);
+  const inverted = Number.isFinite(numericValue) && numericValue > 0 && numericValue < 1;
+  const formattedValue = formatExchangeRate(numericValue);
+  const [editing, setEditing] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [draft, setDraft] = useState(formattedValue);
+
+  useEffect(() => {
+    if (!editing) setDraft(formattedValue);
+  }, [editing, formattedValue]);
+
+  const commit = (rawValue: string) => {
+    setEditing(false);
+    if (!dirty) {
+      setDraft(formattedValue);
+      return;
+    }
+
+    const parsed = parseExchangeRate(rawValue);
+    if (typeof parsed !== 'number') {
+      setDraft(formattedValue);
+      return;
+    }
+
+    const storedValue = inverted && parsed > 0 ? 1 / parsed : parsed;
+    onChange(storedValue);
+    setDraft(formatExchangeRate(storedValue));
+  };
+
+  const preciseValue = Number.isFinite(numericValue)
+    ? new Intl.NumberFormat('en-US', { useGrouping: false, maximumFractionDigits: 20 }).format(numericValue)
+    : String(value);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className="input"
+      value={draft}
+      onFocus={() => {
+        setEditing(true);
+        setDirty(false);
+      }}
+      onChange={event => {
+        setDirty(true);
+        setDraft(event.target.value);
+      }}
+      onBlur={event => commit(event.target.value)}
+      onKeyDown={event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        event.currentTarget.blur();
+      }}
+      aria-label={`${currency} exchange rate`}
+      placeholder="0"
+      title={inverted
+        ? `Displayed as 1 ${referenceCurrency} in ${currency}. Stored rate: ${preciseValue}`
+        : `Stored rate: ${preciseValue}`}
+    />
+  );
+}
 
 export function PeriodRatesPanel({
   currentMonth,
@@ -73,12 +165,17 @@ export function PeriodRatesPanel({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', flex: 1, alignContent: 'flex-start' }}>
           {Object.entries(rates).map(([currency, rate]) => (
             <div key={currency} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-              <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium">{currency}</div>
-              <AmountInput
+              <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                <span>{currency}</span>
+                {toExchangeRateNumber(rate) > 0 && toExchangeRateNumber(rate) < 1 && (
+                  <small style={{ color: '#60a5fa', fontSize: '9px', fontWeight: 700 }}>{settings.baseCurrency || 'RUB'} → {currency}</small>
+                )}
+              </div>
+              <ExchangeRateInput
+                currency={currency}
+                referenceCurrency={settings.baseCurrency || 'RUB'}
                 value={rate}
                 onChange={value => onRateChange(currency, value)}
-                maximumFractionDigits={8}
-                ariaLabel={`${currency} exchange rate`}
               />
             </div>
           ))}

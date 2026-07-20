@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import type { FocusEvent, MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FocusEvent, KeyboardEvent, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowDownUp, ChevronDown, Coins, ExternalLink, Folder, MessageSquare, RefreshCw, X } from 'lucide-react';
@@ -171,6 +171,47 @@ type TooltipPosition = {
 const clamp = (value: number, min: number, max: number) => {
   return Math.min(Math.max(value, min), max);
 };
+
+function ExpandablePeriodComment({ comment }: { comment: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const paragraphRef = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    if (expanded) return;
+    const paragraph = paragraphRef.current;
+    if (!paragraph) return;
+
+    const updateOverflow = () => setCanExpand(paragraph.scrollHeight > paragraph.clientHeight + 1);
+    updateOverflow();
+    window.addEventListener('resize', updateOverflow);
+    return () => window.removeEventListener('resize', updateOverflow);
+  }, [comment, expanded]);
+
+  const toggle = () => {
+    if (canExpand) setExpanded(value => !value);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!canExpand || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    toggle();
+  };
+
+  return (
+    <div
+      className={`snapshot-diff-period-note-comment${expanded ? ' is-expanded' : ''}${canExpand ? ' is-expandable' : ''}`}
+      role={canExpand ? 'button' : undefined}
+      tabIndex={canExpand ? 0 : undefined}
+      aria-expanded={canExpand ? expanded : undefined}
+      onClick={toggle}
+      onKeyDown={handleKeyDown}
+    >
+      <p ref={paragraphRef}>{comment}</p>
+      {canExpand && <span>{expanded ? 'Collapse' : 'Show more'}</span>}
+    </div>
+  );
+}
 
 function CommentMarker({ comment, label }: { comment?: string; label?: string }) {
   const [position, setPosition] = useState<TooltipPosition | null>(null);
@@ -424,7 +465,7 @@ export function SnapshotDiffModal({
                   <div className="snapshot-diff-period-note-label">
                     <MessageSquare size={14} /> Previous · {selectedPrevious.month}
                   </div>
-                  <p>{selectedPrevious.data.comment}</p>
+                  <ExpandablePeriodComment comment={selectedPrevious.data.comment} />
                 </div>
               )}
               {selectedCurrent.data.comment && (
@@ -432,7 +473,7 @@ export function SnapshotDiffModal({
                   <div className="snapshot-diff-period-note-label">
                     <MessageSquare size={14} /> Current · {selectedCurrent.month}
                   </div>
-                  <p>{selectedCurrent.data.comment}</p>
+                  <ExpandablePeriodComment comment={selectedCurrent.data.comment} />
                 </div>
               )}
             </section>
