@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock } from 'lucide-react';
-import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Dot, PieChart, Pie, Cell } from 'recharts';
+import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
@@ -138,7 +138,7 @@ export default function Dashboard() {
     });
   }, [snapshots, baseCurrency, secondaryCurrency]);
 
-  const CustomDot = (props: any) => {
+  const CommentDot = (props: any) => {
     const { cx, cy, payload } = props;
     if (payload && payload.hasComment) {
       return (
@@ -148,7 +148,7 @@ export default function Dashboard() {
         </g>
       );
     }
-    return <Dot {...props} />;
+    return <g />;
   };
 
   const handleChartClick = (state: any) => {
@@ -349,9 +349,9 @@ export default function Dashboard() {
                       <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => formatCompactNumber(val)} />
                     )}
                     <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} secondaryCurrency={secondaryCurrency} />} />
-                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" />
+                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" dot={<CommentDot />} />
                     {secondaryCurrency && secondaryCurrency !== baseCurrency && (
-                      <Line yAxisId="right" type="monotone" dataKey="SECONDARY" name="SECONDARY" stroke="#6366f1" strokeWidth={3} dot={<CustomDot />} activeDot={{ r: 6 }} />
+                      <Line yAxisId="right" type="monotone" dataKey="SECONDARY" name="SECONDARY" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                     )}
                   </AreaChart>
                 </ResponsiveContainer>

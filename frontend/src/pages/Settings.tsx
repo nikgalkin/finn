@@ -598,7 +598,7 @@ export default function Settings() {
             <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>Secondary Currency</label>
             <select
               className="input"
-              value={settings.secondaryCurrency || 'USD'}
+              value={settings.secondaryCurrency ?? 'USD'}
               onChange={e => setSettings({ ...settings, secondaryCurrency: e.target.value })}
               style={{ width: '100%', height: '36px' }}
             >

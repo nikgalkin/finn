@@ -115,11 +115,11 @@ export default function CashFlow() {
   const [csvImporting, setCsvImporting] = useState(false);
   const [csvImportError, setCsvImportError] = useState('');
   const [csvImportNotice, setCsvImportNotice] = useState('');
-  const [expandedYears, setExpandedYears] = useState<Set<string>>(new Set());
-  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const linkedMonth = searchParams.get('month');
+  const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set(linkedMonth ? [linkedMonth.slice(0, 4)] : []));
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(() => new Set(linkedMonth ? [linkedMonth] : []));
   const csvFileInputRef = useRef<HTMLInputElement | null>(null);
   const expansionInitializedRef = useRef(false);
-  const linkedMonth = searchParams.get('month');
 
   useEscapeToDashboard({
     blocked: Boolean(periodEditor || commentEditor || csvPreview)
@@ -165,6 +165,19 @@ export default function CashFlow() {
     if (!linkedMonth || !months.includes(linkedMonth)) return;
     setStartMonth(linkedMonth);
     setEndMonth(linkedMonth);
+  }, [linkedMonth, months]);
+
+  useEffect(() => {
+    if (!linkedMonth || !months.includes(linkedMonth)) return;
+    const linkedYear = linkedMonth.slice(0, 4);
+    setExpandedYears(previous => {
+      if (previous.has(linkedYear)) return previous;
+      return new Set(previous).add(linkedYear);
+    });
+    setExpandedMonths(previous => {
+      if (previous.has(linkedMonth)) return previous;
+      return new Set(previous).add(linkedMonth);
+    });
   }, [linkedMonth, months]);
 
   const timeframeEntries = useMemo(() => entries.filter(entry => (
@@ -601,8 +614,8 @@ export default function CashFlow() {
             return (
               <details
                 key={year}
-                open={expandedYears.has(year)}
-                onToggle={event => setYearExpanded(year, event.currentTarget.open)}
+                open={year === linkedMonth?.slice(0, 4) || expandedYears.has(year)}
+                onToggle={event => setYearExpanded(year, year === linkedMonth?.slice(0, 4) || event.currentTarget.open)}
                 className="glass-panel cash-flow-year-group"
               >
                 <summary className="cash-flow-year-summary">
@@ -637,8 +650,8 @@ export default function CashFlow() {
                     return (
                       <details
                         key={month}
-                        open={expandedMonths.has(month)}
-                        onToggle={event => setMonthExpanded(month, event.currentTarget.open)}
+                        open={month === linkedMonth || expandedMonths.has(month)}
+                        onToggle={event => setMonthExpanded(month, month === linkedMonth || event.currentTarget.open)}
                         className="cash-flow-month-group"
                       >
                         <summary className="cash-flow-month-summary">
