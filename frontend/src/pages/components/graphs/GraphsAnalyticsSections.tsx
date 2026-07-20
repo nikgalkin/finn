@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Activity, ArrowLeftRight, BarChart3, ChevronDown, Clock, Grid, Landmark, Layers, LineChart as LineChartIcon, ListFilter, Percent, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, ReferenceLine } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
@@ -85,10 +85,7 @@ const SECTION_TITLE_STYLE = { color: 'var(--text-secondary)', fontSize: '13px', 
 const TOOLTIP_STYLE = { backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 };
 
 const formatNumber = (value: number) => Math.round(value).toLocaleString('en-US');
-
-const formatMoney = (value: number, suffix: string) => {
-  return `${formatNumber(value)} ${suffix}`;
-};
+const formatMoney = (value: number, suffix: string) => `${formatNumber(value)} ${suffix}`;
 
 const getDeltaColor = (value: number) => {
   if (value > 0) return 'var(--diff-positive, hsl(142, 45%, 55%))';
@@ -96,21 +93,15 @@ const getDeltaColor = (value: number) => {
   return 'var(--text-secondary)';
 };
 
-const formatSigned = (value: number) => {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${formatNumber(value)}`;
-};
+const formatSigned = (value: number) => `${value > 0 ? '+' : ''}${formatNumber(value)}`;
 
 const normalizeStackData = (data: ChartDatum[], keys: string[]) => {
   return data.map(point => {
     const total = keys.reduce((sum, key) => sum + Number(point[key] || 0), 0);
-    const normalized: ChartDatum = { month: point.month };
-
-    keys.forEach(key => {
-      normalized[key] = total > 0 ? (Number(point[key] || 0) / total) * 100 : 0;
-    });
-
-    return normalized;
+    return {
+      month: point.month,
+      ...Object.fromEntries(keys.map(key => [key, total > 0 ? (Number(point[key] || 0) / total) * 100 : 0]))
+    };
   });
 };
 
@@ -282,7 +273,7 @@ const SummaryCard = ({ stat }: { stat: SummaryStat }) => {
   );
 };
 
-const ChartTitle = ({ icon, children, help }: { icon: React.ReactNode; children: React.ReactNode; help: string }) => {
+const ChartTitle = ({ icon, children, help }: { icon: ReactNode; children: ReactNode; help: string }) => {
   return (
     <h4 className="flex items-center gap-2" style={{ margin: '0 0 16px 0', fontSize: '14px', minWidth: 0 }}>
       {icon}
@@ -292,7 +283,31 @@ const ChartTitle = ({ icon, children, help }: { icon: React.ReactNode; children:
   );
 };
 
-const MoversList = ({ title, icon, data, baseCurrency, help }: { title: string; icon: React.ReactNode; data: MoverDatum[]; baseCurrency: string; help: string }) => {
+type TitledContentProps = { children: ReactNode; icon: ReactNode; title: ReactNode };
+type ChartCardProps = TitledContentProps & { help: string; panel?: boolean; style?: CSSProperties };
+
+const ChartCard = ({ children, help, icon, title, panel = true, style }: ChartCardProps) => (
+  <div className={panel ? 'glass-panel' : undefined} style={{ ...CARD_STYLE, ...style }}>
+    <ChartTitle icon={icon} help={help}>{title}</ChartTitle>
+    {children}
+  </div>
+);
+
+type CollapsibleSectionProps = Omit<TitledContentProps, 'title'> & { contentStyle: CSSProperties; help?: string; title: string };
+
+const CollapsibleSection = ({ children, contentStyle, help, icon, title }: CollapsibleSectionProps) => (
+  <details className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
+    <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', cursor: 'pointer', userSelect: 'none', listStyle: 'none', borderBottom: '1px solid var(--glass-border)' }}>
+      {icon}
+      <span style={{ fontWeight: 800 }}>{title}</span>
+      {help && <HelpTooltip text={help} />}
+      <ChevronDown size={16} style={{ marginLeft: 'auto', color: 'var(--text-secondary)' }} />
+    </summary>
+    <div style={contentStyle}>{children}</div>
+  </details>
+);
+
+const MoversList = ({ title, icon, data, baseCurrency, help }: { title: string; icon: ReactNode; data: MoverDatum[]; baseCurrency: string; help: string }) => {
   return (
     <div>
       <ChartTitle icon={icon} help={help}>{title}</ChartTitle>
@@ -364,6 +379,28 @@ export function GraphsAnalyticsSections({
     const num = Number(value || 0);
     return allocationMode === 'percent' ? `${num.toFixed(1)}%` : formatMoney(num, baseCurrency);
   };
+
+  const renderAllocationChart = (
+    data: ChartDatum[], keys: string[], group: 'currencies' | 'tags', stackId: string,
+    getColor: (key: string) => string
+  ) => (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+        <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
+        <YAxis
+          domain={allocationMode === 'percent' ? [0, 100] : undefined}
+          ticks={allocationMode === 'percent' ? [0, 25, 50, 75, 100] : undefined}
+          stroke="var(--text-secondary)"
+          tickFormatter={(val) => allocationMode === 'percent' ? `${val}%` : formatCompact(val)}
+          style={{ fontSize: '12px' }}
+        />
+        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={allocationFormatter} />
+        <Legend onClick={(event) => handleLegendClickSmart(group, event, keys)} wrapperStyle={LEGEND_STYLE} />
+        {keys.map(key => <Bar key={key} dataKey={key} stackId={stackId} fill={getColor(key)} hide={hiddenSeries[group][key]} />)}
+      </BarChart>
+    </ResponsiveContainer>
+  );
 
   return (
     <>
@@ -439,13 +476,12 @@ export function GraphsAnalyticsSections({
           </span>
         </h3>
         <div style={GRID_2}>
-          <div className="glass-panel" style={{ ...CARD_STYLE, gridColumn: 'span 2', height: '390px' }}>
-            <ChartTitle
-              icon={<TrendingUp size={16} style={{ color: '#10b981' }} />}
-              help={`Shows total net worth in ${baseCurrency} for each snapshot. The green area is the total converted with that snapshot's rates; the yellow line is the change from the previous snapshot.`}
-            >
-              Net Worth Trend ({baseCurrency})
-            </ChartTitle>
+          <ChartCard
+            icon={<TrendingUp size={16} style={{ color: '#10b981' }} />}
+            help={`Shows total net worth in ${baseCurrency} for each snapshot. The green area is the total converted with that snapshot's rates; the yellow line is the change from the previous snapshot.`}
+            title={<>Net Worth Trend ({baseCurrency})</>}
+            style={{ gridColumn: 'span 2', height: '390px' }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={netWorthData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                 <defs>
@@ -469,17 +505,16 @@ export function GraphsAnalyticsSections({
                 <Line yAxisId="right" type="monotone" dataKey="delta" name="delta" stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
 
-          <div className="glass-panel" style={{ ...CARD_STYLE, gridColumn: 'span 2' }}>
-            <ChartTitle
-              icon={<ArrowLeftRight size={16} style={{ color: '#10b981' }} />}
-              help={cashFlowEnabled
-                ? `Reconciles each snapshot change into recorded external Cash Flow, estimated unrecorded capital return, and exchange-rate impact. Internal transfers are excluded from Cash Flow.`
-                : `Splits each snapshot change into organic flow and exchange-rate impact. Enable Cash Flow to separate external movements from estimated capital return.`}
-            >
-              {cashFlowEnabled ? 'Capital Return Decomposition' : 'Organic Flow & FX Impact'} ({baseCurrency})
-            </ChartTitle>
+          <ChartCard
+            icon={<ArrowLeftRight size={16} style={{ color: '#10b981' }} />}
+            help={cashFlowEnabled
+              ? `Reconciles each snapshot change into recorded external Cash Flow, estimated unrecorded capital return, and exchange-rate impact. Internal transfers are excluded from Cash Flow.`
+              : `Splits each snapshot change into organic flow and exchange-rate impact. Enable Cash Flow to separate external movements from estimated capital return.`}
+            title={<>{cashFlowEnabled ? 'Capital Return Decomposition' : 'Organic Flow & FX Impact'} ({baseCurrency})</>}
+            style={{ gridColumn: 'span 2' }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={decompositionData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -501,7 +536,7 @@ export function GraphsAnalyticsSections({
                 )}
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
       </section>
 
@@ -530,40 +565,19 @@ export function GraphsAnalyticsSections({
         </div>
 
         <div style={GRID_2}>
-          <div className="glass-panel" style={CARD_STYLE}>
-            <ChartTitle
-              icon={<Layers size={16} className="text-secondary" />}
-              help={`Shows portfolio split by currency over time. In Percent mode each month is normalized to 100%; in Value mode every currency is converted to ${baseCurrency} using that snapshot's rates.`}
-            >
-              Currency Exposure
-            </ChartTitle>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={currencyAllocationData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
-                <YAxis
-                  domain={allocationMode === 'percent' ? [0, 100] : undefined}
-                  ticks={allocationMode === 'percent' ? [0, 25, 50, 75, 100] : undefined}
-                  stroke="var(--text-secondary)"
-                  tickFormatter={(val) => allocationMode === 'percent' ? `${val}%` : formatCompact(val)}
-                  style={{ fontSize: '12px' }}
-                />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={allocationFormatter} />
-                <Legend onClick={(event) => handleLegendClickSmart('currencies', event, allUsedCurrencies)} wrapperStyle={LEGEND_STYLE} />
-                {allUsedCurrencies.map(currency => (
-                  <Bar key={currency} dataKey={currency} stackId="currency_stack" fill={getCurrencyColor(currency)} hide={hiddenSeries.currencies[currency]} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartCard
+            icon={<Layers size={16} className="text-secondary" />}
+            help={`Shows portfolio split by currency over time. In Percent mode each month is normalized to 100%; in Value mode every currency is converted to ${baseCurrency} using that snapshot's rates.`}
+            title="Currency Exposure"
+          >
+            {renderAllocationChart(currencyAllocationData, allUsedCurrencies, 'currencies', 'currency_stack', getCurrencyColor)}
+          </ChartCard>
 
-          <div className="glass-panel" style={CARD_STYLE}>
-            <ChartTitle
-              icon={<Landmark size={16} className="text-secondary" />}
-              help={`Shows balances grouped by organization. Each organization's balances are converted to ${baseCurrency} with the rates stored in the same snapshot, then stacked by month.`}
-            >
-              Balance by Organization ({baseCurrency})
-            </ChartTitle>
+          <ChartCard
+            icon={<Landmark size={16} className="text-secondary" />}
+            help={`Shows balances grouped by organization. Each organization's balances are converted to ${baseCurrency} with the rates stored in the same snapshot, then stacked by month.`}
+            title={<>Balance by Organization ({baseCurrency})</>}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={orgTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -576,34 +590,16 @@ export function GraphsAnalyticsSections({
                 ))}
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
 
-          <div className="glass-panel" style={{ ...CARD_STYLE, gridColumn: 'span 2' }}>
-            <ChartTitle
-              icon={<Layers size={16} style={{ color: 'var(--accent)' }} />}
-              help={`Shows portfolio structure by balance tags. Tagged balances are converted to ${baseCurrency}; if a balance has multiple tags, its value is split evenly between them. Untagged balances go to "untagged".`}
-            >
-              Asset Structure by Tags
-            </ChartTitle>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={tagAllocationData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
-                <YAxis
-                  domain={allocationMode === 'percent' ? [0, 100] : undefined}
-                  ticks={allocationMode === 'percent' ? [0, 25, 50, 75, 100] : undefined}
-                  stroke="var(--text-secondary)"
-                  tickFormatter={(val) => allocationMode === 'percent' ? `${val}%` : formatCompact(val)}
-                  style={{ fontSize: '12px' }}
-                />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={allocationFormatter} />
-                <Legend onClick={(event) => handleLegendClickSmart('tags', event, allUsedTags)} wrapperStyle={LEGEND_STYLE} />
-                {allUsedTags.map(tag => (
-                  <Bar key={tag} dataKey={tag} stackId="tags_stack" fill={tag === 'untagged' ? '#475569' : getTagColor(tag)} hide={hiddenSeries.tags[tag]} />
-                ))}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartCard
+            icon={<Layers size={16} style={{ color: 'var(--accent)' }} />}
+            help={`Shows portfolio structure by balance tags. Tagged balances are converted to ${baseCurrency}; if a balance has multiple tags, its value is split evenly between them. Untagged balances go to "untagged".`}
+            title="Asset Structure by Tags"
+            style={{ gridColumn: 'span 2' }}
+          >
+            {renderAllocationChart(tagAllocationData, allUsedTags, 'tags', 'tags_stack', tag => tag === 'untagged' ? '#475569' : getTagColor(tag))}
+          </ChartCard>
         </div>
       </section>
 
@@ -668,25 +664,23 @@ export function GraphsAnalyticsSections({
       <section>
         <h3 className="mb-4" style={SECTION_TITLE_STYLE}>CURRENT COMPOSITION</h3>
         <div style={GRID_2}>
-          <div className="glass-panel" style={{ ...CARD_STYLE, height: '380px' }}>
-            <ChartTitle
-              icon={<Grid size={16} style={{ color: 'var(--accent)' }} />}
-              help={`Shows the latest selected snapshot as a heatmap by organization. Each tile is one organization converted to ${baseCurrency}; the percentage and fill indicate its share of the selected snapshot total.`}
-            >
-              Organization Heatmap ({latestSnapshotMonth || 'latest'})
-            </ChartTitle>
+          <ChartCard
+            icon={<Grid size={16} style={{ color: 'var(--accent)' }} />}
+            help={`Shows the latest selected snapshot as a heatmap by organization. Each tile is one organization converted to ${baseCurrency}; the percentage and fill indicate its share of the selected snapshot total.`}
+            title={<>Organization Heatmap ({latestSnapshotMonth || 'latest'})</>}
+            style={{ height: '380px' }}
+          >
             <div style={{ flex: 1, minHeight: 0 }}>
               <OrganizationHeatmap data={treemapData} baseCurrency={baseCurrency} />
             </div>
-          </div>
+          </ChartCard>
 
-          <div className="glass-panel" style={{ ...CARD_STYLE, height: '380px' }}>
-            <ChartTitle
-              icon={<Grid size={16} style={{ color: '#10b981' }} />}
-              help={`Shows the latest selected snapshot by organization and currency. Every bar segment is a currency balance converted to ${baseCurrency}, stacked within its organization.`}
-            >
-              Organizations to Currencies ({baseCurrency})
-            </ChartTitle>
+          <ChartCard
+            icon={<Grid size={16} style={{ color: '#10b981' }} />}
+            help={`Shows the latest selected snapshot by organization and currency. Every bar segment is a currency balance converted to ${baseCurrency}, stacked within its organization.`}
+            title={<>Organizations to Currencies ({baseCurrency})</>}
+            style={{ height: '380px' }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={flowChartData} layout="vertical" margin={{ top: 10, right: 10, left: 40, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
@@ -699,18 +693,16 @@ export function GraphsAnalyticsSections({
                 ))}
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
         </div>
       </section>
 
-      <details className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
-        <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', cursor: 'pointer', userSelect: 'none', listStyle: 'none', borderBottom: '1px solid var(--glass-border)' }}>
-          <LineChartIcon size={16} style={{ color: 'var(--accent)' }} />
-          <span style={{ fontWeight: 800 }}>Exchange Rates</span>
-          <HelpTooltip text={`Shows historical rates stored in each snapshot. Values are rendered against ${baseCurrency}; very low nominal rates may be inverted so the line remains readable.`} />
-          <ChevronDown size={16} style={{ marginLeft: 'auto', color: 'var(--text-secondary)' }} />
-        </summary>
-        <div style={{ height: '350px', padding: '20px' }}>
+      <CollapsibleSection
+        icon={<LineChartIcon size={16} style={{ color: 'var(--accent)' }} />}
+        title="Exchange Rates"
+        help={`Shows historical rates stored in each snapshot. Values are rendered against ${baseCurrency}; very low nominal rates may be inverted so the line remains readable.`}
+        contentStyle={{ height: '350px', padding: '20px' }}
+      >
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={currencyRatesData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -738,25 +730,22 @@ export function GraphsAnalyticsSections({
               })}
             </LineChart>
           </ResponsiveContainer>
-        </div>
-      </details>
+      </CollapsibleSection>
 
       {cashFlowEnabled && (
-        <details className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
-          <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', cursor: 'pointer', userSelect: 'none', listStyle: 'none', borderBottom: '1px solid var(--glass-border)' }}>
-            <ArrowLeftRight size={16} style={{ color: '#3b82f6' }} />
-            <span style={{ fontWeight: 800 }}>Cash Flow</span>
-            <HelpTooltip text={`Shows recorded external Cash Flow converted to ${baseCurrency} with each month's snapshot rates. Internal transfers are excluded from income, spending, savings rate, and event analysis.`} />
-            <ChevronDown size={16} style={{ marginLeft: 'auto', color: 'var(--text-secondary)' }} />
-          </summary>
-          <div style={{ ...GRID_2, padding: '20px' }}>
-            <div style={{ ...CARD_STYLE, height: '320px' }}>
-              <ChartTitle
-                icon={<ArrowLeftRight size={16} style={{ color: '#3b82f6' }} />}
-                help={`Shows after-tax incoming and spending converted to ${baseCurrency} with each month's snapshot rates. The line is how much remained after spending. Internal transfers are excluded.`}
-              >
-                Monthly Cash Flow ({baseCurrency})
-              </ChartTitle>
+        <CollapsibleSection
+          icon={<ArrowLeftRight size={16} style={{ color: '#3b82f6' }} />}
+          title="Cash Flow"
+          help={`Shows recorded external Cash Flow converted to ${baseCurrency} with each month's snapshot rates. Internal transfers are excluded from income, spending, savings rate, and event analysis.`}
+          contentStyle={{ ...GRID_2, padding: '20px' }}
+        >
+            <ChartCard
+              panel={false}
+              icon={<ArrowLeftRight size={16} style={{ color: '#3b82f6' }} />}
+              help={`Shows after-tax incoming and spending converted to ${baseCurrency} with each month's snapshot rates. The line is how much remained after spending. Internal transfers are excluded.`}
+              title={<>Monthly Cash Flow ({baseCurrency})</>}
+              style={{ height: '320px' }}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={cashFlowMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -769,15 +758,15 @@ export function GraphsAnalyticsSections({
                   <Line type="monotone" dataKey="Net saved" stroke="#60a5fa" strokeWidth={3} dot={{ r: 3, fill: 'var(--bg-color)', strokeWidth: 2 }} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </ChartCard>
 
-            <div style={{ ...CARD_STYLE, height: '320px' }}>
-              <ChartTitle
-                icon={<Percent size={16} style={{ color: '#60a5fa' }} />}
-                help="Monthly share of after-tax income left after spending. The bars show each month; the line is a rolling three-month average. Months without incoming money have no rate. Internal transfers are excluded."
-              >
-                Savings Rate
-              </ChartTitle>
+            <ChartCard
+              panel={false}
+              icon={<Percent size={16} style={{ color: '#60a5fa' }} />}
+              help="Monthly share of after-tax income left after spending. The bars show each month; the line is a rolling three-month average. Months without incoming money have no rate. Internal transfers are excluded."
+              title="Savings Rate"
+              style={{ height: '320px' }}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={cashFlowMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -794,15 +783,15 @@ export function GraphsAnalyticsSections({
                   <Line type="monotone" dataKey="3M average" stroke="#60a5fa" strokeWidth={3} connectNulls dot={{ r: 3, fill: 'var(--bg-color)', strokeWidth: 2 }} />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
+            </ChartCard>
 
-            <div style={{ ...CARD_STYLE, height: '380px', gridColumn: '1 / -1' }}>
-              <ChartTitle
-                icon={<Activity size={16} style={{ color: '#a78bfa' }} />}
-                help={`Shows every external movement in the selected period. Incoming events are green and above zero; spending is red and below zero. Bubble size reflects the amount. Incoming points use the after-tax value, while the tooltip also shows gross incoming and tax. Internal transfers are excluded.`}
-              >
-                Cash Flow Events ({baseCurrency})
-              </ChartTitle>
+            <ChartCard
+              panel={false}
+              icon={<Activity size={16} style={{ color: '#a78bfa' }} />}
+              help={`Shows every external movement in the selected period. Incoming events are green and above zero; spending is red and below zero. Bubble size reflects the amount. Incoming points use the after-tax value, while the tooltip also shows gross incoming and tax. Internal transfers are excluded.`}
+              title={<>Cash Flow Events ({baseCurrency})</>}
+              style={{ height: '380px', gridColumn: '1 / -1' }}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart margin={{ top: 12, right: 18, left: 0, bottom: 12 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
@@ -816,25 +805,22 @@ export function GraphsAnalyticsSections({
                   </Scatter>
                 </ScatterChart>
               </ResponsiveContainer>
-            </div>
-          </div>
-        </details>
+            </ChartCard>
+        </CollapsibleSection>
       )}
 
-      <details className="glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
-        <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 20px', cursor: 'pointer', userSelect: 'none', listStyle: 'none', borderBottom: '1px solid var(--glass-border)' }}>
-          <Clock size={16} style={{ color: '#eab308' }} />
-          <span style={{ fontWeight: 800 }}>Snapshot Time & Operational Metrics</span>
-          <ChevronDown size={16} style={{ marginLeft: 'auto', color: 'var(--text-secondary)' }} />
-        </summary>
-        <div style={{ ...GRID_2, padding: '20px' }}>
-          <div style={{ ...CARD_STYLE, height: '320px' }}>
-            <ChartTitle
-              icon={<Clock size={16} className="text-secondary" style={{ color: 'var(--accent)' }} />}
-              help="Shows how long each snapshot editing session took. It uses the snapshot duration_seconds field and formats it as seconds or minutes."
-            >
-              Time Invested in Snapshot Management
-            </ChartTitle>
+      <CollapsibleSection
+        icon={<Clock size={16} style={{ color: '#eab308' }} />}
+        title="Snapshot Time & Operational Metrics"
+        contentStyle={{ ...GRID_2, padding: '20px' }}
+      >
+          <ChartCard
+            panel={false}
+            icon={<Clock size={16} className="text-secondary" style={{ color: 'var(--accent)' }} />}
+            help="Shows how long each snapshot editing session took. It uses the snapshot duration_seconds field and formats it as seconds or minutes."
+            title="Time Invested in Snapshot Management"
+            style={{ height: '320px' }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={uxMetricsData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                 <defs>
@@ -850,15 +836,15 @@ export function GraphsAnalyticsSections({
                 <Area type="monotone" dataKey="duration_seconds_raw" stroke="var(--accent)" fillOpacity={1} fill="url(#colorUxDuration)" strokeWidth={2} dot={{ r: 4, fill: 'var(--bg-color)', strokeWidth: 2 }} />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </ChartCard>
 
-          <div style={{ ...CARD_STYLE, height: '320px' }}>
-            <ChartTitle
-              icon={<BarChart3 size={16} className="text-secondary" style={{ color: '#10b981' }} />}
-              help="Compares account count with time cost per account. Account count is the number of balance rows in the snapshot; seconds per account is duration_seconds divided by that count."
-            >
-              Operational Effort per Financial Account
-            </ChartTitle>
+          <ChartCard
+            panel={false}
+            icon={<BarChart3 size={16} className="text-secondary" style={{ color: '#10b981' }} />}
+            help="Compares account count with time cost per account. Account count is the number of balance rows in the snapshot; seconds per account is duration_seconds divided by that count."
+            title="Operational Effort per Financial Account"
+            style={{ height: '320px' }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={uxMetricsData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
@@ -871,9 +857,8 @@ export function GraphsAnalyticsSections({
                 <Line yAxisId="right" type="monotone" dataKey="cost_per_account" name="Time Cost per Account (Sec)" stroke="#eab308" strokeWidth={3} dot={{ r: 3, fill: 'var(--bg-color)' }} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-      </details>
+          </ChartCard>
+      </CollapsibleSection>
 
     </>
   );

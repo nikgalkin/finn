@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Archive, ArrowDownUp, ArrowLeft, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../types';
-import type { LocalAISettings, LocalAIStatus, Snapshot } from '../types';
+import type { CashFlowSettings, LocalAISettings, LocalAIStatus, Snapshot } from '../types';
 import { isValidCountryCode } from '../lib/countries';
 import { SETTINGS_UPDATED_EVENT, useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
@@ -26,6 +26,8 @@ type ArchiveImpact = {
   latestNonZeroBalances: string[];
 };
 
+type DuplicateValues = ReturnType<typeof findDuplicateValues>;
+
 const listGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' };
 const listBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '260px', overflowY: 'auto' as const, paddingRight: '4px' };
 const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '372px', overflowY: 'auto' as const, paddingRight: '4px', scrollBehavior: 'smooth' as const };
@@ -33,7 +35,12 @@ const compactButtonStyle = { padding: '6px 12px', fontSize: '13px' };
 const iconButtonStyle = { padding: '8px' };
 const inputRowStyle = { height: '36px' };
 const autoFetchStyle = { background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0 10px', height: '36px', userSelect: 'none' as const };
+const enabledCheckboxStyle = { width: '17px', height: '17px', accentColor: 'var(--accent)' };
+const DEFAULT_CASH_FLOW: CashFlowSettings = { enabled: false, sources: [], taxRates: {}, categories: [] };
+const DEFAULT_LOCAL_AI: LocalAISettings = { enabled: false, provider: 'lmstudio', baseUrl: 'http://127.0.0.1:1234/v1', model: '' };
 const normalizeListValue = (value: string) => value.trim().toLocaleLowerCase();
+const replaceAt = <T,>(values: T[], index: number, value: T) => values.map((item, itemIndex) => itemIndex === index ? value : item);
+const removeAt = <T,>(values: T[], index: number) => values.filter((_, itemIndex) => itemIndex !== index);
 
 const findDuplicateValues = (values: string[]) => {
   const entries = new Map<string, { count: number; display: string }>();
@@ -46,10 +53,54 @@ const findDuplicateValues = (values: string[]) => {
       display: current?.display || value.trim()
     });
   });
-  return Array.from(entries.entries())
+  const items = Array.from(entries.entries())
     .filter(([, entry]) => entry.count > 1)
     .map(([normalized, entry]) => ({ normalized, display: entry.display }));
+  return { items, names: new Set(items.map(item => item.normalized)) };
 };
+
+const duplicateIssues = (duplicates: DuplicateValues, section: string, message: string): SettingsValidationIssue[] => (
+  duplicates.items.map(item => ({ section, value: item.display, message }))
+);
+
+type SettingsPanelProps = {
+  children: ReactNode; description: string; enabled: boolean; icon: ReactNode; intro: string; onEnabledChange: (enabled: boolean) => void; title: string;
+};
+
+const SettingsPanel = ({ children, description, enabled, icon, intro, onEnabledChange, title }: SettingsPanelProps) => (
+  <details className="glass-panel" open={enabled} style={{ marginTop: '16px', padding: 0 }}>
+    <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
+      {icon}
+      <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{title}</span>
+      <span style={{ fontSize: '12px' }}>{description}</span>
+    </summary>
+    <div className="cash-flow-settings-body">
+      <div className="cash-flow-settings-status">
+        <span>{intro}</span>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={enabled} onChange={event => onEnabledChange(event.target.checked)} style={enabledCheckboxStyle} />
+          Enabled
+        </label>
+      </div>
+      {children}
+    </div>
+  </details>
+);
+
+type CurrencyFieldProps = {
+  allowNone?: boolean; currencies: string[]; description: string; label: string; onChange: (value: string) => void; value: string;
+};
+
+const CurrencyField = ({ allowNone, currencies, description, label, onChange, value }: CurrencyFieldProps) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+    <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{label}</label>
+    <select className="input" value={value} onChange={event => onChange(event.target.value)} style={{ width: '100%', height: '36px' }}>
+      {allowNone && <option value="">— None —</option>}
+      {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+    </select>
+    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.35' }}>{description}</span>
+  </div>
+);
 
 export default function Settings() {
   const { settings, setSettings, loading } = useSettings();
@@ -71,22 +122,11 @@ export default function Settings() {
   const pendingScroll = useRef<ScrollableSettingsListKey | null>(null);
   const currentSettingsHash = useMemo(() => JSON.stringify(settings), [settings]);
   const isDirty = !!initialSettingsHash.current && initialSettingsHash.current !== currentSettingsHash;
-  const duplicateOrganizations = useMemo(() => (
-    findDuplicateValues(settings.organizations.map(organization => organization.name))
-  ), [settings.organizations]);
+  const duplicateOrganizations = useMemo(() => findDuplicateValues(settings.organizations.map(organization => organization.name)), [settings.organizations]);
   const duplicateCurrencies = useMemo(() => findDuplicateValues(settings.currencies), [settings.currencies]);
   const duplicateTags = useMemo(() => findDuplicateValues(settings.tags || []), [settings.tags]);
   const duplicateFlowSources = useMemo(() => findDuplicateValues(settings.cashFlow?.sources || []), [settings.cashFlow?.sources]);
   const duplicateFlowCategories = useMemo(() => findDuplicateValues(settings.cashFlow?.categories || []), [settings.cashFlow?.categories]);
-  const duplicateOrganizationNames = useMemo(() => (
-    new Set(duplicateOrganizations.map(item => item.normalized))
-  ), [duplicateOrganizations]);
-  const duplicateCurrencyNames = useMemo(() => (
-    new Set(duplicateCurrencies.map(item => item.normalized))
-  ), [duplicateCurrencies]);
-  const duplicateTagNames = useMemo(() => (
-    new Set(duplicateTags.map(item => item.normalized))
-  ), [duplicateTags]);
   const activeOrganizations = useMemo(() => (
     settings.organizations.map((organization, index) => ({ organization, index })).filter(({ organization }) => !organization.archivedAt)
   ), [settings.organizations]);
@@ -180,31 +220,11 @@ export default function Settings() {
 
   const handleSave = () => {
     const issues: SettingsValidationIssue[] = [
-      ...duplicateOrganizations.map(item => ({
-        section: 'Organization',
-        value: item.display,
-        message: 'This organization is listed more than once.'
-      })),
-      ...duplicateCurrencies.map(item => ({
-        section: 'Currency',
-        value: item.display,
-        message: 'This currency is listed more than once.'
-      })),
-      ...duplicateTags.map(item => ({
-        section: 'Balance tag',
-        value: item.display,
-        message: 'This balance tag is listed more than once.'
-      })),
-      ...duplicateFlowCategories.map(item => ({
-        section: 'Cash Flow category',
-        value: item.display,
-        message: 'This Cash Flow category is listed more than once.'
-      })),
-      ...duplicateFlowSources.map(item => ({
-        section: 'Cash Flow source',
-        value: item.display,
-        message: 'This Cash Flow source is listed more than once.'
-      })),
+      ...duplicateIssues(duplicateOrganizations, 'Organization', 'This organization is listed more than once.'),
+      ...duplicateIssues(duplicateCurrencies, 'Currency', 'This currency is listed more than once.'),
+      ...duplicateIssues(duplicateTags, 'Balance tag', 'This balance tag is listed more than once.'),
+      ...duplicateIssues(duplicateFlowCategories, 'Cash Flow category', 'This Cash Flow category is listed more than once.'),
+      ...duplicateIssues(duplicateFlowSources, 'Cash Flow source', 'This Cash Flow source is listed more than once.'),
       ...settings.organizations
         .filter(organization => !isValidCountryCode(organization.country))
         .map(organization => ({
@@ -252,9 +272,9 @@ export default function Settings() {
   };
 
   const updateList = (list: SettingsListKey, index: number, val: string) => {
-    const newList = [...(settings[list] || [])];
-    const previousValue = newList[index];
-    newList[index] = val;
+    const values = settings[list] || [];
+    const previousValue = values[index];
+    const newList = replaceAt(values, index, val);
     if (list === 'currencies') {
       const autoFetchCurrencies = [...(settings.autoFetchCurrencies || [])];
       const autoFetchIndex = autoFetchCurrencies.indexOf(previousValue);
@@ -279,9 +299,9 @@ export default function Settings() {
   };
 
   const removeFromList = (list: SettingsListKey, index: number) => {
-    const newList = [...(settings[list] || [])];
-    const removedValue = newList[index];
-    newList.splice(index, 1);
+    const values = settings[list] || [];
+    const removedValue = values[index];
+    const newList = removeAt(values, index);
     if (list === 'currencies') {
       const autoFetchCurrencies = [...(settings.autoFetchCurrencies || [])];
       const autoFetchIndex = autoFetchCurrencies.indexOf(removedValue);
@@ -293,9 +313,7 @@ export default function Settings() {
   };
 
   const updateOrganization = (index: number, field: 'name' | 'country', value: string) => {
-    const organizations = [...settings.organizations];
-    organizations[index] = { ...organizations[index], [field]: value };
-    setSettings({ ...settings, organizations });
+    setSettings({ ...settings, organizations: replaceAt(settings.organizations, index, { ...settings.organizations[index], [field]: value }) });
   };
 
   const addOrganization = () => {
@@ -315,17 +333,17 @@ export default function Settings() {
       .then(snapshots => {
         const normalizedName = normalizeListValue(organization.name);
         const parsed = (snapshots || []).map(snapshot => ({ ...snapshot, parsedData: JSON.parse(snapshot.data) }));
-        const matchingSnapshots = parsed.filter(snapshot => (
+        const snapshotCount = parsed.filter(snapshot => (
           snapshot.parsedData.organizations?.some((item: { name?: string }) => normalizeListValue(item.name || '') === normalizedName)
-        ));
-        const latestSnapshot = [...parsed].sort((a, b) => b.month.localeCompare(a.month))[0];
+        )).length;
+        const latestSnapshot = parsed.reduce((latest, snapshot) => !latest || snapshot.month > latest.month ? snapshot : latest, parsed[0]);
         const latestOrganization = latestSnapshot?.parsedData.organizations?.find((item: { name?: string }) => (
           normalizeListValue(item.name || '') === normalizedName
         ));
         const latestNonZeroBalances = (latestOrganization?.balances || [])
           .filter((balance: { amount?: number | string }) => Number(balance.amount || 0) !== 0)
           .map((balance: { amount?: number | string; currency?: string }) => `${balance.currency || ''} ${Number(balance.amount).toLocaleString('en-US')}`.trim());
-        setArchiveImpact({ index, loading: false, error: '', snapshotCount: matchingSnapshots.length, latestNonZeroBalances });
+        setArchiveImpact({ index, loading: false, error: '', snapshotCount, latestNonZeroBalances });
       })
       .catch(error => setArchiveImpact({
         index,
@@ -338,66 +356,38 @@ export default function Settings() {
 
   const archiveOrganization = () => {
     if (!archiveImpact) return;
-    const organizations = [...settings.organizations];
-    organizations[archiveImpact.index] = { ...organizations[archiveImpact.index], archivedAt: new Date().toISOString() };
-    setSettings({ ...settings, organizations });
+    const organization = { ...settings.organizations[archiveImpact.index], archivedAt: new Date().toISOString() };
+    setSettings({ ...settings, organizations: replaceAt(settings.organizations, archiveImpact.index, organization) });
     setArchiveImpact(null);
   };
 
   const restoreOrganization = (index: number) => {
-    const organizations = [...settings.organizations];
-    const { archivedAt: _archivedAt, ...organization } = organizations[index];
-    organizations[index] = organization;
-    setSettings({ ...settings, organizations });
+    const { archivedAt: _archivedAt, ...organization } = settings.organizations[index];
+    setSettings({ ...settings, organizations: replaceAt(settings.organizations, index, organization) });
   };
 
   const toggleAutoFetch = (curr: string) => {
     const autoFetch = settings.autoFetchCurrencies || [];
-    if (autoFetch.includes(curr)) {
-      setSettings({ ...settings, autoFetchCurrencies: autoFetch.filter(c => c !== curr) });
-    } else {
-      setSettings({ ...settings, autoFetchCurrencies: [...autoFetch, curr] });
-    }
+    const autoFetchCurrencies = autoFetch.includes(curr) ? autoFetch.filter(currency => currency !== curr) : [...autoFetch, curr];
+    setSettings({ ...settings, autoFetchCurrencies });
   };
 
   const updateLocalAI = (patch: Partial<LocalAISettings>) => {
-    setSettings({
-      ...settings,
-      localAI: {
-        enabled: false,
-        provider: 'lmstudio',
-        baseUrl: 'http://127.0.0.1:1234/v1',
-        model: '',
-        ...(settings.localAI || {}),
-        ...patch
-      }
-    });
+    setSettings({ ...settings, localAI: { ...DEFAULT_LOCAL_AI, ...settings.localAI, ...patch } });
   };
 
   const updateCashFlow = (patch: Partial<NonNullable<typeof settings.cashFlow>>) => {
-    setSettings({
-      ...settings,
-      cashFlow: {
-        enabled: false,
-        sources: [],
-        taxRates: {},
-        categories: [],
-        ...(settings.cashFlow || {}),
-        ...patch
-      }
-    });
+    setSettings({ ...settings, cashFlow: { ...DEFAULT_CASH_FLOW, ...settings.cashFlow, ...patch } });
   };
 
   const updateFlowCategory = (index: number, value: string) => {
-    const categories = [...(settings.cashFlow?.categories || [])];
-    categories[index] = value;
-    updateCashFlow({ categories });
+    updateCashFlow({ categories: replaceAt(settings.cashFlow?.categories || [], index, value) });
   };
 
   const updateFlowSource = (index: number, value: string) => {
-    const sources = [...(settings.cashFlow?.sources || [])];
-    const previousValue = sources[index];
-    sources[index] = value;
+    const currentSources = settings.cashFlow?.sources || [];
+    const sources = replaceAt(currentSources, index, value);
+    const previousValue = currentSources[index];
     const taxRates = { ...(settings.cashFlow?.taxRates || {}) };
     if (previousValue !== value && Object.hasOwn(taxRates, previousValue)) {
       taxRates[value] = taxRates[previousValue];
@@ -416,35 +406,27 @@ export default function Settings() {
     });
   };
 
-  const addFlowCategory = () => {
-    pendingScroll.current = 'categories';
-    updateCashFlow({ categories: [...(settings.cashFlow?.categories || []), ''] });
-  };
-
-  const addFlowSource = () => {
-    pendingScroll.current = 'sources';
-    updateCashFlow({ sources: [...(settings.cashFlow?.sources || []), ''] });
+  const addFlowValue = (list: FlowSettingsListKey) => {
+    pendingScroll.current = list;
+    updateCashFlow({ [list]: [...(settings.cashFlow?.[list] || []), ''] });
   };
 
   const removeFlowCategory = (index: number) => {
-    const categories = [...(settings.cashFlow?.categories || [])];
-    categories.splice(index, 1);
-    updateCashFlow({ categories });
+    updateCashFlow({ categories: removeAt(settings.cashFlow?.categories || [], index) });
   };
 
   const removeFlowSource = (index: number) => {
-    const sources = [...(settings.cashFlow?.sources || [])];
-    const removedSource = sources[index];
-    sources.splice(index, 1);
+    const currentSources = settings.cashFlow?.sources || [];
+    const removedSource = currentSources[index];
     const taxRates = { ...(settings.cashFlow?.taxRates || {}) };
     delete taxRates[removedSource];
-    updateCashFlow({ sources, taxRates });
+    updateCashFlow({ sources: removeAt(currentSources, index), taxRates });
   };
 
-  const chatModels = (aiStatus?.models || []).filter(model => {
+  const chatModels = useMemo(() => (aiStatus?.models || []).filter(model => {
     const value = `${model.id} ${model.type || ''}`.toLowerCase();
     return !value.includes('embed') && !value.includes('rerank') && !value.includes('whisper');
-  });
+  }), [aiStatus?.models]);
 
   const renderListSection = (title: string, list: SettingsListKey, placeholder?: string) => (
     <div className="glass-panel" style={{ padding: '18px 20px' }}>
@@ -454,14 +436,11 @@ export default function Settings() {
           <Plus size={14} /> Add
         </button>
       </div>
-      <div
-        ref={element => { scrollBodyRefs.current[list] = element; }}
-        style={listBodyStyle}
-      >
+      <div ref={element => { scrollBodyRefs.current[list] = element; }} style={listBodyStyle}>
         {(settings[list] || []).map((item, i) => {
           const isCurrency = list === 'currencies';
           const isAuto = isCurrency && (settings.autoFetchCurrencies || []).includes(item);
-          const duplicateNames = isCurrency ? duplicateCurrencyNames : duplicateTagNames;
+          const duplicateNames = isCurrency ? duplicateCurrencies.names : duplicateTags.names;
           const isDuplicate = duplicateNames.has(normalizeListValue(item));
 
           return (
@@ -499,11 +478,7 @@ export default function Settings() {
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-2">
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Organizations</h3>
-          <HelpTooltip
-            text="Country is optional. Finn stores it as an ISO 3166-1 alpha-3 code, for example DEU or USA."
-            ariaLabel="Organization country explanation"
-            width={280}
-          />
+          <HelpTooltip text="Country is optional. Finn stores it as an ISO 3166-1 alpha-3 code, for example DEU or USA." ariaLabel="Organization country explanation" width={280} />
         </div>
         <button className="btn" style={compactButtonStyle} onClick={addOrganization} aria-label="Add organization">
           <Plus size={14} /> Add
@@ -511,7 +486,7 @@ export default function Settings() {
       </div>
       <div ref={element => { scrollBodyRefs.current.organizations = element; }} style={organizationListBodyStyle}>
         {activeOrganizations.map(({ organization, index }) => {
-          const isDuplicate = duplicateOrganizationNames.has(normalizeListValue(organization.name));
+          const isDuplicate = duplicateOrganizations.names.has(normalizeListValue(organization.name));
           return (
             <div key={index} className="flex gap-2 items-center">
               <input
@@ -526,11 +501,7 @@ export default function Settings() {
               {isDuplicate && (
                 <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>Duplicate</span>
               )}
-              <CountrySelect
-                id={`organization-country-${index}`}
-                value={organization.country}
-                onChange={value => updateOrganization(index, 'country', value)}
-              />
+              <CountrySelect id={`organization-country-${index}`} value={organization.country} onChange={value => updateOrganization(index, 'country', value)} />
               <button className="btn" style={{ ...iconButtonStyle, color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.3)' }} onClick={() => requestArchiveOrganization(index)} title={`Archive ${organization.name || 'organization'}`}>
                 <Archive size={16} />
               </button>
@@ -579,36 +550,16 @@ export default function Settings() {
         <h3 style={{ margin: '0 0 14px 0', fontSize: '18px', fontWeight: 600 }}>Currency Framework</h3>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>Base Currency</label>
-            <select
-              className="input"
-              value={settings.baseCurrency || 'RUB'}
-              onChange={e => setSettings({ ...settings, baseCurrency: e.target.value })}
-              style={{ width: '100%', height: '36px' }}
-            >
-              {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.35' }}>
-              The primary asset standard for your total net worth metrics.
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>Secondary Currency</label>
-            <select
-              className="input"
-              value={settings.secondaryCurrency ?? 'USD'}
-              onChange={e => setSettings({ ...settings, secondaryCurrency: e.target.value })}
-              style={{ width: '100%', height: '36px' }}
-            >
-              <option value="">— None —</option>
-              {settings.currencies.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.35' }}>
-              Displayed concurrently alongside base units inside grids and trends.
-            </span>
-          </div>
+          <CurrencyField
+            label="Base Currency" value={settings.baseCurrency || 'RUB'} currencies={settings.currencies}
+            onChange={baseCurrency => setSettings({ ...settings, baseCurrency })}
+            description="The primary asset standard for your total net worth metrics."
+          />
+          <CurrencyField
+            label="Secondary Currency" value={settings.secondaryCurrency ?? 'USD'} currencies={settings.currencies}
+            onChange={secondaryCurrency => setSettings({ ...settings, secondaryCurrency })}
+            description="Displayed concurrently alongside base units inside grids and trends." allowNone
+          />
         </div>
       </div>
 
@@ -621,26 +572,12 @@ export default function Settings() {
         {renderListSection('Balance Tags', 'tags', 'e.g. Safety Cushion, Crypto')}
       </div>
 
-      <details className="glass-panel" open={settings.cashFlow?.enabled} style={{ marginTop: '16px', padding: 0 }}>
-        <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
-          <ArrowDownUp size={17} />
-          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Cash Flow</span>
-          <span style={{ fontSize: '12px' }}>External incoming and outgoing money movements</span>
-        </summary>
-        <div className="cash-flow-settings-body">
-          <div className="cash-flow-settings-status">
-            <span>Reusable suggestions for the period editor.</span>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={settings.cashFlow?.enabled ?? false}
-                onChange={event => updateCashFlow({ enabled: event.target.checked })}
-                style={{ width: '17px', height: '17px', accentColor: 'var(--accent)' }}
-              />
-              Enabled
-            </label>
-          </div>
-
+      <SettingsPanel
+        title="Cash Flow" description="External incoming and outgoing money movements"
+        intro="Reusable suggestions for the period editor." icon={<ArrowDownUp size={17} />}
+        enabled={settings.cashFlow?.enabled ?? false}
+        onEnabledChange={enabled => updateCashFlow({ enabled })}
+      >
           <div className="cash-flow-settings-grid" style={{ opacity: settings.cashFlow?.enabled ? 1 : 0.55 }}>
             <section className="cash-flow-settings-section">
               <div className="cash-flow-settings-section-header">
@@ -648,7 +585,7 @@ export default function Settings() {
                   <div style={{ fontSize: '14px', fontWeight: 600 }}>Sources & recipients</div>
                   <div className="cash-flow-settings-section-description">From/To suggestions with an optional default tax.</div>
                 </div>
-                <button className="btn" style={compactButtonStyle} onClick={addFlowSource} disabled={!settings.cashFlow?.enabled}>
+                <button className="btn" style={compactButtonStyle} onClick={() => addFlowValue('sources')} disabled={!settings.cashFlow?.enabled}>
                   <Plus size={14} /> Add
                 </button>
               </div>
@@ -656,29 +593,20 @@ export default function Settings() {
                 <span>Name</span>
                 <span>Default tax</span>
               </div>
-              <div
-                ref={element => { scrollBodyRefs.current.sources = element; }}
-                className="cash-flow-settings-list"
-              >
+              <div ref={element => { scrollBodyRefs.current.sources = element; }} className="cash-flow-settings-list">
                 {(settings.cashFlow?.sources || []).map((source, index) => {
-                  const isDuplicate = duplicateFlowSources.some(item => item.normalized === normalizeListValue(source));
+                  const isDuplicate = duplicateFlowSources.names.has(normalizeListValue(source));
                   return (
                     <div key={index} className="cash-flow-source-setting-row">
                       <input
-                        className="input"
-                        value={source}
+                        className="input" value={source} disabled={!settings.cashFlow?.enabled}
                         onChange={event => updateFlowSource(index, event.target.value)}
-                        disabled={!settings.cashFlow?.enabled}
                         placeholder="e.g. Employer or landlord"
                         style={isDuplicate ? { borderColor: 'var(--danger)' } : undefined}
                       />
                       <div className="cash-flow-tax-rate-setting">
                         <input
-                          className="input"
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
+                          className="input" type="number" min="0" max="100" step="0.01"
                           aria-label={`${source || `Source ${index + 1}`} default tax rate`}
                           value={settings.cashFlow?.taxRates?.[source] ?? 0}
                           onChange={event => updateFlowSourceTaxRate(source, event.target.value)}
@@ -704,24 +632,19 @@ export default function Settings() {
                   <div style={{ fontSize: '14px', fontWeight: 600 }}>Categories</div>
                   <div className="cash-flow-settings-section-description">Labels used to group incoming and outgoing movements.</div>
                 </div>
-                <button className="btn" style={compactButtonStyle} onClick={addFlowCategory} disabled={!settings.cashFlow?.enabled}>
+                <button className="btn" style={compactButtonStyle} onClick={() => addFlowValue('categories')} disabled={!settings.cashFlow?.enabled}>
                   <Plus size={14} /> Add
                 </button>
               </div>
               <div className="cash-flow-category-setting-label-spacer" aria-hidden="true" />
-              <div
-                ref={element => { scrollBodyRefs.current.categories = element; }}
-                className="cash-flow-settings-list"
-              >
+              <div ref={element => { scrollBodyRefs.current.categories = element; }} className="cash-flow-settings-list">
                 {(settings.cashFlow?.categories || []).map((category, index) => {
-                  const isDuplicate = duplicateFlowCategories.some(item => item.normalized === normalizeListValue(category));
+                  const isDuplicate = duplicateFlowCategories.names.has(normalizeListValue(category));
                   return (
                     <div key={index} className="cash-flow-simple-setting-row">
                       <input
-                        className="input"
-                        value={category}
+                        className="input" value={category} disabled={!settings.cashFlow?.enabled}
                         onChange={event => updateFlowCategory(index, event.target.value)}
-                        disabled={!settings.cashFlow?.enabled}
                         placeholder="e.g. Debt repayment"
                         style={isDuplicate ? { borderColor: 'var(--danger)' } : undefined}
                       />
@@ -737,40 +660,21 @@ export default function Settings() {
               </div>
             </section>
           </div>
-        </div>
-      </details>
+      </SettingsPanel>
 
-      <details className="glass-panel" open={settings.localAI?.enabled} style={{ marginTop: '16px', padding: 0 }}>
-        <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
-          <Server size={17} />
-          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>Local AI</span>
-          <span style={{ fontSize: '12px' }}>Connection settings and model selection</span>
-        </summary>
-        <div className="cash-flow-settings-body">
-          <div className="cash-flow-settings-status">
-            <span>
-              Connect Finn to an OpenAI-compatible model server running on this computer.
-            </span>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={settings.localAI?.enabled ?? false}
-                onChange={event => updateLocalAI({ enabled: event.target.checked })}
-                style={{ width: '17px', height: '17px', accentColor: 'var(--accent)' }}
-              />
-              Enabled
-            </label>
-          </div>
-
+      <SettingsPanel
+        title="Local AI" description="Connection settings and model selection"
+        intro="Connect Finn to an OpenAI-compatible model server running on this computer."
+        icon={<Server size={17} />} enabled={settings.localAI?.enabled ?? false}
+        onEnabledChange={enabled => updateLocalAI({ enabled })}
+      >
           <div className="local-ai-settings-content" style={{ opacity: settings.localAI?.enabled ? 1 : 0.55 }}>
             <div className="local-ai-settings-grid">
               <div className="cash-flow-field">
                 <label>Provider</label>
                 <select
-                  className="input"
-                  value={settings.localAI?.provider || 'lmstudio'}
+                  className="input" value={settings.localAI?.provider || 'lmstudio'} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ provider: event.target.value as LocalAISettings['provider'] })}
-                  disabled={!settings.localAI?.enabled}
                 >
                   <option value="lmstudio">LM Studio</option>
                   <option value="openai-compatible">OpenAI compatible</option>
@@ -779,20 +683,16 @@ export default function Settings() {
               <div className="cash-flow-field">
                 <label>Server URL</label>
                 <input
-                  className="input"
-                  value={settings.localAI?.baseUrl || 'http://127.0.0.1:1234/v1'}
+                  className="input" value={settings.localAI?.baseUrl || 'http://127.0.0.1:1234/v1'} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ baseUrl: event.target.value })}
-                  disabled={!settings.localAI?.enabled}
                   placeholder="http://127.0.0.1:1234/v1"
                 />
               </div>
               <div className="cash-flow-field">
                 <label>Chat model</label>
                 <select
-                  className="input"
-                  value={settings.localAI?.model || ''}
+                  className="input" value={settings.localAI?.model || ''} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ model: event.target.value })}
-                  disabled={!settings.localAI?.enabled}
                 >
                   <option value="">Auto-select first chat model</option>
                   {chatModels.map(model => <option key={model.id} value={model.id}>{model.id}</option>)}
@@ -802,8 +702,7 @@ export default function Settings() {
                 </select>
               </div>
               <button
-                className="btn"
-                onClick={() => void probeLocalAI()}
+                className="btn" onClick={() => void probeLocalAI()}
                 disabled={aiProbing || !settings.localAI?.enabled}
               >
                 {aiProbing ? <Spinner label="Checking local AI server" size={15} /> : <RefreshCw size={15} />} Test
@@ -823,35 +722,24 @@ export default function Settings() {
               For privacy, Finn accepts loopback addresses only. The financial dataset is sent directly from the Go backend to the local server.
             </div>
           </div>
-        </div>
-      </details>
+      </SettingsPanel>
 
       {showLeaveConfirm && (
         <ConfirmLeaveModal
           message="Settings have unsaved changes. Leave without saving?"
-          onCancel={() => {
-            setShowLeaveConfirm(false);
-            setPendingNavigation(null);
-          }}
+          onCancel={() => { setShowLeaveConfirm(false); setPendingNavigation(null); }}
           onConfirm={() => navigate(pendingNavigation || '/')}
         />
       )}
       {validationIssues.length > 0 && (
-        <SettingsValidationModal
-          issues={validationIssues}
-          onClose={() => setValidationIssues([])}
-        />
+        <SettingsValidationModal issues={validationIssues} onClose={() => setValidationIssues([])} />
       )}
       {archiveImpact && (
         <ArchiveOrganizationModal
-          name={settings.organizations[archiveImpact.index]?.name || ''}
-          country={settings.organizations[archiveImpact.index]?.country}
-          loading={archiveImpact.loading}
-          error={archiveImpact.error}
-          snapshotCount={archiveImpact.snapshotCount}
+          name={settings.organizations[archiveImpact.index]?.name || ''} country={settings.organizations[archiveImpact.index]?.country}
+          loading={archiveImpact.loading} error={archiveImpact.error} snapshotCount={archiveImpact.snapshotCount}
           latestNonZeroBalances={archiveImpact.latestNonZeroBalances}
-          onCancel={() => setArchiveImpact(null)}
-          onConfirm={archiveOrganization}
+          onCancel={() => setArchiveImpact(null)} onConfirm={archiveOrganization}
         />
       )}
     </div>
