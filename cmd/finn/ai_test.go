@@ -50,6 +50,22 @@ func newAITestDB(t *testing.T, baseURL string) *sql.DB {
 			duration_seconds INTEGER DEFAULT 0
 		);
 		CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+		CREATE TABLE flow_entries (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			month TEXT NOT NULL,
+			entry_type TEXT NOT NULL DEFAULT 'external',
+			direction TEXT NOT NULL,
+			counterparty TEXT NOT NULL DEFAULT '',
+			account TEXT NOT NULL DEFAULT '',
+			currency TEXT NOT NULL,
+			amount REAL NOT NULL,
+			tax_rate REAL NOT NULL DEFAULT 0,
+			category TEXT NOT NULL DEFAULT '',
+			comment TEXT NOT NULL DEFAULT '',
+			to_account TEXT NOT NULL DEFAULT '',
+			to_currency TEXT NOT NULL DEFAULT '',
+			to_amount REAL NOT NULL DEFAULT 0
+		);
 	`)
 	if err != nil {
 		db.Close()
@@ -95,6 +111,29 @@ func newAITestDB(t *testing.T, baseURL string) *sql.DB {
 			t.Fatal(err)
 		}
 	}
+	flows := []struct {
+		month, entryType, direction, counterparty, account, currency string
+		amount, taxRate                                              float64
+		category, comment, toAccount, toCurrency                     string
+		toAmount                                                     float64
+	}{
+		{"2026-01", "external", "in", "Employer", "Bank", "USD", 100, 10, "salary", "Salary to Bank", "", "", 0},
+		{"2026-02", "external", "out", "Landlord", "Bank", "RUB", 300, 0, "rent", "Rent", "", "", 0},
+		{"2026-02", "transfer", "out", "", "Bank", "USD", 5, 0, "", "Bank to Broker", "Broker", "RUB", 550},
+	}
+	for _, flow := range flows {
+		if _, err := db.Exec(`
+			INSERT INTO flow_entries (
+				month, entry_type, direction, counterparty, account, currency, amount,
+				tax_rate, category, comment, to_account, to_currency, to_amount
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, flow.month, flow.entryType, flow.direction, flow.counterparty, flow.account,
+			flow.currency, flow.amount, flow.taxRate, flow.category, flow.comment,
+			flow.toAccount, flow.toCurrency, flow.toAmount); err != nil {
+			db.Close()
+			t.Fatal(err)
+		}
+	}
 	t.Cleanup(func() { db.Close() })
 	return db
 }
@@ -134,6 +173,7 @@ func TestBuildFinancialContextIncludesDerivedMetrics(t *testing.T) {
 	checks := []string{
 		`You are a financial analysis assistant.`,
 		`"snapshot_count":2`,
+		`"cash_flow_count":3`,
 		`"first_month":"2026-01"`,
 		`"last_month":"2026-02"`,
 		`"month":"2026-02"`,
@@ -146,6 +186,9 @@ func TestBuildFinancialContextIncludesDerivedMetrics(t *testing.T) {
 		`"currency_shares_percent":{"RUB":57.6923,"USD":42.3077}`,
 		`currency_values_base: exact value of each currency position converted to base_currency`,
 		`currency_shares_percent: exact percentage exposure`,
+		`"entry_type":"external","direction":"in","counterparty":"Employer","account":"Bank","currency":"USD","amount":100,"tax_rate":10,"category":"salary","comment":"Salary to Bank"`,
+		`"entry_type":"transfer","direction":"out","account":"Bank","currency":"USD","amount":5,"comment":"Bank to Broker","to_account":"Broker","to_currency":"RUB","to_amount":550`,
+		`Never count it as income, spending, savings, or an external capital contribution/withdrawal`,
 	}
 	for _, expected := range checks {
 		if !strings.Contains(info.Prompt, expected) {
@@ -182,6 +225,8 @@ func TestBuildFinancialContextHidesOrganizations(t *testing.T) {
 		`"country":"RUS"`,
 		`"comment":"Moved money from Organization1 to Organization2"`,
 		`"organization_totals_base":{"Organization1":1500,"Organization2":1100}`,
+		`"account":"Organization1"`,
+		`"comment":"Organization1 to Organization2"`,
 		`Organization names and identifiers were anonymized consistently`,
 	} {
 		if !strings.Contains(hidden.Prompt, expected) {
@@ -279,6 +324,7 @@ func TestBuildFinancialContextFiltersSnapshotsWithoutLosingFlowBaseline(t *testi
 	}
 	checks := []string{
 		`"snapshot_count":1`,
+		`"cash_flow_count":2`,
 		`"first_month":"2026-02"`,
 		`"organic_delta":500`,
 		`"fx_impact_delta":100`,
@@ -291,6 +337,9 @@ func TestBuildFinancialContextFiltersSnapshotsWithoutLosingFlowBaseline(t *testi
 	if strings.Contains(info.Prompt, `"month":"2026-01"`) {
 		t.Fatal("filtered context unexpectedly contains an excluded snapshot")
 	}
+	if strings.Contains(info.Prompt, `"counterparty":"Employer"`) {
+		t.Fatal("filtered context unexpectedly contains an excluded cash flow entry")
+	}
 
 	rangeInfo, err := buildFinancialContext(db, aiContextFilter{FromMonth: "2026-01", ToMonth: "2026-01"})
 	if err != nil {
@@ -298,6 +347,9 @@ func TestBuildFinancialContextFiltersSnapshotsWithoutLosingFlowBaseline(t *testi
 	}
 	if rangeInfo.Snapshots != 1 || !strings.Contains(rangeInfo.Prompt, `"last_month":"2026-01"`) {
 		t.Fatalf("unexpected range context: %+v", rangeInfo)
+	}
+	if !strings.Contains(rangeInfo.Prompt, `"cash_flow_count":1`) || strings.Contains(rangeInfo.Prompt, `"counterparty":"Landlord"`) {
+		t.Fatal("range context contains cash flow outside the selected period")
 	}
 }
 

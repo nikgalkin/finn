@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Search } from 'lucide-react';
+import { ChevronDown, Plus, Search } from 'lucide-react';
 
 type SearchableSelectProps = {
   id?: string;
@@ -17,6 +17,7 @@ type SearchableSelectProps = {
   textAlign?: 'left' | 'center';
   portal?: boolean;
   portalZIndex?: number;
+  allowCustom?: boolean;
 };
 
 const triggerStyle = { padding: '4px 8px', background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' as const, height: '28px' };
@@ -25,7 +26,7 @@ const searchIconStyle = { position: 'absolute' as const, left: '8px', top: '50%'
 const searchInputStyle = { width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '4px', padding: '2px 6px 2px 22px', fontSize: '12px', color: 'var(--text-primary)', outline: 'none' };
 const optionsStyle = { overflowY: 'auto' as const, flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '2px' };
 
-export function SearchableSelect({ id, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false, portalZIndex = 10000 }: SearchableSelectProps) {
+export function SearchableSelect({ id, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false, portalZIndex = 10000, allowCustom = false }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0 });
@@ -79,9 +80,13 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
   const filteredOptions = options.filter(opt =>
     opt.toLowerCase().includes(search.toLowerCase())
   );
+  const customValue = search.trim();
+  const exactOption = options.find(option => option.toLowerCase() === customValue.toLowerCase());
+  const canCreate = allowCustom && customValue !== '' && !exactOption;
 
   const selectOption = (option: string) => {
     onChange(option);
+    setSearch('');
     setIsOpen(false);
   };
 
@@ -98,6 +103,7 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
           <Search size={12} style={searchIconStyle} />
           <input
             type="text"
+            aria-label={`${ariaLabel || placeholder} search`}
             value={search}
             onChange={event => setSearch(event.target.value)}
             onKeyDown={event => {
@@ -106,12 +112,13 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
                 setIsOpen(false);
                 return;
               }
-              if (event.key === 'Enter' && !event.nativeEvent.isComposing && filteredOptions[0]) {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing && (exactOption || canCreate || filteredOptions[0])) {
                 event.preventDefault();
-                selectOption(filteredOptions[0]);
+                const option = exactOption || (canCreate ? customValue : filteredOptions[0]);
+                if (option) selectOption(option);
               }
             }}
-            placeholder="Search..."
+            placeholder={allowCustom ? 'Search or create...' : 'Search...'}
             autoFocus
             style={searchInputStyle}
           />
@@ -119,6 +126,17 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
       )}
 
       <div style={optionsStyle}>
+        {canCreate && (
+          <div
+            role="option"
+            aria-selected="false"
+            onClick={() => selectOption(customValue)}
+            style={{ padding: '6px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', textAlign: 'left', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}
+            className="hover:bg-[rgba(255,255,255,0.05)]"
+          >
+            <Plus size={13} /> Create “{customValue}”
+          </div>
+        )}
         {filteredOptions.map(option => (
           <div
             key={option}
@@ -139,7 +157,7 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
             {option}
           </div>
         ))}
-        {filteredOptions.length === 0 && (
+        {filteredOptions.length === 0 && !canCreate && (
           <div style={{ padding: '8px', fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center' }}>
             No results
           </div>

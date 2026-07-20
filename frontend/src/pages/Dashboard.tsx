@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock } from 'lucide-react';
-import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Dot, PieChart, Pie, Cell } from 'recharts';
+import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
@@ -41,7 +41,7 @@ const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency
       </div>
 
       <ul style={{ listStyleType: 'none', padding: 0, margin: 0 }}>
-        {payload.map((item: any) => {
+        {payload.filter((item: any) => item.name === 'BASE' || item.name === 'SECONDARY').map((item: any) => {
           const isBase = item.name === 'BASE';
           const numValue = Number(item.value) || 0;
           const formattedValue = numValue.toLocaleString('en-US');
@@ -127,7 +127,7 @@ export default function Dashboard() {
   };
 
   const chartData = useMemo(() => {
-    return snapshots.map(s => {
+    const points = snapshots.map(s => {
       const totals = calculateTotals(s, baseCurrency, secondaryCurrency);
       return {
         name: s.month,
@@ -136,19 +136,30 @@ export default function Dashboard() {
         hasComment: hasAnyComments(s)
       };
     });
+    return points;
   }, [snapshots, baseCurrency, secondaryCurrency]);
 
-  const CustomDot = (props: any) => {
+  const CommentDot = (props: any) => {
     const { cx, cy, payload } = props;
     if (payload && payload.hasComment) {
       return (
         <g key={cx} style={{ cursor: 'pointer' }}>
-          <circle cx={cx} cy={cy} r={7} fill="none" stroke="#3b82f6" strokeWidth={2} />
-          <circle cx={cx} cy={cy} r={4} fill="#3b82f6" />
+          <line
+            x1={cx}
+            y1={cy + 6}
+            x2={cx}
+            y2="calc(100% - 45px)"
+            stroke="#34d399"
+            strokeWidth={1}
+            strokeDasharray="3 5"
+            opacity={0.18}
+          />
+          <circle cx={cx} cy={cy} r={4.60} fill="var(--bg-color)" fillOpacity={0.62} stroke="#34d399" strokeWidth={2} strokeOpacity={0.68} />
+          <circle cx={cx} cy={cy} r={2.00} fill="#10b981" opacity={0.59} />
         </g>
       );
     }
-    return <Dot {...props} />;
+    return <g />;
   };
 
   const handleChartClick = (state: any) => {
@@ -349,9 +360,9 @@ export default function Dashboard() {
                       <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => formatCompactNumber(val)} />
                     )}
                     <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} secondaryCurrency={secondaryCurrency} />} />
-                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" />
+                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" dot={<CommentDot />} />
                     {secondaryCurrency && secondaryCurrency !== baseCurrency && (
-                      <Line yAxisId="right" type="monotone" dataKey="SECONDARY" name="SECONDARY" stroke="#6366f1" strokeWidth={3} dot={<CustomDot />} activeDot={{ r: 6 }} />
+                      <Line yAxisId="right" type="monotone" dataKey="SECONDARY" name="SECONDARY" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                     )}
                   </AreaChart>
                 </ResponsiveContainer>

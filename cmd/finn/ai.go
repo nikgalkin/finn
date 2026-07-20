@@ -110,6 +110,22 @@ type aiDerivedMetrics struct {
 	TagTotals          map[string]float64 `json:"tag_totals_base"`
 }
 
+type aiCashFlowEntry struct {
+	Month        string  `json:"month"`
+	EntryType    string  `json:"entry_type"`
+	Direction    string  `json:"direction"`
+	Counterparty string  `json:"counterparty,omitempty"`
+	Account      string  `json:"account"`
+	Currency     string  `json:"currency"`
+	Amount       float64 `json:"amount"`
+	TaxRate      float64 `json:"tax_rate,omitempty"`
+	Category     string  `json:"category,omitempty"`
+	Comment      string  `json:"comment,omitempty"`
+	ToAccount    string  `json:"to_account,omitempty"`
+	ToCurrency   string  `json:"to_currency,omitempty"`
+	ToAmount     float64 `json:"to_amount,omitempty"`
+}
+
 type aiContextPreview struct {
 	Prompt          string   `json:"prompt"`
 	Bytes           int      `json:"bytes"`
@@ -136,6 +152,8 @@ type aiFinancialDataset struct {
 	SecondaryCurrency string              `json:"secondary_currency,omitempty"`
 	Settings          map[string]any      `json:"settings"`
 	Snapshots         []aiContextSnapshot `json:"snapshots"`
+	CashFlowCount     int                 `json:"cash_flow_count"`
+	CashFlow          []aiCashFlowEntry   `json:"cash_flow"`
 }
 
 type aiContextInfo struct {
@@ -606,6 +624,63 @@ func anonymizeAISnapshot(data *aiSnapshotData, anonymizer *aiOrganizationAnonymi
 	}
 }
 
+func loadAICashFlow(db *sql.DB, firstMonth, lastMonth string) ([]aiCashFlowEntry, error) {
+	query := `
+		SELECT month, entry_type, direction, counterparty, account, currency, amount,
+		       tax_rate, category, comment, to_account, to_currency, to_amount
+		FROM flow_entries
+	`
+	args := make([]any, 0, 2)
+	conditions := make([]string, 0, 2)
+	if firstMonth != "" {
+		conditions = append(conditions, "month >= ?")
+		args = append(args, firstMonth)
+	}
+	if lastMonth != "" {
+		conditions = append(conditions, "month <= ?")
+		args = append(args, lastMonth)
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY month ASC, id ASC"
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	entries := make([]aiCashFlowEntry, 0)
+	for rows.Next() {
+		var entry aiCashFlowEntry
+		if err := rows.Scan(
+			&entry.Month, &entry.EntryType, &entry.Direction, &entry.Counterparty,
+			&entry.Account, &entry.Currency, &entry.Amount, &entry.TaxRate,
+			&entry.Category, &entry.Comment, &entry.ToAccount, &entry.ToCurrency,
+			&entry.ToAmount,
+		); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+func anonymizeAICashFlow(entries []aiCashFlowEntry, anonymizer *aiOrganizationAnonymizer) {
+	for index := range entries {
+		entries[index].Account = anonymizer.alias(entries[index].Account)
+		entries[index].ToAccount = anonymizer.alias(entries[index].ToAccount)
+	}
+	for index := range entries {
+		entries[index].Counterparty = anonymizer.text(entries[index].Counterparty)
+		entries[index].Comment = anonymizer.text(entries[index].Comment)
+	}
+}
+
 func buildFinancialContext(db *sql.DB, filter aiContextFilter) (aiContextInfo, error) {
 	if err := validateAIContextFilter(filter); err != nil {
 		return aiContextInfo{}, err
@@ -633,11 +708,12 @@ func buildFinancialContext(db *sql.DB, filter aiContextFilter) (aiContextInfo, e
 	defer rows.Close()
 
 	dataset := aiFinancialDataset{
-		SchemaVersion:     1,
+		SchemaVersion:     2,
 		BaseCurrency:      baseCurrency,
 		SecondaryCurrency: secondaryCurrency,
 		Settings:          master,
 		Snapshots:         []aiContextSnapshot{},
+		CashFlow:          []aiCashFlowEntry{},
 	}
 	for rows.Next() {
 		var month, rawData string
@@ -676,6 +752,9 @@ func buildFinancialContext(db *sql.DB, filter aiContextFilter) (aiContextInfo, e
 	if err := rows.Err(); err != nil {
 		return aiContextInfo{}, err
 	}
+	if err := rows.Close(); err != nil {
+		return aiContextInfo{}, err
+	}
 	for index := range dataset.Snapshots {
 		var previous *aiContextSnapshot
 		if index > 0 {
@@ -693,6 +772,20 @@ func buildFinancialContext(db *sql.DB, filter aiContextFilter) (aiContextInfo, e
 		dataset.FirstMonth = dataset.Snapshots[0].Month
 		dataset.LastMonth = dataset.Snapshots[dataset.SnapshotCount-1].Month
 	}
+	flowFirstMonth := dataset.FirstMonth
+	flowLastMonth := dataset.LastMonth
+	if dataset.SnapshotCount == 0 {
+		flowFirstMonth = filter.FromMonth
+		flowLastMonth = filter.ToMonth
+	}
+	dataset.CashFlow, err = loadAICashFlow(db, flowFirstMonth, flowLastMonth)
+	if err != nil {
+		return aiContextInfo{}, fmt.Errorf("load cash flow: %w", err)
+	}
+	if organizationAnonymizer != nil {
+		anonymizeAICashFlow(dataset.CashFlow, organizationAnonymizer)
+	}
+	dataset.CashFlowCount = len(dataset.CashFlow)
 
 	rawDataset, err := json.Marshal(dataset)
 	if err != nil {
@@ -713,6 +806,10 @@ Rules:
 - Treat every number under derived as authoritative. Never replace it with a manual recalculation from raw data.
 - If a user asks for currency exposure, quote currency_shares_percent directly. Do not recompute percentages.
 - Never change a provided value merely to make a total look plausible. If fields appear inconsistent, report the inconsistency.
+- Cash Flow is a record of entered movements and may be incomplete. Do not assume it fully reconciles with snapshot balance changes.
+- For cash_flow entries, external/in is income and external/out is spending. An incoming amount after tax is amount * (1 - tax_rate / 100).
+- A transfer is an internal movement between accounts or currencies. Never count it as income, spending, savings, or an external capital contribution/withdrawal.
+- Cash Flow amounts are raw units in currency; transfer to_amount values are raw units in to_currency. Never sum different currencies directly.
 
 Metric definitions:
 - total_base: total portfolio value converted using that month's rates.
@@ -723,6 +820,7 @@ Metric definitions:
 - currency_shares_percent: exact percentage exposure of each currency within total_base. Use these values verbatim for allocation questions.
 - organization_totals_base and tag_totals_base are exact values converted to base_currency.
 - tag totals split a balance equally when it has multiple tags.
+- cash_flow contains the recorded movements within the selected snapshot period, ordered by month. entry_type is external or transfer.
 
 <FINANCIAL_DATA fingerprint="` + fingerprint + `">
 ` + string(rawDataset) + `

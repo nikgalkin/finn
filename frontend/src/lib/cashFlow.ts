@@ -11,13 +11,14 @@ export type FlowCurrencySummary = {
 export type FlowSummary = Array<[string, FlowCurrencySummary]>;
 
 export const calculateFlowTax = (
-  entry: Pick<FlowEntry, 'direction' | 'amount' | 'taxRate'>
-) => entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0;
+  entry: Pick<FlowEntry, 'entryType' | 'direction' | 'amount' | 'taxRate'>
+) => entry.entryType !== 'transfer' && entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0;
 
 export const summarizeFlowEntries = (entries: FlowEntry[]): FlowSummary => {
   const byCurrency = new Map<string, FlowCurrencySummary>();
 
   entries.forEach(entry => {
+    if (entry.entryType === 'transfer') return;
     const total = byCurrency.get(entry.currency) || {
       incoming: 0,
       incomingNet: 0,
@@ -40,4 +41,3 @@ export const summarizeFlowEntries = (entries: FlowEntry[]): FlowSummary => {
 
   return Array.from(byCurrency.entries()).sort(([left], [right]) => left.localeCompare(right));
 };
-

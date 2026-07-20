@@ -14,7 +14,7 @@ type FlowCsvImportModalProps = {
   onImport: () => void;
 };
 
-const formatAmount = (amount: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(amount);
+const formatAmount = (amount: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount);
 
 export function FlowCsvImportModal({ preview, importing, error, importDuplicates, onImportDuplicatesChange, onClose, onImport }: FlowCsvImportModalProps) {
   useEffect(() => {
@@ -80,7 +80,7 @@ export function FlowCsvImportModal({ preview, importing, error, importDuplicates
               )}
               <div className="cash-flow-import-preview">
                 <table className="table">
-                  <thead><tr><th>Status</th><th>Month</th><th>Direction</th><th>Counterparty</th><th>Gross amount</th><th>Tax</th><th>Category</th><th>Comment</th></tr></thead>
+                  <thead><tr><th>Status</th><th>Month</th><th>Type</th><th>From / To</th><th>Own account</th><th>Amount</th><th>Tax</th><th>Category</th><th>Comment</th></tr></thead>
                   <tbody>
                     {shownEntries.map((entry, index) => {
                       const duplicate = duplicatesByIndex.get(index);
@@ -94,11 +94,14 @@ export function FlowCsvImportModal({ preview, importing, error, importDuplicates
                             ) : <span className="cash-flow-import-status">New</span>}
                           </td>
                           <td>{entry.month}</td>
-                          <td className={entry.direction === 'in' ? 'text-success' : 'text-danger'}>{entry.direction}</td>
-                          <td>{entry.counterparty}</td>
-                          <td>{formatAmount(entry.amount)} {entry.currency}</td>
-                          <td>{entry.taxRate ? `${formatAmount(entry.taxRate)}%` : '—'}</td>
-                          <td>{entry.category || '—'}</td>
+                          <td className={entry.entryType === 'transfer' ? undefined : entry.direction === 'in' ? 'text-success' : 'text-danger'}>{entry.entryType === 'transfer' ? 'transfer' : entry.direction}</td>
+                          <td>{entry.entryType === 'transfer' ? `${entry.account} → ${entry.toAccount}` : entry.counterparty}</td>
+                          <td>{entry.entryType === 'transfer' ? '—' : entry.account || '—'}</td>
+                          <td>{entry.entryType === 'transfer'
+                            ? `${formatAmount(entry.amount)} ${entry.currency} → ${formatAmount(entry.toAmount)} ${entry.toCurrency}`
+                            : `${formatAmount(entry.amount)} ${entry.currency}`}</td>
+                          <td>{entry.entryType !== 'transfer' && entry.taxRate ? `${formatAmount(entry.taxRate)}%` : '—'}</td>
+                          <td>{entry.entryType !== 'transfer' ? entry.category || '—' : '—'}</td>
                           <td className="cash-flow-import-comment">{entry.comment || '—'}</td>
                         </tr>
                       );

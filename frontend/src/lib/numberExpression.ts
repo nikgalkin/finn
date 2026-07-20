@@ -11,12 +11,22 @@ const expandNumberShorthand = (expression: string) => expression.replace(
   (_, amount: string, suffix: string) => `(${amount}*${SHORTHAND_MULTIPLIERS[suffix.toLowerCase()]})`
 );
 
+const expandMonthlyAnnualRate = (expression: string) => {
+  const match = expression.match(/^(.+)([+-])\s*((?:\d+(?:\.\d+)?|\.\d+))%\s*$/);
+  if (!match) return expression;
+  const base = match[1].trim();
+  const operator = match[2];
+  const annualRate = match[3];
+  return `((${base})${operator}((${base})*${annualRate}/100/12))`;
+};
+
 export const evaluateNumberExpression = (expression: string | number): number => {
   if (typeof expression === 'number') return expression;
 
   try {
-    const expanded = expandNumberShorthand(expression.replace(/,/g, ''));
-    if (/[a-z]/i.test(expanded)) return 0;
+    const normalized = expression.replace(/,/g, '.');
+    const expanded = expandMonthlyAnnualRate(expandNumberShorthand(normalized));
+    if (/[a-z%]/i.test(expanded)) return 0;
 
     const sanitized = expanded.replace(/[^-()\d/*+.]/g, '');
     if (!sanitized) return 0;

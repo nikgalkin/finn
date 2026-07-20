@@ -90,20 +90,6 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 	// Попытка добавить колонку в старую бд, если она была создана ранее без нее
 	_, _ = db.Exec("ALTER TABLE snapshots ADD COLUMN duration_seconds INTEGER DEFAULT 0")
 
-	if isDemo {
-		var count int
-		err := db.QueryRow("SELECT COUNT(*) FROM snapshots").Scan(&count)
-		if err == nil && count == 0 {
-			log.Println("🌱 DB: Populating fresh demo workspace from demo/demo.sql...")
-			_, err = db.Exec(appassets.DemoSQL)
-			if err != nil {
-				log.Printf("⚠️  DB: Population failed: %v\n", err)
-			} else {
-				log.Println("✅ DB: Demo seed injector finalized!")
-			}
-		}
-	}
-
 	appliedMigrations, err := runMigrations(db)
 	if err != nil {
 		log.Fatalf("❌ DB CRITICAL: Migration failed: %v\n", err)
@@ -112,7 +98,96 @@ func initDB(cfg *Config, isDemo bool) *sql.DB {
 		log.Printf("✅ DB: Applied migration %03d (%s).\n", migration.version, migration.name)
 	}
 
+	if isDemo {
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM snapshots").Scan(&count)
+		if err == nil && count == 0 {
+			log.Println("🌱 DB: Populating fresh demo workspace from demo/demo.sql...")
+			err = seedDemo(db)
+			if err != nil {
+				log.Printf("⚠️  DB: Population failed: %v\n", err)
+			} else {
+				log.Println("✅ DB: Demo seed injector finalized!")
+			}
+		}
+	}
+
 	return db
+}
+
+func seedDemo(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	for index, statement := range splitSQLStatements(appassets.DemoSQL) {
+		statement = strings.TrimSpace(statement)
+		if statement == "" {
+			continue
+		}
+		if _, err := tx.Exec(statement); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("execute demo statement %d: %w", index+1, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit demo seed: %w", err)
+	}
+	return nil
+}
+
+func splitSQLStatements(script string) []string {
+	statements := make([]string, 0)
+	start := 0
+	inQuote := false
+	inLineComment := false
+	inBlockComment := false
+	for index := 0; index < len(script); index++ {
+		current := script[index]
+		if inLineComment {
+			if current == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if current == '*' && index+1 < len(script) && script[index+1] == '/' {
+				inBlockComment = false
+				index++
+			}
+			continue
+		}
+		if inQuote {
+			if current == '\'' {
+				if index+1 < len(script) && script[index+1] == '\'' {
+					index++
+					continue
+				}
+				inQuote = false
+			}
+			continue
+		}
+		if current == '-' && index+1 < len(script) && script[index+1] == '-' {
+			inLineComment = true
+			index++
+			continue
+		}
+		if current == '/' && index+1 < len(script) && script[index+1] == '*' {
+			inBlockComment = true
+			index++
+			continue
+		}
+		if current == '\'' {
+			inQuote = true
+			continue
+		}
+		if current == ';' {
+			statements = append(statements, script[start:index])
+			start = index + 1
+		}
+	}
+	statements = append(statements, script[start:])
+	return statements
 }
 
 type appliedMigration struct {

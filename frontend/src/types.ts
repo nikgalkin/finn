@@ -55,17 +55,23 @@ export type CashFlowSettings = {
 };
 
 export type FlowDirection = 'in' | 'out';
+export type FlowEntryType = 'external' | 'transfer';
 
 export type FlowEntry = {
   id: number;
   month: string;
+  entryType: FlowEntryType;
   direction: FlowDirection;
   counterparty: string;
+  account: string;
   currency: string;
   amount: number;
   taxRate: number;
   category: string;
   comment: string;
+  toAccount: string;
+  toCurrency: string;
+  toAmount: number;
 };
 
 export type LocalAISettings = {

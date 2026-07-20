@@ -1,14 +1,19 @@
-import type { FlowDirection, FlowEntry } from '../types';
+import type { FlowDirection, FlowEntry, FlowEntryType } from '../types';
 
 export type FlowCsvEntry = {
   month: string;
+  entryType: FlowEntryType;
   direction: FlowDirection;
   counterparty: string;
+  account: string;
   amount: number;
   currency: string;
   taxRate: number;
   category: string;
   comment: string;
+  toAccount: string;
+  toCurrency: string;
+  toAmount: number;
 };
 
 export type FlowCsvPreview = {
@@ -23,23 +28,38 @@ export type FlowCsvDuplicate = {
   reason: 'existing' | 'file';
 };
 
-const ALLOWED_HEADERS = ['month', 'direction', 'counterparty', 'amount', 'currency', 'tax_rate', 'category', 'comment'] as const;
-const REQUIRED_HEADERS = ['month', 'direction', 'counterparty', 'amount', 'currency'] as const;
+const ALLOWED_HEADERS = ['month', 'entry_type', 'direction', 'counterparty', 'account', 'amount', 'currency', 'tax_rate', 'category', 'comment', 'to_account', 'to_amount', 'to_currency'] as const;
+const REQUIRED_HEADERS = ['month', 'amount', 'currency'] as const;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const CSV_SEPARATOR = ';';
 
 const parseNumber = (value: string) => Number(/^[-+]?\d+,\d+$/.test(value) ? value.replace(',', '.') : value);
 
-const flowEntryKey = (entry: FlowCsvEntry | FlowEntry) => [
-  entry.month.trim(),
-  entry.direction.trim().toLowerCase(),
-  entry.counterparty.trim(),
-  entry.currency.trim().toUpperCase(),
-  String(Number(entry.amount)),
-  String(entry.direction === 'out' ? 0 : Number(entry.taxRate || 0)),
-  entry.category.trim(),
-  entry.comment.trim()
-].join('\u001f');
+const flowEntryKey = (entry: FlowCsvEntry | FlowEntry) => {
+  if (entry.entryType === 'transfer') {
+    return [
+      entry.month.trim(),
+      'transfer',
+      entry.account.trim(),
+      entry.currency.trim().toUpperCase(),
+      String(Number(entry.amount)),
+      entry.toAccount.trim(),
+      entry.toCurrency.trim().toUpperCase(),
+      String(Number(entry.toAmount)),
+      entry.comment.trim()
+    ].join('\u001f');
+  }
+  return [
+    entry.month.trim(),
+    entry.direction.trim().toLowerCase(),
+    entry.counterparty.trim(),
+    entry.currency.trim().toUpperCase(),
+    String(Number(entry.amount)),
+    String(entry.direction === 'out' ? 0 : Number(entry.taxRate || 0)),
+    entry.category.trim(),
+    entry.comment.trim()
+  ].join('\u001f');
+};
 
 export const findFlowCsvDuplicates = (csvEntries: FlowCsvEntry[], existingEntries: FlowEntry[]): FlowCsvDuplicate[] => {
   const existingKeys = new Set(existingEntries.map(flowEntryKey));
@@ -126,24 +146,43 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
     const csvRowNumber = rowIndex + 2;
     const read = (header: string) => row[headerIndex.get(header) ?? -1]?.trim() || '';
     const month = read('month');
+    const entryTypeText = read('entry_type').toLowerCase() || 'external';
     const direction = read('direction').toLowerCase();
     const counterparty = read('counterparty');
+    const account = read('account');
     const amountText = read('amount');
     const amount = parseNumber(amountText);
     const currency = read('currency').toUpperCase();
     const taxRateText = read('tax_rate');
     const taxRate = taxRateText === '' ? 0 : parseNumber(taxRateText);
+    const toAccount = read('to_account');
+    const toAmountText = read('to_amount');
+    const toAmount = parseNumber(toAmountText);
+    const toCurrency = read('to_currency').toUpperCase();
     const rowErrors: string[] = [];
 
     if (row.length > headers.length) rowErrors.push('has more values than headers');
     if (!MONTH_PATTERN.test(month)) rowErrors.push('month must use YYYY-MM');
-    if (direction !== 'in' && direction !== 'out') rowErrors.push('direction must be in or out');
-    if (!counterparty) rowErrors.push('counterparty is required');
+    if (entryTypeText !== 'external' && entryTypeText !== 'transfer') rowErrors.push('entry_type must be external or transfer');
     if (!amountText || !Number.isFinite(amount) || amount <= 0) rowErrors.push('amount must be a positive number');
     if (!currency) rowErrors.push('currency is required');
     else if (configuredCurrencySet.size > 0 && !configuredCurrencySet.has(currency)) rowErrors.push(`${currency} is not configured in Settings`);
-    if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) rowErrors.push('tax_rate must be from 0 to 100');
-    if (direction === 'out' && taxRate !== 0) rowErrors.push('tax_rate must be empty or 0 for outgoing entries');
+
+    if (entryTypeText === 'transfer') {
+      if (!account) rowErrors.push('account is required for a transfer');
+      if (!toAccount) rowErrors.push('to_account is required for a transfer');
+      if (!toAmountText || !Number.isFinite(toAmount) || toAmount <= 0) rowErrors.push('to_amount must be a positive number for a transfer');
+      if (!toCurrency) rowErrors.push('to_currency is required for a transfer');
+      else if (configuredCurrencySet.size > 0 && !configuredCurrencySet.has(toCurrency)) rowErrors.push(`${toCurrency} is not configured in Settings`);
+      if (account && toAccount && currency && toCurrency && account === toAccount && currency === toCurrency) {
+        rowErrors.push('source and destination must differ');
+      }
+    } else {
+      if (direction !== 'in' && direction !== 'out') rowErrors.push('direction must be in or out');
+      if (!counterparty) rowErrors.push('counterparty is required');
+      if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) rowErrors.push('tax_rate must be from 0 to 100');
+      if (direction === 'out' && taxRate !== 0) rowErrors.push('tax_rate must be empty or 0 for outgoing entries');
+    }
 
     if (rowErrors.length > 0) {
       errors.push(`Row ${csvRowNumber}: ${rowErrors.join('; ')}.`);
@@ -152,13 +191,18 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
 
     entries.push({
       month,
-      direction: direction as FlowDirection,
-      counterparty,
+      entryType: entryTypeText as FlowEntryType,
+      direction: entryTypeText === 'transfer' ? 'out' : direction as FlowDirection,
+      counterparty: entryTypeText === 'transfer' ? '' : counterparty,
+      account,
       amount,
       currency,
-      taxRate,
-      category: read('category'),
-      comment: read('comment')
+      taxRate: entryTypeText === 'transfer' ? 0 : taxRate,
+      category: entryTypeText === 'transfer' ? '' : read('category'),
+      comment: read('comment'),
+      toAccount: entryTypeText === 'transfer' ? toAccount : '',
+      toCurrency: entryTypeText === 'transfer' ? toCurrency : '',
+      toAmount: entryTypeText === 'transfer' ? toAmount : 0
     });
   });
 

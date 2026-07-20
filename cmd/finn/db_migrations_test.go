@@ -3,9 +3,8 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"math"
 	"testing"
-
-	appassets "finn"
 )
 
 func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
@@ -24,16 +23,15 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(appassets.DemoSQL); err != nil {
-		t.Fatal(err)
-	}
-
 	applied, err := runMigrations(db)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) != 3 {
-		t.Fatalf("applied migrations = %+v, want all three migrations", applied)
+	if len(applied) != 4 {
+		t.Fatalf("applied migrations = %+v, want all four migrations", applied)
+	}
+	if err := seedDemo(db); err != nil {
+		t.Fatal(err)
 	}
 
 	var snapshotCount int
@@ -42,6 +40,75 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 	}
 	if snapshotCount != 10 {
 		t.Fatalf("snapshot count = %d, want 10", snapshotCount)
+	}
+
+	var flowCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries").Scan(&flowCount); err != nil {
+		t.Fatal(err)
+	}
+	if flowCount != 29 {
+		t.Fatalf("flow entry count = %d, want 29", flowCount)
+	}
+
+	var salaryCount, rentCount, transferCount, carCount, bonusCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries WHERE entry_type = 'external' AND direction = 'in' AND currency = 'USD' AND amount = 3000 AND category = 'salary'").Scan(&salaryCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries WHERE entry_type = 'external' AND direction = 'out' AND currency = 'RUB' AND amount = 90000 AND category = 'rent'").Scan(&rentCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries WHERE entry_type = 'transfer' AND currency = 'USD' AND to_currency = 'RUB'").Scan(&transferCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries WHERE month = '2026-03' AND direction = 'out' AND currency = 'RUB' AND amount = 600000 AND category = 'car'").Scan(&carCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries WHERE month = '2026-05' AND direction = 'in' AND currency = 'USD' AND amount = 5000 AND category = 'bonus'").Scan(&bonusCount); err != nil {
+		t.Fatal(err)
+	}
+	if salaryCount != 9 || rentCount != 9 || transferCount != 9 {
+		t.Fatalf("recurring demo rows = salary:%d rent:%d transfers:%d, want 9 each", salaryCount, rentCount, transferCount)
+	}
+	if carCount != 1 || bonusCount != 1 {
+		t.Fatalf("demo events = car:%d bonus:%d, want 1 each", carCount, bonusCount)
+	}
+
+	rows, err := db.Query("SELECT data FROM snapshots ORDER BY month")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var previousDeposit float64
+	for snapshotIndex := 0; rows.Next(); snapshotIndex++ {
+		var snapshotJSON string
+		if err := rows.Scan(&snapshotJSON); err != nil {
+			t.Fatal(err)
+		}
+		var snapshot aiSnapshotData
+		if err := json.Unmarshal([]byte(snapshotJSON), &snapshot); err != nil {
+			t.Fatal(err)
+		}
+		var deposit float64
+		for _, organization := range snapshot.Organizations {
+			if organization.Name != "Alfabank" || len(organization.Balances) == 0 {
+				continue
+			}
+			deposit = numberValue(organization.Balances[0].Amount)
+		}
+		if deposit == 0 {
+			t.Fatalf("snapshot %d has no Alfabank deposit", snapshotIndex)
+		}
+		if snapshotIndex > 0 {
+			monthlyReturn := deposit/previousDeposit - 1
+			const expectedMonthlyReturn = 0.10 / 12
+			if math.Abs(monthlyReturn-expectedMonthlyReturn) > 0.0000001 {
+				t.Fatalf("snapshot %d deposit return = %.8f, want 10%% annual rate accrued monthly", snapshotIndex, monthlyReturn)
+			}
+		}
+		previousDeposit = deposit
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -68,8 +135,8 @@ func TestSQLMigrationsBackfillCountriesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) != 3 || applied[0].version != 1 || applied[1].version != 2 || applied[2].version != 3 {
-		t.Fatalf("applied migrations = %+v, want versions 1, 2, and 3", applied)
+	if len(applied) != 4 || applied[0].version != 1 || applied[1].version != 2 || applied[2].version != 3 || applied[3].version != 4 {
+		t.Fatalf("applied migrations = %+v, want versions 1, 2, 3, and 4", applied)
 	}
 
 	var snapshotJSON string
@@ -106,6 +173,13 @@ func TestSQLMigrationsBackfillCountriesOnce(t *testing.T) {
 	}
 	if taxColumnCount != 1 {
 		t.Fatalf("tax_rate column count = %d, want 1", taxColumnCount)
+	}
+	var entryTypeColumnCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('flow_entries') WHERE name = 'entry_type'").Scan(&entryTypeColumnCount); err != nil {
+		t.Fatal(err)
+	}
+	if entryTypeColumnCount != 1 {
+		t.Fatalf("entry_type column count = %d, want 1", entryTypeColumnCount)
 	}
 
 	applied, err = runMigrations(db)
