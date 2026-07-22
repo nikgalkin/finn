@@ -45,6 +45,7 @@ test('uses actual tagged balance amounts when one account has multiple balances 
   assert.equal(byTag.deposit.result, 10);
   assert.equal(byTag.deposit.openingCapital, 100);
   assert.equal(byTag.deposit.closingCapital, 110);
+  assert.equal(byTag.deposit.assignedFlow, 0);
   assert.equal(byTag.stocks.result, 90);
   assert.equal(byTag.stocks.openingCapital, 900);
   assert.equal(byTag.stocks.closingCapital, 990);
@@ -62,7 +63,9 @@ test('allocates account-level flows proportionally across its tagged balances', 
   const byTag = Object.fromEntries(result.returns.map(item => [item.tag, item]));
 
   assert.equal(byTag.deposit.assignedFlow, 10);
+  assert.equal(byTag.deposit.closingCapital, 110);
   assert.equal(byTag.stocks.assignedFlow, 90);
+  assert.equal(byTag.stocks.closingCapital, 990);
   assert.equal(byTag.deposit.result, 0);
   assert.equal(byTag.stocks.result, 0);
   assert.equal(result.proportionallyAllocatedEntries, 1);

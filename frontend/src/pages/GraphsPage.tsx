@@ -321,7 +321,7 @@ export default function GraphsPage() {
     result: number;
     multiplier: number;
     ratedMonths: number;
-    monthly: Array<{ month: string; openingCapital: number; closingCapital: number; result: number; ratePercent: number | null }>;
+    monthly: Array<{ month: string; openingCapital: number; closingCapital: number; assignedFlow: number; result: number; ratePercent: number | null }>;
   }>();
   let assignedExternalEntries = 0;
   let totalExternalEntries = 0;
@@ -340,6 +340,7 @@ export default function GraphsPage() {
         month: snapshot.month,
         openingCapital: item.openingCapital,
         closingCapital: item.closingCapital,
+        assignedFlow: item.assignedFlow,
         result: item.result,
         ratePercent: item.ratePercent
       });

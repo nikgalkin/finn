@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Activity, ArrowLeftRight, ArrowRight, BarChart3, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
@@ -26,7 +26,7 @@ type TagReturnStat = {
   tag: string;
   result: number;
   ratePercent: number | null;
-  monthly: Array<{ month: string; openingCapital: number; closingCapital: number; result: number; ratePercent: number | null }>;
+  monthly: Array<{ month: string; openingCapital: number; closingCapital: number; assignedFlow: number; result: number; ratePercent: number | null }>;
 };
 
 type OrganizationCurrencyBreakdown = {
@@ -338,6 +338,7 @@ export function GraphsAnalyticsSections({
 }: GraphsAnalyticsSectionsProps) {
   const [allocationMode, setAllocationMode] = useState<'percent' | 'value'>('value');
   const [selectedTagReturn, setSelectedTagReturn] = useState<TagReturnStat | null>(null);
+  const [expandedTagMonth, setExpandedTagMonth] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedTagReturn) return;
@@ -347,6 +348,7 @@ export function GraphsAnalyticsSections({
       event.stopPropagation();
       event.stopImmediatePropagation();
       setSelectedTagReturn(null);
+      setExpandedTagMonth(null);
     };
     document.addEventListener('keydown', handleEscape, true);
     return () => document.removeEventListener('keydown', handleEscape, true);
@@ -465,7 +467,10 @@ export function GraphsAnalyticsSections({
                         key={item.tag}
                         type="button"
                         className="capital-return-tag-row"
-                        onClick={() => setSelectedTagReturn(item)}
+                        onClick={() => {
+                          setSelectedTagReturn(item);
+                          setExpandedTagMonth(null);
+                        }}
                         aria-label={`View monthly breakdown for ${item.tag}`}
                       >
                           <span className="capital-return-tag-name">
@@ -517,7 +522,10 @@ export function GraphsAnalyticsSections({
           data-escape-guard="true"
           data-hotkeys-guard="true"
           onMouseDown={event => {
-            if (event.target === event.currentTarget) setSelectedTagReturn(null);
+            if (event.target === event.currentTarget) {
+              setSelectedTagReturn(null);
+              setExpandedTagMonth(null);
+            }
           }}
         >
           <div className="capital-return-tag-modal" role="dialog" aria-modal="true" aria-labelledby="capital-return-tag-modal-title">
@@ -529,7 +537,10 @@ export function GraphsAnalyticsSections({
                   {selectedTagReturn.tag}
                 </h3>
               </div>
-              <button type="button" className="capital-return-tag-modal-close" onClick={() => setSelectedTagReturn(null)} aria-label="Close monthly breakdown">
+              <button type="button" className="capital-return-tag-modal-close" onClick={() => {
+                setSelectedTagReturn(null);
+                setExpandedTagMonth(null);
+              }} aria-label="Close monthly breakdown">
                 <X size={17} />
               </button>
             </div>
@@ -546,21 +557,58 @@ export function GraphsAnalyticsSections({
               </div>
             </div>
             <div className="capital-return-tag-modal-months">
-              <div className="capital-return-tag-modal-month-heading"><span>Month</span><span>Opening → closing</span><span>Earnings</span><span>Return</span></div>
-              {[...selectedTagReturn.monthly].sort((left, right) => right.month.localeCompare(left.month)).map(month => (
-                <div key={month.month} className="capital-return-tag-modal-month-row">
-                  <span>{month.month}</span>
-                  <strong className="capital-return-tag-modal-balance">
-                    <span>{formatNumber(month.openingCapital)}</span>
-                    <ArrowRight size={11} />
-                    <span>{formatNumber(month.closingCapital)} {baseCurrency}</span>
-                  </strong>
-                  <strong style={{ color: getMoneyDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
-                  <strong style={{ color: month.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(month.ratePercent) }}>
-                    {month.ratePercent === null ? '—' : formatPercent(month.ratePercent)}
-                  </strong>
-                </div>
-              ))}
+              <div className="capital-return-tag-modal-month-heading"><span>Month</span><span>Opening → closing</span><span>Earnings</span><span>Return</span><span /></div>
+              {[...selectedTagReturn.monthly].sort((left, right) => right.month.localeCompare(left.month)).map(month => {
+                const isExpanded = expandedTagMonth === month.month;
+                return (
+                  <Fragment key={month.month}>
+                    <button
+                      type="button"
+                      className={`capital-return-tag-modal-month-row${isExpanded ? ' is-expanded' : ''}`}
+                      aria-expanded={isExpanded}
+                      onClick={() => setExpandedTagMonth(isExpanded ? null : month.month)}
+                    >
+                      <span>{month.month}</span>
+                      <strong className="capital-return-tag-modal-balance">
+                        <span>{formatNumber(month.openingCapital)}</span>
+                        <ArrowRight size={11} />
+                        <span>{formatNumber(month.closingCapital)} {baseCurrency}</span>
+                      </strong>
+                      <strong style={{ color: getMoneyDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
+                      <strong style={{ color: month.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(month.ratePercent) }}>
+                        {month.ratePercent === null ? '—' : formatPercent(month.ratePercent)}
+                      </strong>
+                      <ChevronDown className="capital-return-tag-modal-month-chevron" size={13} />
+                    </button>
+                    {isExpanded && (
+                      <div className="capital-return-tag-modal-month-detail">
+                        <div className="capital-return-tag-modal-formula">
+                          <div>
+                            <span>Opening balance</span>
+                            <strong>{formatNumber(month.openingCapital)} {baseCurrency}</strong>
+                          </div>
+                          <i>+</i>
+                          <div>
+                            <span>Recorded movements</span>
+                            <strong style={{ color: getMoneyDeltaColor(month.assignedFlow) }}>{formatSigned(month.assignedFlow)} {baseCurrency}</strong>
+                          </div>
+                          <i>+</i>
+                          <div>
+                            <span>Estimated earnings</span>
+                            <strong style={{ color: getMoneyDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
+                          </div>
+                          <i>=</i>
+                          <div className="is-closing">
+                            <span>Closing balance</span>
+                            <strong>{formatNumber(month.closingCapital)} {baseCurrency}</strong>
+                          </div>
+                        </div>
+                        <p>Recorded movements include Cash Flow entries and internal transfers attributed to accounts carrying this tag.</p>
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
             </div>
             <div className="capital-return-tag-modal-note">
               Opening and closing balances are valued in {baseCurrency} at each month's closing rates. Earnings exclude recorded external flows attributed to this tag; return is time-weighted and not annualized.

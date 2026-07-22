@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock } from 'lucide-react';
+import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, ChevronDown, Clock } from 'lucide-react';
 import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
@@ -20,6 +20,8 @@ import {
   convertAmount,
   hasAnyComments
 } from '../lib/finance';
+
+const DASHBOARD_PIE_VISIBLE_ROWS = 7;
 
 const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency }: any) => {
   if (!active || !payload || !payload.length) return null;
@@ -318,8 +320,8 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="glass-panel" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '24px' }}>
-              <div style={{ flex: 1, height: '140px' }}>
+            <div className="glass-panel dashboard-pie-panel">
+              <div className="dashboard-pie-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={3} dataKey="value">
@@ -335,19 +337,30 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem', maxHeight: '140px', overflowY: 'auto', minWidth: '160px' }}>
-                {pieData.map((entry, idx) => {
-                  const percent = latestTotals.totalBase > 0 ? (entry.value / latestTotals.totalBase) * 100 : 0;
-                  return (
-                    <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: CHART_COLORS[idx % CHART_COLORS.length], flexShrink: 0 }} />
-                      <span style={{ color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '100px' }} title={entry.name}>
-                        {entry.name}:
-                      </span>
-                      <span style={{ fontWeight: 600, marginLeft: 'auto' }}>{percent.toFixed(1)}%</span>
-                    </div>
-                  );
-                })}
+              {pieData.length > DASHBOARD_PIE_VISIBLE_ROWS && (
+                <div className="dashboard-pie-legend-side-hint">
+                  <span>Scroll for <strong>{pieData.length - DASHBOARD_PIE_VISIBLE_ROWS}</strong> more</span>
+                  <ChevronDown size={13} />
+                </div>
+              )}
+
+              <div className="dashboard-pie-legend">
+                <div
+                  className="dashboard-pie-legend-scroll"
+                  tabIndex={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 0 : undefined}
+                  aria-label={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 'Organization allocation. Scroll for more organizations.' : 'Organization allocation'}
+                >
+                  {pieData.map((entry, idx) => {
+                    const percent = latestTotals.totalBase > 0 ? (entry.value / latestTotals.totalBase) * 100 : 0;
+                    return (
+                      <div key={entry.name} className="dashboard-pie-legend-row">
+                        <span className="dashboard-pie-legend-marker" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                        <span className="dashboard-pie-legend-name" title={entry.name}>{entry.name}:</span>
+                        <span className="dashboard-pie-legend-value">{percent.toFixed(1)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
