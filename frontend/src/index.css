@@ -772,6 +772,129 @@ a { color: var(--accent); text-decoration: none; }
 
 .cash-flow-settings-status label { flex: 0 0 auto; cursor: pointer; font-size: 13px; }
 
+.settings-scroll-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 20px;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.settings-scroll-hint strong { color: var(--text-primary); }
+
+.currency-framework-panel { padding: 0; overflow: hidden; }
+
+.currency-framework-header {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.currency-framework-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(20, 184, 166, 0.25);
+  border-radius: 12px;
+  color: #2dd4bf;
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.currency-framework-header h3 { margin: 0; font-size: 17px; font-weight: 750; }
+
+.currency-framework-header p { margin: 4px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.4; }
+
+.currency-framework-count {
+  padding: 5px 9px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.05);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.currency-framework-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 12px;
+  padding: 16px 20px 12px;
+}
+
+.currency-framework-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.22);
+}
+
+.currency-framework-field.is-base { border-color: rgba(20, 184, 166, 0.2); background: rgba(20, 184, 166, 0.035); }
+
+.currency-framework-field-heading { display: flex; align-items: center; gap: 9px; }
+
+.currency-framework-field-heading > span {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--text-primary);
+  background: rgba(148, 163, 184, 0.1);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.currency-framework-field.is-base .currency-framework-field-heading > span { color: #5eead4; background: rgba(20, 184, 166, 0.11); }
+
+.currency-framework-field-heading > div { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
+
+.currency-framework-field-heading strong { font-size: 13px; }
+
+.currency-framework-field-heading small { color: var(--text-secondary); font-size: 9px; font-weight: 650; }
+
+.currency-framework-select { position: relative; }
+
+.currency-framework-select i {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.currency-framework-select .input { width: 100%; height: 36px; padding-left: 30px; font-weight: 750; }
+
+.currency-framework-field-description { color: var(--text-secondary); font-size: 10px; line-height: 1.4; }
+
+.currency-framework-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+
+.currency-framework-connector span { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+
 .cash-flow-settings-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -841,13 +964,16 @@ a { color: var(--accent); text-decoration: none; }
 .cash-flow-source-setting-labels,
 .cash-flow-source-setting-row { display: grid; grid-template-columns: minmax(0, 1fr) 92px 36px; gap: 8px; }
 
-.cash-flow-source-setting-labels {
+.cash-flow-source-setting-labels,
+.cash-flow-category-setting-labels {
   padding: 0 4px 5px;
   color: var(--text-secondary);
   font-size: 10px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
+
+.cash-flow-category-setting-labels { display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 8px; }
 
 .cash-flow-source-setting-labels span:nth-child(2) { text-align: center; }
 
@@ -924,6 +1050,18 @@ a { color: var(--accent); text-decoration: none; }
 
 .cash-flow-net-summary.is-compact .cash-flow-net-pill { padding: 4px 7px; font-size: 11px; }
 
+.capital-return-card { height: 300px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+.capital-return-tag-panel-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+
+.capital-return-tag-scroll {
+  flex: 0 0 120px;
+  height: 120px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
 .capital-return-formula { display: flex; flex-direction: column; gap: 8px; }
 
 .capital-return-formula > div,
@@ -967,23 +1105,179 @@ a { color: var(--accent); text-decoration: none; }
   line-height: 1.45;
 }
 
-.capital-return-tag-list { display: flex; flex-direction: column; gap: 2px; }
+.capital-return-tag-list { display: flex; flex-direction: column; }
 
 .capital-return-tag-row {
-  grid-template-columns: minmax(90px, 1fr) auto 76px;
-  padding: 8px 0;
+  grid-template-columns: minmax(90px, 1fr) auto 76px 14px;
+  width: 100%;
+  height: 40px;
+  padding: 0;
+  border: 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
   font-size: 13px;
+  text-align: left;
+  cursor: pointer;
 }
 
-.capital-return-tag-row > span { font-weight: 700; }
+.capital-return-tag-row:hover { background: rgba(148, 163, 184, 0.035); }
 
-.capital-return-tag-row > strong:last-child,
+.capital-return-tag-name {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 7px;
+  max-width: 100%;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.055);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.capital-return-tag-name i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; }
+
+.capital-return-tag-rate { text-align: right; }
+
+.capital-return-tag-chevron { color: var(--text-secondary); }
+
+.capital-return-tag-scroll-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 19px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.capital-return-tag-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 6, 23, 0.74);
+  backdrop-filter: blur(5px);
+}
+
+.capital-return-tag-modal {
+  display: flex;
+  width: min(560px, 100%);
+  max-height: min(700px, calc(100vh - 40px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 13px;
+  background: var(--bg-color);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.capital-return-tag-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.capital-return-tag-modal-header > div > span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.capital-return-tag-modal-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0 0;
+  font-size: 17px;
+}
+
+.capital-return-tag-modal-header h3 i { width: 8px; height: 8px; border-radius: 50%; }
+
+.capital-return-tag-modal-close {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.capital-return-tag-modal-close:hover { color: var(--text-primary); background: rgba(148, 163, 184, 0.12); }
+
+.capital-return-tag-modal-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 20px;
+}
+
+.capital-return-tag-modal-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 11px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.035);
+}
+
+.capital-return-tag-modal-summary span { color: var(--text-secondary); font-size: 10px; font-weight: 700; }
+
+.capital-return-tag-modal-summary strong { font-size: 15px; }
+
+.capital-return-tag-modal-months { min-height: 0; overflow-y: auto; padding: 0 20px; }
+
+.capital-return-tag-modal-month-heading,
+.capital-return-tag-modal-month-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) auto 68px;
+  align-items: center;
+  gap: 12px;
+}
+
+.capital-return-tag-modal-month-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 10px;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.capital-return-tag-modal-month-row { min-height: 37px; padding: 0 10px; border-bottom: 1px solid rgba(148, 163, 184, 0.08); color: var(--text-secondary); font-size: 11px; }
+
+.capital-return-tag-modal-month-heading > span:not(:first-child),
+.capital-return-tag-modal-month-row > strong { text-align: right; }
+
+.capital-return-tag-modal-note { padding: 13px 20px 16px; color: var(--text-secondary); font-size: 10px; line-height: 1.45; }
+
 .snapshot-diff-rate-row > span:last-child { text-align: right; }
 
 .capital-return-coverage-warning,
 .capital-return-coverage-complete {
-  margin-top: 12px;
+  margin-top: 8px;
   padding: 9px 11px;
   border: 1px solid rgba(245, 158, 11, 0.28);
   border-radius: 7px;
@@ -1674,6 +1968,16 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 @media (max-width: 760px) {
+  .currency-framework-header { grid-template-columns: 42px minmax(0, 1fr); }
+
+  .currency-framework-count { grid-column: 2; justify-self: start; }
+
+  .currency-framework-flow { grid-template-columns: 1fr; }
+
+  .currency-framework-connector { flex-direction: row; padding: 1px 0; }
+
+  .currency-framework-connector svg { transform: rotate(90deg); }
+
   .cash-flow-modal-backdrop { align-items: stretch; padding: 8px; }
 
   .cash-flow-period-modal,

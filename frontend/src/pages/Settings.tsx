@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Archive, ArrowDownUp, ArrowLeft, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
+import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, ChevronDown, Coins, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { API_URL } from '../types';
+import { API_URL, getCurrencyColor } from '../types';
 import type { CashFlowSettings, LocalAISettings, LocalAIStatus, Snapshot } from '../types';
 import { isValidCountryCode } from '../lib/countries';
 import { SETTINGS_UPDATED_EVENT, useSettings } from '../hooks/useSettings';
@@ -29,8 +29,13 @@ type ArchiveImpact = {
 type DuplicateValues = ReturnType<typeof findDuplicateValues>;
 
 const listGridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' };
-const listBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '260px', overflowY: 'auto' as const, paddingRight: '4px' };
-const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: '6px', maxHeight: '372px', overflowY: 'auto' as const, paddingRight: '4px', scrollBehavior: 'smooth' as const };
+const SETTINGS_ROW_HEIGHT = 36;
+const SETTINGS_ROW_GAP = 6;
+const SETTINGS_LIST_VISIBLE_ROWS = 5;
+const ORGANIZATION_LIST_VISIBLE_ROWS = 6;
+const settingsListHeight = (visibleRows: number) => visibleRows * SETTINGS_ROW_HEIGHT + (visibleRows - 1) * SETTINGS_ROW_GAP;
+const listBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: `${SETTINGS_ROW_GAP}px`, maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px`, overflowY: 'auto' as const, paddingRight: '4px' };
+const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as const, gap: `${SETTINGS_ROW_GAP}px`, maxHeight: `${settingsListHeight(ORGANIZATION_LIST_VISIBLE_ROWS)}px`, overflowY: 'auto' as const, paddingRight: '4px', scrollBehavior: 'smooth' as const };
 const compactButtonStyle = { padding: '6px 12px', fontSize: '13px' };
 const iconButtonStyle = { padding: '8px' };
 const inputRowStyle = { height: '36px' };
@@ -39,6 +44,9 @@ const enabledCheckboxStyle = { width: '17px', height: '17px', accentColor: 'var(
 const DEFAULT_CASH_FLOW: CashFlowSettings = { enabled: false, sources: [], taxRates: {}, categories: [] };
 const DEFAULT_LOCAL_AI: LocalAISettings = { enabled: false, provider: 'lmstudio', baseUrl: 'http://127.0.0.1:1234/v1', model: '' };
 const normalizeListValue = (value: string) => value.trim().toLocaleLowerCase();
+const normalizeCurrencyCode = (value: string) => value.trim().toUpperCase();
+const sanitizeCurrencyCodeInput = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+const isValidCurrencyCode = (value: string) => /^[A-Z0-9]{2,10}$/.test(normalizeCurrencyCode(value));
 const replaceAt = <T,>(values: T[], index: number, value: T) => values.map((item, itemIndex) => itemIndex === index ? value : item);
 const removeAt = <T,>(values: T[], index: number) => values.filter((_, itemIndex) => itemIndex !== index);
 
@@ -62,6 +70,16 @@ const findDuplicateValues = (values: string[]) => {
 const duplicateIssues = (duplicates: DuplicateValues, section: string, message: string): SettingsValidationIssue[] => (
   duplicates.items.map(item => ({ section, value: item.display, message }))
 );
+
+const SettingsScrollHint = ({ total, visible }: { total: number; visible: number }) => {
+  const remaining = Math.max(0, total - visible);
+  if (remaining === 0) return null;
+  return (
+    <div className="settings-scroll-hint">
+      <ChevronDown size={13} /> Scroll for <strong>{remaining}</strong> more
+    </div>
+  );
+};
 
 type SettingsPanelProps = {
   children: ReactNode; description: string; enabled: boolean; icon: ReactNode; intro: string; onEnabledChange: (enabled: boolean) => void; title: string;
@@ -88,17 +106,26 @@ const SettingsPanel = ({ children, description, enabled, icon, intro, onEnabledC
 );
 
 type CurrencyFieldProps = {
-  allowNone?: boolean; currencies: string[]; description: string; label: string; onChange: (value: string) => void; value: string;
+  allowNone?: boolean; currencies: string[]; description: string; label: string; onChange: (value: string) => void; role: 'base' | 'secondary'; value: string;
 };
 
-const CurrencyField = ({ allowNone, currencies, description, label, onChange, value }: CurrencyFieldProps) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-    <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{label}</label>
-    <select className="input" value={value} onChange={event => onChange(event.target.value)} style={{ width: '100%', height: '36px' }}>
-      {allowNone && <option value="">— None —</option>}
-      {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
-    </select>
-    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.35' }}>{description}</span>
+const CurrencyField = ({ allowNone, currencies, description, label, onChange, role, value }: CurrencyFieldProps) => (
+  <div className={`currency-framework-field is-${role}`}>
+    <div className="currency-framework-field-heading">
+      <span>{role === 'base' ? '1' : '2'}</span>
+      <div>
+        <strong>{label}</strong>
+        <small>{role === 'base' ? 'Portfolio standard' : 'Optional comparison'}</small>
+      </div>
+    </div>
+    <div className="currency-framework-select">
+      <i style={{ background: value ? getCurrencyColor(value) : 'var(--text-secondary)' }} />
+      <select className="input" value={value} onChange={event => onChange(event.target.value)}>
+        {allowNone && <option value="">— None —</option>}
+        {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+      </select>
+    </div>
+    <span className="currency-framework-field-description">{description}</span>
   </div>
 );
 
@@ -108,6 +135,7 @@ export default function Settings() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [validationIssues, setValidationIssues] = useState<SettingsValidationIssue[]>([]);
+  const [validatedCurrencyIndexes, setValidatedCurrencyIndexes] = useState<Set<number>>(() => new Set());
   const [archiveImpact, setArchiveImpact] = useState<ArchiveImpact | null>(null);
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
   const [aiProbing, setAIProbing] = useState(false);
@@ -225,6 +253,13 @@ export default function Settings() {
       ...duplicateIssues(duplicateTags, 'Balance tag', 'This balance tag is listed more than once.'),
       ...duplicateIssues(duplicateFlowCategories, 'Cash Flow category', 'This Cash Flow category is listed more than once.'),
       ...duplicateIssues(duplicateFlowSources, 'Cash Flow source', 'This Cash Flow source is listed more than once.'),
+      ...settings.currencies
+        .filter(currency => !isValidCurrencyCode(currency))
+        .map(currency => ({
+          section: 'Currency',
+          value: currency.trim() || 'empty',
+          message: 'Use 2–10 Latin letters or digits. Fiat ISO codes usually contain 3 letters; crypto tickers may be longer.'
+        })),
       ...settings.organizations
         .filter(organization => !isValidCountryCode(organization.country))
         .map(organization => ({
@@ -234,15 +269,25 @@ export default function Settings() {
         }))
     ];
     if (issues.length > 0) {
+      setValidatedCurrencyIndexes(new Set(
+        settings.currencies.flatMap((currency, index) => isValidCurrencyCode(currency) ? [] : [index])
+      ));
       setValidationIssues(issues);
       return;
     }
-    const baseCurrency = settings.baseCurrency || 'RUB';
+    const normalizedCurrencies = settings.currencies.map(normalizeCurrencyCode);
+    const baseCurrency = normalizeCurrencyCode(settings.baseCurrency || 'RUB');
+    const secondaryCurrency = normalizeCurrencyCode(settings.secondaryCurrency || '');
     const normalizedSettings = {
       ...settings,
-      secondaryCurrency: settings.secondaryCurrency === baseCurrency ? '' : settings.secondaryCurrency,
-      autoFetchCurrencies: Array.from(new Set(settings.autoFetchCurrencies || []))
-        .filter(currency => currency && currency !== baseCurrency),
+      currencies: normalizedCurrencies,
+      baseCurrency,
+      secondaryCurrency: secondaryCurrency === baseCurrency ? '' : secondaryCurrency,
+      autoFetchCurrencies: Array.from(new Set(
+        (settings.autoFetchCurrencies || [])
+          .map(normalizeCurrencyCode)
+          .filter(currency => currency && currency !== baseCurrency)
+      )),
       organizations: settings.organizations.map(organization => ({
         ...organization,
         country: organization.country?.trim().toUpperCase() || undefined
@@ -278,12 +323,19 @@ export default function Settings() {
   const updateList = (list: SettingsListKey, index: number, val: string) => {
     const values = settings[list] || [];
     const previousValue = values[index];
-    const newList = replaceAt(values, index, val);
+    const nextValue = list === 'currencies' ? sanitizeCurrencyCodeInput(val) : val;
+    const newList = replaceAt(values, index, nextValue);
     if (list === 'currencies') {
       const autoFetchCurrencies = [...(settings.autoFetchCurrencies || [])];
       const autoFetchIndex = autoFetchCurrencies.indexOf(previousValue);
-      if (autoFetchIndex >= 0) autoFetchCurrencies[autoFetchIndex] = val;
-      setSettings({ ...settings, currencies: newList, autoFetchCurrencies });
+      if (autoFetchIndex >= 0) autoFetchCurrencies[autoFetchIndex] = nextValue;
+      setSettings({
+        ...settings,
+        currencies: newList,
+        baseCurrency: settings.baseCurrency === previousValue ? nextValue : settings.baseCurrency,
+        secondaryCurrency: settings.secondaryCurrency === previousValue ? nextValue : settings.secondaryCurrency,
+        autoFetchCurrencies
+      });
       return;
     }
     setSettings({ ...settings, [list]: newList });
@@ -307,6 +359,7 @@ export default function Settings() {
     const removedValue = values[index];
     const newList = removeAt(values, index);
     if (list === 'currencies') {
+      setValidatedCurrencyIndexes(new Set());
       const autoFetchCurrencies = [...(settings.autoFetchCurrencies || [])];
       const autoFetchIndex = autoFetchCurrencies.indexOf(removedValue);
       if (autoFetchIndex >= 0) autoFetchCurrencies.splice(autoFetchIndex, 1);
@@ -453,7 +506,16 @@ export default function Settings() {
   const renderListSection = (title: string, list: SettingsListKey, placeholder?: string) => (
     <div className="glass-panel" style={{ padding: '18px 20px' }}>
       <div className="flex justify-between items-center mb-2">
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{title}</h3>
+        <div className="flex items-center gap-2">
+          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{title}</h3>
+          {list === 'currencies' && (
+            <HelpTooltip
+              text="Fiat currencies usually use 3-letter ISO codes. Crypto tickers such as USDT may be longer; Finn accepts 2–10 Latin letters or digits and stores them in uppercase."
+              ariaLabel="Currency code format"
+              width={310}
+            />
+          )}
+        </div>
         <button className="btn" style={compactButtonStyle} onClick={() => addToList(list)} aria-label={`Add ${title.toLowerCase()}`}>
           <Plus size={14} /> Add
         </button>
@@ -465,6 +527,8 @@ export default function Settings() {
           const isAuto = isCurrency && !isBaseCurrency && (settings.autoFetchCurrencies || []).includes(item);
           const duplicateNames = isCurrency ? duplicateCurrencies.names : duplicateTags.names;
           const isDuplicate = duplicateNames.has(normalizeListValue(item));
+          const isInvalidCurrency = isCurrency && !isValidCurrencyCode(item);
+          const showInvalidCurrency = isInvalidCurrency && validatedCurrencyIndexes.has(i);
 
           return (
             <div key={i} className={`flex gap-2${isCurrency ? ' items-center' : ''}`}>
@@ -476,15 +540,36 @@ export default function Settings() {
               )}
               <input
                 className="input"
+                aria-label={`${title} item ${i + 1}`}
                 value={item}
                 placeholder={placeholder}
-                onChange={event => updateList(list, i, event.target.value)}
-                aria-invalid={isDuplicate}
-                title={isDuplicate ? `Duplicate ${isCurrency ? 'currency' : 'balance tag'}` : undefined}
-                style={{ ...inputRowStyle, borderColor: isDuplicate ? 'var(--danger)' : undefined }}
+                onChange={event => {
+                  if (isCurrency) {
+                    setValidatedCurrencyIndexes(previous => {
+                      const next = new Set(previous);
+                      next.delete(i);
+                      return next;
+                    });
+                  }
+                  updateList(list, i, event.target.value);
+                }}
+                onBlur={() => {
+                  if (!isCurrency) return;
+                  setValidatedCurrencyIndexes(previous => new Set(previous).add(i));
+                }}
+                maxLength={isCurrency ? 10 : undefined}
+                autoCapitalize={isCurrency ? 'characters' : undefined}
+                spellCheck={isCurrency ? false : undefined}
+                aria-invalid={isDuplicate || showInvalidCurrency}
+                title={isDuplicate
+                  ? `Duplicate ${isCurrency ? 'currency' : 'balance tag'}`
+                  : showInvalidCurrency
+                    ? 'Use 2–10 Latin letters or digits'
+                    : undefined}
+                style={{ ...inputRowStyle, borderColor: isDuplicate || showInvalidCurrency ? 'var(--danger)' : undefined }}
               />
-              {isDuplicate && (
-                <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>Duplicate</span>
+              {(isDuplicate || showInvalidCurrency) && (
+                <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>{isDuplicate ? 'Duplicate' : 'Invalid code'}</span>
               )}
               <button className="btn btn-danger" style={iconButtonStyle} onClick={() => removeFromList(list, i)}>
                 <Trash2 size={16} />
@@ -493,6 +578,7 @@ export default function Settings() {
           );
         })}
       </div>
+      <SettingsScrollHint total={(settings[list] || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
     </div>
   );
 
@@ -535,12 +621,13 @@ export default function Settings() {
           <div style={{ padding: '10px 0', color: 'var(--text-secondary)', fontSize: '12px' }}>No active organizations.</div>
         )}
       </div>
+      <SettingsScrollHint total={activeOrganizations.length} visible={ORGANIZATION_LIST_VISIBLE_ROWS} />
       {archivedOrganizations.length > 0 && (
         <details style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--glass-border)' }}>
           <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, userSelect: 'none' }}>
             Archived organizations ({archivedOrganizations.length})
           </summary>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px`, overflowY: 'auto', paddingRight: '4px' }}>
             {archivedOrganizations.map(({ organization, index }) => (
               <div key={index} className="flex items-center gap-2" style={{ minHeight: '36px', padding: '5px 8px 5px 12px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.38)', border: '1px solid var(--glass-border)' }}>
                 <span style={{ flex: 1, fontSize: '13px' }}>{organization.name}</span>
@@ -551,6 +638,7 @@ export default function Settings() {
               </div>
             ))}
           </div>
+          <SettingsScrollHint total={archivedOrganizations.length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
         </details>
       )}
     </div>
@@ -569,21 +657,34 @@ export default function Settings() {
           <Save size={18} /> Save
         </button>
       </div>
-      <div className="glass-panel mb-4" style={{ padding: '18px 24px' }}>
-        <h3 style={{ margin: '0 0 14px 0', fontSize: '18px', fontWeight: 600 }}>Currency Framework</h3>
+      <div className="glass-panel currency-framework-panel mb-4">
+        <div className="currency-framework-header">
+          <div className="currency-framework-icon"><Coins size={20} /></div>
+          <div>
+            <h3>Currency Framework</h3>
+            <p>Choose the standard used for portfolio valuation and an optional comparison currency.</p>
+          </div>
+          <span className="currency-framework-count">{settings.currencies.length} tracked</span>
+        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+        <div className="currency-framework-flow">
           <CurrencyField
             label="Base Currency" value={settings.baseCurrency || 'RUB'} currencies={settings.currencies}
             onChange={updateBaseCurrency}
-            description="The primary asset standard for your total net worth metrics."
+            description="All balances, earnings, and allocation values are normalized here."
+            role="base"
           />
+          <div className="currency-framework-connector" aria-hidden="true">
+            <ArrowRight size={17} />
+            <span>compare</span>
+          </div>
           <CurrencyField
             label="Secondary Currency"
             value={settings.secondaryCurrency === (settings.baseCurrency || 'RUB') ? '' : (settings.secondaryCurrency ?? 'USD')}
             currencies={settings.currencies.filter(currency => currency !== (settings.baseCurrency || 'RUB'))}
             onChange={secondaryCurrency => setSettings({ ...settings, secondaryCurrency })}
-            description="Displayed concurrently alongside base units inside grids and trends." allowNone
+            description="Shown alongside the base currency where a second perspective is useful."
+            role="secondary" allowNone
           />
         </div>
       </div>
@@ -618,7 +719,7 @@ export default function Settings() {
                 <span>Name</span>
                 <span>Default tax</span>
               </div>
-              <div ref={element => { scrollBodyRefs.current.sources = element; }} className="cash-flow-settings-list">
+              <div ref={element => { scrollBodyRefs.current.sources = element; }} className="cash-flow-settings-list" style={{ maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px` }}>
                 {(settings.cashFlow?.sources || []).map((source, index) => {
                   const isDuplicate = duplicateFlowSources.names.has(normalizeListValue(source));
                   return (
@@ -649,6 +750,7 @@ export default function Settings() {
                   <div className="cash-flow-settings-empty">No sources configured yet.</div>
                 )}
               </div>
+              <SettingsScrollHint total={(settings.cashFlow?.sources || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
             </section>
 
             <section className="cash-flow-settings-section">
@@ -661,8 +763,10 @@ export default function Settings() {
                   <Plus size={14} /> Add
                 </button>
               </div>
-              <div className="cash-flow-category-setting-label-spacer" aria-hidden="true" />
-              <div ref={element => { scrollBodyRefs.current.categories = element; }} className="cash-flow-settings-list">
+              <div className="cash-flow-category-setting-labels" aria-hidden="true">
+                <span>Name</span>
+              </div>
+              <div ref={element => { scrollBodyRefs.current.categories = element; }} className="cash-flow-settings-list" style={{ maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px` }}>
                 {(settings.cashFlow?.categories || []).map((category, index) => {
                   const isDuplicate = duplicateFlowCategories.names.has(normalizeListValue(category));
                   return (
@@ -683,6 +787,7 @@ export default function Settings() {
                   <div className="cash-flow-settings-empty">No categories configured yet.</div>
                 )}
               </div>
+              <SettingsScrollHint total={(settings.cashFlow?.categories || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
             </section>
           </div>
       </SettingsPanel>

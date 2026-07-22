@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Eye } from 'lucide-react';
 import type { ParsedSnapshot } from '../types';
@@ -13,6 +13,7 @@ import { StickyPageHeader } from './components/StickyPageHeader';
 import { TimeframeControl } from './components/TimeframeControl';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
+const LEGEND_DOUBLE_CLICK_WINDOW_MS = 700;
 const getSignedPercent = (current: number, previous: number) => {
   if (previous === 0) return 0;
   return ((current - previous) / previous) * 100;
@@ -101,7 +102,7 @@ export default function GraphsPage() {
   });
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
-  const [lastClick, setLastClick] = useState<{ group: LegendGroup; key: string; time: number } | null>(null);
+  const lastLegendClickRef = useRef<{ group: LegendGroup; key: string; time: number } | null>(null);
 
   useEffect(() => {
     if (snapshots.length > 0 && !startMonth && !endMonth) {
@@ -118,10 +119,6 @@ export default function GraphsPage() {
     const endOk = effectiveEndMonth ? snapshot.month <= effectiveEndMonth : true;
     return startOk && endOk;
   }), [effectiveEndMonth, snapshots, startMonth]);
-
-  const getAmountInBase = (amount: number, currency: string, snapshot: ParsedSnapshot) => {
-    return convertAmount(amount, currency, baseCurrency, snapshot.data.rates);
-  };
 
   const getSnapshotTotalBase = (snapshot: ParsedSnapshot) => {
     return calculateTotals(snapshot, baseCurrency).totalBase;
@@ -173,8 +170,40 @@ export default function GraphsPage() {
 
   const latestSnapshot = filteredSnapshots[filteredSnapshots.length - 1];
   const firstSnapshot = filteredSnapshots[0];
-  const latestBreakdown = snapshotBreakdowns[snapshotBreakdowns.length - 1];
-  const firstBreakdown = snapshotBreakdowns[0];
+  const organizationCurrencyBreakdown = useMemo(() => {
+    if (!latestSnapshot) return [];
+
+    return latestSnapshot.data.organizations.flatMap(organization => {
+      if (!organization.name) return [];
+      const currencies = new Map<string, { amount: number; valueBase: number }>();
+      organization.balances.forEach(balance => {
+        if (!balance.currency) return;
+        const amount = Number(balance.amount || 0);
+        const valueBase = convertAmount(amount, balance.currency, baseCurrency, latestSnapshot.data.rates);
+        const current = currencies.get(balance.currency) || { amount: 0, valueBase: 0 };
+        current.amount += amount;
+        current.valueBase += valueBase;
+        currencies.set(balance.currency, current);
+      });
+
+      const holdings = Array.from(currencies.entries())
+        .map(([currency, values]) => ({ currency, ...values }))
+        .filter(holding => Math.abs(holding.valueBase) >= 0.01)
+        .sort((left, right) => Math.abs(right.valueBase) - Math.abs(left.valueBase));
+      const totalBase = holdings.reduce((sum, holding) => sum + holding.valueBase, 0);
+      const shareBasis = holdings.reduce((sum, holding) => sum + Math.abs(holding.valueBase), 0);
+
+      return [{
+        organization: organization.name,
+        totalBase,
+        holdings: holdings.map(holding => ({
+          ...holding,
+          percent: shareBasis > 0 ? (Math.abs(holding.valueBase) / shareBasis) * 100 : 0
+        }))
+      }];
+    }).filter(item => item.holdings.length > 0)
+      .sort((left, right) => Math.abs(right.totalBase) - Math.abs(left.totalBase));
+  }, [baseCurrency, latestSnapshot]);
 
   const netWorthData = filteredSnapshots.map(snapshot => {
     const globalIndex = snapshots.findIndex(s => s.month === snapshot.month);
@@ -188,37 +217,6 @@ export default function GraphsPage() {
       delta: Math.round(total - previousTotal)
     };
   });
-
-  const treemapData: any[] = [];
-  if (latestSnapshot && latestBreakdown) {
-    latestSnapshot.data.organizations.forEach((org, index) => {
-      const orgValue = latestBreakdown.organizations[org.name] || 0;
-
-      if (orgValue > 0 && org.name) {
-        treemapData.push({
-          name: org.name,
-          value: Math.round(orgValue),
-          color: CHART_COLORS[index % CHART_COLORS.length]
-        });
-      }
-    });
-  }
-
-  const flowChartData: any[] = [];
-  if (latestSnapshot) {
-    latestSnapshot.data.organizations.forEach(org => {
-      if (!org.name) return;
-
-      const point: any = { name: org.name };
-      allUsedCurrencies.forEach(currency => point[currency] = 0);
-
-      org.balances.forEach(balance => {
-        point[balance.currency] += Math.round(getAmountInBase(Number(balance.amount || 0), balance.currency, latestSnapshot));
-      });
-
-      flowChartData.push(point);
-    });
-  }
 
   const decompositionData = filteredSnapshots.map((snapshot, index) => {
     const previousSnapshot = index > 0 ? filteredSnapshots[index - 1] : null;
@@ -308,30 +306,6 @@ export default function GraphsPage() {
     }];
   }).sort((left, right) => left.month.localeCompare(right.month) || left.id - right.id);
 
-  const buildMovers = (startValues: Record<string, number>, endValues: Record<string, number>) => {
-    return Array.from(new Set([...Object.keys(startValues), ...Object.keys(endValues)]))
-      .map(name => {
-        const start = startValues[name] || 0;
-        const end = endValues[name] || 0;
-        return {
-          name,
-          value: Math.round(end),
-          delta: Math.round(end - start),
-          percent: getSignedPercent(end, start)
-        };
-      })
-      .filter(item => Math.abs(item.delta) >= 1 || item.value > 0)
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-      .slice(0, 6);
-  };
-
-  const latestOrgValues = latestBreakdown?.organizations || {};
-  const latestCurrencyValues = latestBreakdown?.currencies || {};
-  const latestTagValues = latestBreakdown?.tags || {};
-  const topOrganizationMovers = buildMovers(firstBreakdown?.organizations || {}, latestOrgValues);
-  const topCurrencyMovers = buildMovers(firstBreakdown?.currencies || {}, latestCurrencyValues);
-  const topTagMovers = buildMovers(firstBreakdown?.tags || {}, latestTagValues);
-
   const currentTotal = latestSnapshot ? getSnapshotTotalBase(latestSnapshot) : 0;
   const startTotal = firstSnapshot ? getSnapshotTotalBase(firstSnapshot) : 0;
   const periodDelta = latestSnapshot && firstSnapshot ? currentTotal - startTotal : 0;
@@ -343,21 +317,29 @@ export default function GraphsPage() {
     return typeof rate === 'number' && Number.isFinite(rate) ? multiplier * (1 + rate / 100) : multiplier;
   }, 1);
   const periodFxImpactDelta = decompositionData.reduce((total, point) => total + Number(point['FX Impact'] || 0), 0);
-  const taggedReturnTotals = new Map<string, { result: number; multiplier: number; months: number }>();
+  const taggedReturnTotals = new Map<string, {
+    result: number;
+    multiplier: number;
+    ratedMonths: number;
+    monthly: Array<{ month: string; result: number; ratePercent: number | null }>;
+  }>();
   let assignedExternalEntries = 0;
   let totalExternalEntries = 0;
+  let proportionallyAllocatedEntries = 0;
   filteredSnapshots.forEach((snapshot, index) => {
     if (!cashFlowEnabled || index === 0) return;
     const monthEntries = flowEntries.filter(entry => entry.month === snapshot.month);
     const breakdown = calculateTaggedCapitalReturns(snapshot, filteredSnapshots[index - 1], monthEntries, baseCurrency);
     assignedExternalEntries += breakdown.assignedExternalEntries;
     totalExternalEntries += breakdown.totalExternalEntries;
+    proportionallyAllocatedEntries += breakdown.proportionallyAllocatedEntries;
     breakdown.returns.forEach(item => {
-      const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, months: 0 };
+      const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, ratedMonths: 0, monthly: [] };
       total.result += item.result;
+      total.monthly.push({ month: snapshot.month, result: item.result, ratePercent: item.ratePercent });
       if (item.ratePercent !== null && Number.isFinite(item.ratePercent)) {
         total.multiplier *= 1 + item.ratePercent / 100;
-        total.months += 1;
+        total.ratedMonths += 1;
       }
       taggedReturnTotals.set(item.tag, total);
     });
@@ -366,7 +348,8 @@ export default function GraphsPage() {
     .map(([tag, total]) => ({
       tag,
       result: total.result,
-      ratePercent: total.months > 0 ? (total.multiplier - 1) * 100 : null
+      ratePercent: total.ratedMonths > 0 ? (total.multiplier - 1) * 100 : null,
+      monthly: total.monthly
     }))
     .filter(item => Math.abs(item.result) >= 0.01 || item.ratePercent !== null)
     .sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
@@ -412,24 +395,6 @@ export default function GraphsPage() {
     }
   ];
 
-  const buildConcentrationStat = (label: string, values: Record<string, number>) => {
-    const top = Object.entries(values).sort((a, b) => b[1] - a[1])[0];
-    const total = Object.values(values).reduce((sum, value) => sum + value, 0);
-
-    return {
-      label,
-      name: top?.[0] || 'N/A',
-      value: Math.round(top?.[1] || 0),
-      percent: total > 0 ? ((top?.[1] || 0) / total) * 100 : 0
-    };
-  };
-
-  const concentrationStats = [
-    buildConcentrationStat('Top organization', latestOrgValues),
-    buildConcentrationStat('Top currency', latestCurrencyValues),
-    buildConcentrationStat('Top tag', latestTagValues)
-  ];
-
   const uxMetricsData = filteredSnapshots.map(snapshot => {
     const totalAccountsCount = snapshot.data.organizations.reduce((total, org) => total + org.balances.length, 0);
     const duration = snapshot.duration_seconds || 0;
@@ -456,8 +421,9 @@ export default function GraphsPage() {
     if (!clickedKey) return;
 
     const now = Date.now();
-    const isDoubleClick = lastClick && lastClick.group === group && lastClick.key === clickedKey && (now - lastClick.time < 300);
-    setLastClick({ group, key: clickedKey, time: now });
+    const lastClick = lastLegendClickRef.current;
+    const isDoubleClick = lastClick && lastClick.group === group && lastClick.key === clickedKey && (now - lastClick.time < LEGEND_DOUBLE_CLICK_WINDOW_MS);
+    lastLegendClickRef.current = { group, key: clickedKey, time: now };
 
     setHiddenSeries(prev => {
       const currentGroup = prev[group];
@@ -553,25 +519,20 @@ export default function GraphsPage() {
         allUsedCurrencies={allUsedCurrencies}
         allUsedTags={allUsedTags}
         chartColors={CHART_COLORS}
-        concentrationStats={concentrationStats}
         currencyDistributionData={currencyDistributionData}
         currencyRatesData={currencyRatesData}
         cashFlowMonthlyData={cashFlowMonthlyData}
         cashFlowEventsData={cashFlowEventsData}
         decompositionData={decompositionData}
-        flowChartData={flowChartData}
         hiddenSeries={hiddenSeries}
-        latestSnapshotMonth={latestSnapshot?.month}
         netWorthData={netWorthData}
         orgTrendData={orgTrendData}
+        organizationCurrencyBreakdown={organizationCurrencyBreakdown}
+        organizationCurrencyMonth={latestSnapshot?.month}
         summaryStats={summaryStats}
         tagDistributionData={tagDistributionData}
-        tagReturnCoverage={{ assigned: assignedExternalEntries, total: totalExternalEntries }}
+        tagReturnCoverage={{ assigned: assignedExternalEntries, total: totalExternalEntries, proportional: proportionallyAllocatedEntries }}
         tagReturnStats={tagReturnStats}
-        topCurrencyMovers={topCurrencyMovers}
-        topOrganizationMovers={topOrganizationMovers}
-        topTagMovers={topTagMovers}
-        treemapData={treemapData}
         uxMetricsData={uxMetricsData}
         formatCompact={formatCompact}
         formatFriendlyTime={formatFriendlyTime}
