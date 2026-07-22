@@ -43,7 +43,11 @@ test('uses actual tagged balance amounts when one account has multiple balances 
   const byTag = Object.fromEntries(result.returns.map(item => [item.tag, item]));
 
   assert.equal(byTag.deposit.result, 10);
+  assert.equal(byTag.deposit.openingCapital, 100);
+  assert.equal(byTag.deposit.closingCapital, 110);
   assert.equal(byTag.stocks.result, 90);
+  assert.equal(byTag.stocks.openingCapital, 900);
+  assert.equal(byTag.stocks.closingCapital, 990);
   assert.equal(byTag.deposit.ratePercent, 10);
   assert.equal(byTag.stocks.ratePercent, 10);
 });

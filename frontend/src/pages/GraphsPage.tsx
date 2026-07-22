@@ -321,7 +321,7 @@ export default function GraphsPage() {
     result: number;
     multiplier: number;
     ratedMonths: number;
-    monthly: Array<{ month: string; result: number; ratePercent: number | null }>;
+    monthly: Array<{ month: string; openingCapital: number; closingCapital: number; result: number; ratePercent: number | null }>;
   }>();
   let assignedExternalEntries = 0;
   let totalExternalEntries = 0;
@@ -336,7 +336,13 @@ export default function GraphsPage() {
     breakdown.returns.forEach(item => {
       const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, ratedMonths: 0, monthly: [] };
       total.result += item.result;
-      total.monthly.push({ month: snapshot.month, result: item.result, ratePercent: item.ratePercent });
+      total.monthly.push({
+        month: snapshot.month,
+        openingCapital: item.openingCapital,
+        closingCapital: item.closingCapital,
+        result: item.result,
+        ratePercent: item.ratePercent
+      });
       if (item.ratePercent !== null && Number.isFinite(item.ratePercent)) {
         total.multiplier *= 1 + item.ratePercent / 100;
         total.ratedMonths += 1;

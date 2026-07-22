@@ -19,6 +19,7 @@ export type EstimatedCapitalReturn = {
 export type TaggedCapitalReturn = {
   tag: string;
   openingCapital: number;
+  closingCapital: number;
   assignedFlow: number;
   result: number;
   ratePercent: number | null;
@@ -357,6 +358,7 @@ export const calculateTaggedCapitalReturns = (
     return {
       tag,
       ...total,
+      closingCapital: total.openingCapital + total.assignedFlow + total.result,
       ratePercent: averageCapital > 0 ? (total.result / averageCapital) * 100 : null
     };
   }).sort((left, right) => Math.abs(right.result) - Math.abs(left.result));

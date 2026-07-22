@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { Activity, ArrowLeftRight, BarChart3, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
+import { Activity, ArrowLeftRight, ArrowRight, BarChart3, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
 import { HelpTooltip } from '../HelpTooltip';
@@ -26,7 +26,7 @@ type TagReturnStat = {
   tag: string;
   result: number;
   ratePercent: number | null;
-  monthly: Array<{ month: string; result: number; ratePercent: number | null }>;
+  monthly: Array<{ month: string; openingCapital: number; closingCapital: number; result: number; ratePercent: number | null }>;
 };
 
 type OrganizationCurrencyBreakdown = {
@@ -87,6 +87,9 @@ const getDeltaColor = (value: number) => {
   if (value < 0) return 'var(--diff-negative, hsl(0, 45%, 60%))';
   return 'var(--text-secondary)';
 };
+
+const getMoneyDeltaColor = (value: number) => getDeltaColor(normalizeDisplayNumber(value, 0.5));
+const getPercentDeltaColor = (value: number) => getDeltaColor(normalizeDisplayNumber(value));
 
 const formatSigned = (value: number) => {
   const normalized = normalizeDisplayNumber(value, 0.5);
@@ -430,11 +433,11 @@ export function GraphsAnalyticsSections({
               <div className="capital-return-headline">
                 <div>
                   <span>Estimated earnings</span>
-                  <strong style={{ color: getDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong>
+                  <strong style={{ color: getMoneyDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong>
                 </div>
                 <div>
                   <span>Time-weighted return</span>
-                  <strong style={{ color: getDeltaColor(capitalReturnSummary.ratePercent) }}>{formatPercent(capitalReturnSummary.ratePercent)}</strong>
+                  <strong style={{ color: getPercentDeltaColor(capitalReturnSummary.ratePercent) }}>{formatPercent(capitalReturnSummary.ratePercent)}</strong>
                   <small>Selected period · not annualized</small>
                 </div>
               </div>
@@ -469,8 +472,8 @@ export function GraphsAnalyticsSections({
                             <i style={{ background: item.tag === 'untagged' ? '#64748b' : getTagColor(item.tag) }} />
                             {item.tag}
                           </span>
-                          <strong style={{ color: getDeltaColor(item.result) }}>{formatSigned(item.result)} {baseCurrency}</strong>
-                          <strong className="capital-return-tag-rate" style={{ color: item.ratePercent === null ? 'var(--text-secondary)' : getDeltaColor(item.ratePercent) }}>
+                          <strong style={{ color: getMoneyDeltaColor(item.result) }}>{formatSigned(item.result)} {baseCurrency}</strong>
+                          <strong className="capital-return-tag-rate" style={{ color: item.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(item.ratePercent) }}>
                             {item.ratePercent === null ? '—' : formatPercent(item.ratePercent)}
                           </strong>
                           <ChevronRight className="capital-return-tag-chevron" size={14} />
@@ -533,29 +536,34 @@ export function GraphsAnalyticsSections({
             <div className="capital-return-tag-modal-summary">
               <div>
                 <span>Estimated earnings</span>
-                <strong style={{ color: getDeltaColor(selectedTagReturn.result) }}>{formatSigned(selectedTagReturn.result)} {baseCurrency}</strong>
+                <strong style={{ color: getMoneyDeltaColor(selectedTagReturn.result) }}>{formatSigned(selectedTagReturn.result)} {baseCurrency}</strong>
               </div>
               <div>
                 <span>Time-weighted return</span>
-                <strong style={{ color: selectedTagReturn.ratePercent === null ? 'var(--text-secondary)' : getDeltaColor(selectedTagReturn.ratePercent) }}>
+                <strong style={{ color: selectedTagReturn.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(selectedTagReturn.ratePercent) }}>
                   {selectedTagReturn.ratePercent === null ? '—' : formatPercent(selectedTagReturn.ratePercent)}
                 </strong>
               </div>
             </div>
             <div className="capital-return-tag-modal-months">
-              <div className="capital-return-tag-modal-month-heading"><span>Month</span><span>Earnings</span><span>Return</span></div>
+              <div className="capital-return-tag-modal-month-heading"><span>Month</span><span>Opening → closing</span><span>Earnings</span><span>Return</span></div>
               {[...selectedTagReturn.monthly].sort((left, right) => right.month.localeCompare(left.month)).map(month => (
                 <div key={month.month} className="capital-return-tag-modal-month-row">
                   <span>{month.month}</span>
-                  <strong style={{ color: getDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
-                  <strong style={{ color: month.ratePercent === null ? 'var(--text-secondary)' : getDeltaColor(month.ratePercent) }}>
+                  <strong className="capital-return-tag-modal-balance">
+                    <span>{formatNumber(month.openingCapital)}</span>
+                    <ArrowRight size={11} />
+                    <span>{formatNumber(month.closingCapital)} {baseCurrency}</span>
+                  </strong>
+                  <strong style={{ color: getMoneyDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
+                  <strong style={{ color: month.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(month.ratePercent) }}>
                     {month.ratePercent === null ? '—' : formatPercent(month.ratePercent)}
                   </strong>
                 </div>
               ))}
             </div>
             <div className="capital-return-tag-modal-note">
-              Monthly earnings exclude recorded external flows attributed to this tag. Return is time-weighted and not annualized.
+              Opening and closing balances are valued in {baseCurrency} at each month's closing rates. Earnings exclude recorded external flows attributed to this tag; return is time-weighted and not annualized.
             </div>
           </div>
         </div>

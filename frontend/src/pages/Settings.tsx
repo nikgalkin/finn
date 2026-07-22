@@ -647,7 +647,7 @@ export default function Settings() {
   if (loading) return <PageLoader label="Loading settings" />;
 
   return (
-    <div data-unsaved-changes={isDirty ? 'true' : undefined}>
+    <div className="settings-page" data-unsaved-changes={isDirty ? 'true' : undefined}>
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
           <Link title="Back to dashboard" to="/" className="btn"><ArrowLeft size={18} /></Link>

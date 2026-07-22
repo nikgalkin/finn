@@ -130,7 +130,7 @@ export default function Dashboard() {
   }, [snapshots, baseCurrency, secondaryCurrency]);
 
   const CommentDot = (props: any) => {
-    const { cx, cy, payload } = props;
+    const { cx, cy, index, payload } = props;
     if (payload && payload.hasComment) {
       return (
         <g key={cx} style={{ cursor: 'pointer', filter: 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.34))' }}>
@@ -144,7 +144,30 @@ export default function Dashboard() {
             strokeDasharray="3 5"
             opacity={0.28}
           />
-          <circle cx={cx} cy={cy} r={7} fill="rgba(16, 185, 129, 0.08)" />
+          <circle
+            className="dashboard-comment-dot-halo"
+            cx={cx}
+            cy={cy}
+            r={6.4}
+            fill="none"
+            stroke="rgba(110, 231, 183, 0.56)"
+            strokeWidth={1}
+          >
+            <animate
+              attributeName="r"
+              values="6.4;11.5"
+              dur="2.8s"
+              begin={`${(Number(index || 0) % 5) * 0.42}s`}
+              repeatCount="indefinite"
+            />
+            <animate
+              attributeName="opacity"
+              values="0.82;0"
+              dur="2.8s"
+              begin={`${(Number(index || 0) % 5) * 0.42}s`}
+              repeatCount="indefinite"
+            />
+          </circle>
           <circle cx={cx} cy={cy} r={5.25} fill="var(--bg-color)" fillOpacity={0.96} stroke="#6ee7b7" strokeWidth={2.5} />
           <circle cx={cx} cy={cy} r={2.25} fill="#10b981" />
         </g>
