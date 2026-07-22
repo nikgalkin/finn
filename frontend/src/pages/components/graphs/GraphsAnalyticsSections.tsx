@@ -21,12 +21,6 @@ type CapitalReturnSummary = {
   ratePercent: number;
 };
 
-type CapitalOverview = {
-  currentNetWorth: number;
-  periodChange: number;
-  fxImpact: number;
-};
-
 type TagReturnStat = {
   tag: string;
   result: number;
@@ -46,7 +40,6 @@ export type HiddenLegendSeries = Record<LegendGroup, Record<string, boolean>>;
 type GraphsAnalyticsSectionsProps = {
   baseCurrency: string;
   cashFlowEnabled: boolean;
-  capitalOverview?: CapitalOverview;
   capitalReturnSummary?: CapitalReturnSummary;
   activeCurrencies: string[];
   allOrganizations: string[];
@@ -290,7 +283,7 @@ const SummaryCard = ({ stat }: { stat: SummaryStat }) => {
   const color = stat.label === 'Net worth' ? 'var(--text-primary)' : getDeltaColor(stat.value);
 
   return (
-    <div className="glass-panel" style={{ minHeight: '104px', padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
+    <div className="glass-panel" style={{ minHeight: '92px', padding: '14px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '8px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
           <span>{stat.label}</span>
@@ -349,7 +342,6 @@ const CollapsibleSection = ({ children, contentStyle, help, icon, title }: Colla
 export function GraphsAnalyticsSections({
   baseCurrency,
   cashFlowEnabled,
-  capitalOverview,
   capitalReturnSummary,
   activeCurrencies,
   allOrganizations,
@@ -482,7 +474,7 @@ export function GraphsAnalyticsSections({
               </div>
               <div className="capital-return-reconciliation">
                 <div><span>Balance change excluding FX</span><strong>{formatSigned(capitalReturnSummary.organicChange)} {baseCurrency}</strong></div>
-                <div><span>External Cash Flow adjustment</span><strong>{formatSigned(-capitalReturnSummary.externalFlow)} {baseCurrency}</strong></div>
+                <div><span>Less recorded net contributions</span><strong>{formatSigned(-capitalReturnSummary.externalFlow)} {baseCurrency}</strong></div>
               </div>
               <div className="capital-return-transfer-note">
                 Internal transfers do not change external Cash Flow. Any difference between their sent and received legs remains in the balance reconciliation and tag attribution.
@@ -586,7 +578,7 @@ export function GraphsAnalyticsSections({
             </div>
             <div className="capital-return-tag-modal-months">
               <div className="capital-return-tag-modal-month-heading"><span>Month</span><span>Earnings</span><span>Return</span></div>
-              {selectedTagReturn.monthly.map(month => (
+              {[...selectedTagReturn.monthly].sort((left, right) => right.month.localeCompare(left.month)).map(month => (
                 <div key={month.month} className="capital-return-tag-modal-month-row">
                   <span>{month.month}</span>
                   <strong style={{ color: getDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>

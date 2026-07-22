@@ -494,11 +494,6 @@ export default function GraphsPage() {
       <GraphsAnalyticsSections
         baseCurrency={baseCurrency}
         cashFlowEnabled={cashFlowEnabled}
-        capitalOverview={cashFlowEnabled ? {
-          currentNetWorth: currentTotal,
-          periodChange: periodDelta,
-          fxImpact: periodFxImpactDelta
-        } : undefined}
         capitalReturnSummary={cashFlowEnabled ? {
           organicChange: periodExternalFlow + periodEstimatedReturn,
           externalFlow: periodExternalFlow,

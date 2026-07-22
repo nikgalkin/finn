@@ -1196,6 +1196,33 @@ a { color: var(--accent); text-decoration: none; }
   backdrop-filter: blur(5px);
 }
 
+.snapshot-diff-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.snapshot-diff-modal-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(5, 5, 24, 0.73);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+.snapshot-diff-modal {
+  position: relative;
+  z-index: 1;
+  background: rgba(29, 39, 56, 0.63);
+  -webkit-backdrop-filter: blur(22.5px);
+  backdrop-filter: blur(22.5px);
+}
+
 .capital-return-tag-modal {
   display: flex;
   width: min(560px, 100%);
@@ -1424,7 +1451,7 @@ a { color: var(--accent); text-decoration: none; }
   white-space: pre-wrap;
 }
 
-.snapshot-diff-period-note-comment:not(.is-expanded) p { max-height: 4.35em; overflow: hidden; }
+.snapshot-diff-period-note-comment:not(.is-expanded) p { max-height: 2.9em; overflow: hidden; }
 
 .snapshot-diff-period-note-comment.is-expandable { cursor: pointer; outline: none; }
 
@@ -1517,13 +1544,6 @@ a { color: var(--accent); text-decoration: none; }
 .snapshot-diff-recorded-flow-title svg { color: var(--accent); }
 
 .snapshot-diff-recorded-flow-title span { color: var(--text-secondary); font-size: 11px; }
-
-.snapshot-diff-recorded-flow p {
-  margin: 3px 0 0;
-  color: var(--text-secondary);
-  font-size: 10px;
-  line-height: 1.4;
-}
 
 .snapshot-diff-recorded-flow .btn { flex: 0 0 auto; padding: 6px 9px; font-size: 11px; }
 

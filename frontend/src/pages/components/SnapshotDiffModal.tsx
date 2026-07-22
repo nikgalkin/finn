@@ -8,6 +8,7 @@ import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
 import { FlowNetSummary } from './FlowNetSummary';
+import { HelpTooltip } from './HelpTooltip';
 import { ModalPortal } from './ModalPortal';
 import { SearchableSelect } from './graphs/SearchableSelect';
 
@@ -400,9 +401,9 @@ export function SnapshotDiffModal({
   };
 
   return (
-    <ModalPortal className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" zIndex={10_000} onClose={onClose}>
+    <ModalPortal className="snapshot-diff-modal-backdrop" zIndex={10_000} onClose={onClose}>
       <div
-        className="glass-panel flex flex-col"
+        className="glass-panel snapshot-diff-modal flex flex-col"
         style={panelStyle}
         onClick={event => event.stopPropagation()}
       >
@@ -482,8 +483,12 @@ export function SnapshotDiffModal({
                     <ArrowDownUp size={15} />
                     <strong>Recorded Cash Flow</strong>
                     <span>{selectedCurrent.month}</span>
+                    <HelpTooltip
+                      text="Optional recorded movements. They provide context and are not expected to match the snapshot change."
+                      ariaLabel="Recorded Cash Flow explanation"
+                      width={340}
+                    />
                   </div>
-                  <p>Optional recorded movements. They are context and are not expected to match the snapshot change.</p>
                 </div>
                 <Link to={`/flow?month=${selectedCurrent.month}`} className="btn" onClick={onClose}>
                   Open month <ExternalLink size={14} />
