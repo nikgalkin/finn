@@ -237,8 +237,12 @@ export default function Settings() {
       setValidationIssues(issues);
       return;
     }
+    const baseCurrency = settings.baseCurrency || 'RUB';
     const normalizedSettings = {
       ...settings,
+      secondaryCurrency: settings.secondaryCurrency === baseCurrency ? '' : settings.secondaryCurrency,
+      autoFetchCurrencies: Array.from(new Set(settings.autoFetchCurrencies || []))
+        .filter(currency => currency && currency !== baseCurrency),
       organizations: settings.organizations.map(organization => ({
         ...organization,
         country: organization.country?.trim().toUpperCase() || undefined
@@ -367,9 +371,27 @@ export default function Settings() {
   };
 
   const toggleAutoFetch = (curr: string) => {
+    if (curr === (settings.baseCurrency || 'RUB')) return;
     const autoFetch = settings.autoFetchCurrencies || [];
     const autoFetchCurrencies = autoFetch.includes(curr) ? autoFetch.filter(currency => currency !== curr) : [...autoFetch, curr];
     setSettings({ ...settings, autoFetchCurrencies });
+  };
+
+  const updateBaseCurrency = (baseCurrency: string) => {
+    const previousBaseCurrency = settings.baseCurrency || 'RUB';
+    const autoFetchCurrencies = (settings.autoFetchCurrencies || [])
+      .filter(currency => currency !== baseCurrency);
+    if (previousBaseCurrency !== baseCurrency && !autoFetchCurrencies.includes(previousBaseCurrency)) {
+      autoFetchCurrencies.push(previousBaseCurrency);
+    }
+    setSettings({
+      ...settings,
+      baseCurrency,
+      secondaryCurrency: settings.secondaryCurrency === baseCurrency
+        ? previousBaseCurrency
+        : settings.secondaryCurrency,
+      autoFetchCurrencies
+    });
   };
 
   const updateLocalAI = (patch: Partial<LocalAISettings>) => {
@@ -439,15 +461,16 @@ export default function Settings() {
       <div ref={element => { scrollBodyRefs.current[list] = element; }} style={listBodyStyle}>
         {(settings[list] || []).map((item, i) => {
           const isCurrency = list === 'currencies';
-          const isAuto = isCurrency && (settings.autoFetchCurrencies || []).includes(item);
+          const isBaseCurrency = isCurrency && item === (settings.baseCurrency || 'RUB');
+          const isAuto = isCurrency && !isBaseCurrency && (settings.autoFetchCurrencies || []).includes(item);
           const duplicateNames = isCurrency ? duplicateCurrencies.names : duplicateTags.names;
           const isDuplicate = duplicateNames.has(normalizeListValue(item));
 
           return (
             <div key={i} className={`flex gap-2${isCurrency ? ' items-center' : ''}`}>
               {isCurrency && (
-                <label className="flex items-center gap-2 cursor-pointer" title="Auto pull rate" style={autoFetchStyle}>
-                  <input type="checkbox" checked={isAuto} onChange={() => toggleAutoFetch(item)} style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--accent)', margin: 0 }} />
+                <label className={`flex items-center gap-2${isBaseCurrency ? '' : ' cursor-pointer'}`} title={isBaseCurrency ? 'Base currency rate is always 1' : 'Auto pull rate'} style={{ ...autoFetchStyle, opacity: isBaseCurrency ? 0.55 : 1 }}>
+                  <input type="checkbox" checked={isAuto} disabled={isBaseCurrency} onChange={() => toggleAutoFetch(item)} style={{ cursor: isBaseCurrency ? 'not-allowed' : 'pointer', width: '16px', height: '16px', accentColor: 'var(--accent)', margin: 0 }} />
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Auto rate</span>
                 </label>
               )}
@@ -552,11 +575,13 @@ export default function Settings() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
           <CurrencyField
             label="Base Currency" value={settings.baseCurrency || 'RUB'} currencies={settings.currencies}
-            onChange={baseCurrency => setSettings({ ...settings, baseCurrency })}
+            onChange={updateBaseCurrency}
             description="The primary asset standard for your total net worth metrics."
           />
           <CurrencyField
-            label="Secondary Currency" value={settings.secondaryCurrency ?? 'USD'} currencies={settings.currencies}
+            label="Secondary Currency"
+            value={settings.secondaryCurrency === (settings.baseCurrency || 'RUB') ? '' : (settings.secondaryCurrency ?? 'USD')}
+            currencies={settings.currencies.filter(currency => currency !== (settings.baseCurrency || 'RUB'))}
             onChange={secondaryCurrency => setSettings({ ...settings, secondaryCurrency })}
             description="Displayed concurrently alongside base units inside grids and trends." allowNone
           />

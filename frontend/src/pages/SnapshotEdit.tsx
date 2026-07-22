@@ -16,6 +16,14 @@ import type { FlowPeriodDraft } from './components/FlowPeriodModal';
 import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
+import { copyFlowPeriodEntries } from '../lib/cashFlow';
+
+const previousMonth = (month: string) => {
+  const [year, monthNumber] = month.split('-').map(Number);
+  if (!year || !monthNumber) return '';
+  const date = new Date(year, monthNumber - 2, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
 
 export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
@@ -47,7 +55,7 @@ export default function SnapshotEdit() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [recentlyAddedOrgId, setRecentlyAddedOrgId] = useState<string | null>(null);
-  const [cashFlowEditor, setCashFlowEditor] = useState<{ month: string; entries: FlowEntry[] } | null>(null);
+  const [cashFlowEditor, setCashFlowEditor] = useState<{ month: string; entries: FlowEntry[]; previousEntries: ReturnType<typeof copyFlowPeriodEntries> } | null>(null);
   const [cashFlowLoading, setCashFlowLoading] = useState(false);
   const [cashFlowSaving, setCashFlowSaving] = useState(false);
   const [cashFlowError, setCashFlowError] = useState('');
@@ -199,21 +207,21 @@ export default function SnapshotEdit() {
     try {
       const response = await fetch(`${API_URL}/flows`);
       if (!response.ok) throw new Error('Could not load Cash Flow.');
-      const entries = await response.json() as FlowEntry[];
+      const entries = (await response.json() as FlowEntry[] || []).map(entry => ({
+        ...entry,
+        entryType: entry.entryType || 'external' as const,
+        account: entry.account || '',
+        taxRate: entry.taxRate || 0,
+        toAccount: entry.toAccount || '',
+        toCurrency: entry.toCurrency || '',
+        toAmount: entry.toAmount || 0
+      }));
       setCashFlowEditor({
         month: currentMonth,
-        entries: (entries || [])
+        entries: entries
           .filter(entry => entry.month === currentMonth)
-          .map(entry => ({
-            ...entry,
-            entryType: entry.entryType || 'external' as const,
-            account: entry.account || '',
-            taxRate: entry.taxRate || 0,
-            toAccount: entry.toAccount || '',
-            toCurrency: entry.toCurrency || '',
-            toAmount: entry.toAmount || 0
-          }))
-          .sort((left, right) => right.id - left.id)
+          .sort((left, right) => right.id - left.id),
+        previousEntries: copyFlowPeriodEntries(entries, previousMonth(currentMonth))
       });
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Could not load Cash Flow.');
@@ -711,6 +719,7 @@ export default function SnapshotEdit() {
           key={`snapshot-cash-flow-${cashFlowEditor.month}`}
           month={cashFlowEditor.month}
           entries={cashFlowEditor.entries}
+          copyPreviousEntries={cashFlowEditor.previousEntries}
           settings={settings}
           appendBlank={cashFlowEditor.entries.length === 0}
           lockMonth

@@ -111,5 +111,7 @@ else
     "$BINARY" "$@"
 fi
 
-# make a sql dump for db
-# sqlite3 finn.db .dump > demo/demo.sql
+## make a sql dump for db
+# sqlite3 finn-test.db .dump > test/finn-test.sql
+## restore with reset
+# rm -f finn-test.db; sqlite3 finn-test.db < test/finn-test.sql

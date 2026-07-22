@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDown, ArrowRightLeft, ArrowUp, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowRightLeft, ArrowUp, Copy, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
 import type { AppSettings, FlowDirection, FlowEntry, FlowEntryType } from '../../types';
+import type { FlowPeriodSeed } from '../../lib/cashFlow';
 import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
 import { Spinner } from './PageLoader';
@@ -27,8 +28,6 @@ export type FlowPeriodDraft = {
   toAmount: number | string;
 };
 
-export type FlowPeriodSeed = Omit<FlowEntry, 'id' | 'month'>;
-
 type FlowPeriodModalProps = {
   month: string;
   entries: FlowEntry[];
@@ -38,6 +37,7 @@ type FlowPeriodModalProps = {
   appendBlank?: boolean;
   focusEntryID?: number;
   lockMonth?: boolean;
+  copyPreviousEntries?: FlowPeriodSeed[];
   saving: boolean;
   error: string;
   onMonthChange: (month: string) => void;
@@ -83,6 +83,30 @@ const entryToDraft = (entry: FlowEntry): FlowPeriodDraft => ({
   toAmount: entry.toAmount ? String(entry.toAmount) : ''
 });
 
+const seedToDraft = (entry: FlowPeriodSeed): FlowPeriodDraft => ({
+  ...entry,
+  clientID: draftID(),
+  amount: String(entry.amount),
+  taxRate: entry.taxRate || 0,
+  toAmount: entry.toAmount ? String(entry.toAmount) : ''
+});
+
+const isUntouchedBlankDraft = (draft: FlowPeriodDraft, currency: string) => (
+  !draft.id
+  && draft.entryType === 'external'
+  && draft.direction === 'in'
+  && !draft.counterparty
+  && !draft.account
+  && draft.currency === currency
+  && draft.amount === ''
+  && Number(draft.taxRate) === 0
+  && !draft.category
+  && !draft.comment
+  && !draft.toAccount
+  && draft.toCurrency === currency
+  && draft.toAmount === ''
+);
+
 const formatMonth = (month: string) => {
   const [year, monthNumber] = month.split('-').map(Number);
   if (!year || !monthNumber) return month;
@@ -98,6 +122,7 @@ export function FlowPeriodModal({
   appendBlank = false,
   focusEntryID,
   lockMonth = false,
+  copyPreviousEntries,
   saving,
   error,
   onMonthChange,
@@ -108,13 +133,7 @@ export function FlowPeriodModal({
   const [drafts, setDrafts] = useState<FlowPeriodDraft[]>(() => {
     const initial = [
       ...entries.map(entryToDraft),
-      ...seedEntries.map(entry => ({
-        ...entry,
-        clientID: draftID(),
-        amount: String(entry.amount),
-        taxRate: entry.taxRate || 0,
-        toAmount: entry.toAmount ? String(entry.toAmount) : ''
-      }))
+      ...seedEntries.map(seedToDraft)
     ];
     if (appendBlank || initial.length === 0) initial.push(emptyDraft(defaultCurrency));
     return initial;
@@ -122,6 +141,7 @@ export function FlowPeriodModal({
   const initialDrafts = useRef(JSON.stringify(drafts));
   const [validationError, setValidationError] = useState('');
   const [commentEditor, setCommentEditor] = useState<{ clientID: string; text: string } | null>(null);
+  const [copiedPrevious, setCopiedPrevious] = useState(false);
   const dirty = JSON.stringify(drafts) !== initialDrafts.current;
 
   const counterpartyOptions = useMemo(() => Array.from(new Set([
@@ -176,6 +196,16 @@ export function FlowPeriodModal({
   };
 
   const defaultTaxRate = (counterparty: string) => settings.cashFlow?.taxRates?.[counterparty] || 0;
+
+  const copyPrevious = () => {
+    if (!copyPreviousEntries?.length || copiedPrevious || saving) return;
+    setDrafts(current => [
+      ...(current.length === 1 && isUntouchedBlankDraft(current[0], defaultCurrency) ? [] : current),
+      ...copyPreviousEntries.map(seedToDraft)
+    ]);
+    setCopiedPrevious(true);
+    setValidationError('');
+  };
 
   const changeMonth = (nextMonth: string) => {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(nextMonth)) return false;
@@ -352,7 +382,18 @@ export function FlowPeriodModal({
           ))}
         </div>
 
-        <div className="cash-flow-period-add">
+        <div className="cash-flow-period-add flex gap-2" style={{ flexWrap: 'wrap' }}>
+          {copyPreviousEntries && (
+            <button
+              type="button"
+              className="btn"
+              onClick={copyPrevious}
+              disabled={saving || copiedPrevious || copyPreviousEntries.length === 0}
+              title={copyPreviousEntries.length === 0 ? 'The previous month has no external movements.' : `Copy ${copyPreviousEntries.length} external movement${copyPreviousEntries.length === 1 ? '' : 's'} from the previous month`}
+            >
+              <Copy size={16} /> {copiedPrevious ? 'Previous copied' : 'Copy previous'}
+            </button>
+          )}
           <button type="button" className="btn" onClick={() => setDrafts(current => [...current, emptyDraft(defaultCurrency)])} disabled={saving}><Plus size={16} /> Add movement</button>
         </div>
 

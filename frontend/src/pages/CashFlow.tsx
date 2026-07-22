@@ -5,9 +5,10 @@ import { useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { API_URL } from '../types';
 import type { FlowDirection, FlowEntry } from '../types';
-import { calculateFlowTax, summarizeFlowEntries } from '../lib/cashFlow';
+import { calculateFlowTax, copyFlowPeriodEntries, summarizeFlowEntries } from '../lib/cashFlow';
+import type { FlowPeriodSeed } from '../lib/cashFlow';
 import { FlowPeriodModal } from './components/FlowPeriodModal';
-import type { FlowPeriodDraft, FlowPeriodSeed } from './components/FlowPeriodModal';
+import type { FlowPeriodDraft } from './components/FlowPeriodModal';
 import { PageLoader } from './components/PageLoader';
 import { QuickHoverTooltip } from './components/QuickHoverTooltip';
 import { CommentModal } from './components/SnapshotCommentModal';
@@ -307,11 +308,8 @@ export default function CashFlow() {
   };
 
   const copyPeriod = (month: string) => {
-    const seedEntries = entries
-      .filter(entry => entry.month === month)
-      .map(({ id: _id, month: _month, ...entry }) => ({ ...entry, taxRate: entry.taxRate || 0, comment: '' }));
     setError('');
-    setPeriodEditor({ month: nextMonth(month), seedEntries });
+    setPeriodEditor({ month: nextMonth(month), seedEntries: copyFlowPeriodEntries(entries, month) });
   };
 
   const readCsvFile = async (file: File) => {
