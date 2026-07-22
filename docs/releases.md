@@ -1,9 +1,10 @@
 # Release Pipeline
 
-Finn uses two GitHub Actions workflows:
+Finn uses three GitHub Actions workflows:
 
-* [`ci.yml`](../.github/workflows/ci.yml) validates pull requests and pushes to `master`, then creates an automatic version tag after all checks pass.
-* [`release.yml`](../.github/workflows/release.yml) builds platform binaries and publishes the GitHub release. It can be called by CI or triggered by a manually pushed `v*` tag.
+* [`ci.yml`](../.github/workflows/ci.yml) validates pull requests and pushes to `master`. It contains checks only, so pull requests do not display skipped release jobs.
+* [`auto-release.yml`](../.github/workflows/auto-release.yml) starts after a successful CI run on `master`, calculates the version, and creates the automatic tag.
+* [`release.yml`](../.github/workflows/release.yml) builds platform binaries and publishes the GitHub release. It can be called by the auto-release workflow or triggered by a manually pushed `v*` tag.
 
 ## Pull requests
 
@@ -28,7 +29,7 @@ It also tests the release-version calculation rules. A failed check stops the pi
 
 ## Automatic releases from `master`
 
-A push to `master` runs the same frontend and backend checks. After they pass, CI selects a version, creates a lightweight Git tag, and calls the release workflow directly.
+A push to `master` runs the same frontend and backend checks. After they pass, the auto-release workflow selects a version, creates a lightweight Git tag, and calls the release workflow directly.
 
 The release workflow is called directly because tags created with the workflow's `GITHUB_TOKEN` do not start another workflow run.
 
@@ -50,18 +51,18 @@ Branch versions take priority over all message markers. For example, merging `fe
 
 If a commit message contains several markers, the bump priority is major, then minor, then bugfix. Markers are lowercase and case-sensitive.
 
-For a PR merge, CI obtains the source branch from the pull request associated with the new `master` commit. A direct push to `master` has no source PR, so its version is selected only from the commit message.
+For a PR merge, the auto-release workflow obtains the source branch from the pull request associated with the new `master` commit. A direct push to `master` has no source PR, so its version is selected only from the commit message.
 
-The version named by a branch must be newer than the latest stable release tag. CI also refuses to overwrite a tag that already points to another commit.
+The version named by a branch must be newer than the latest stable release tag. Auto-release also refuses to overwrite a tag that already points to another commit.
 
 ### Tag and retry behavior
 
-Before calculating a version, CI checks whether the current commit already has a stable version tag:
+Before calculating a version, auto-release checks whether the current commit already has a stable version tag:
 
 * If it does, the existing tag is reused.
-* If it does not, CI calculates and pushes a new tag.
+* If it does not, auto-release calculates and pushes a new tag.
 
-This makes re-running CI safe: a retry does not increment the version again merely because the workflow was restarted.
+This makes re-running the pipeline safe: a retry does not increment the version again merely because a workflow was restarted.
 
 ## Release build
 

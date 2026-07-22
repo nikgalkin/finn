@@ -1,0 +1,91 @@
+name: Auto Release
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-release-master
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Create version tag
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    permissions:
+      contents: write
+      pull-requests: read
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout validated commit and tags
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Calculate version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          existing_tag=""
+          while IFS= read -r candidate; do
+            if [[ "$candidate" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              existing_tag="$candidate"
+              break
+            fi
+          done < <(git tag --points-at HEAD --sort=-version:refname)
+
+          if [ -n "$existing_tag" ]; then
+            echo "Reusing existing tag $existing_tag"
+            echo "tag=$existing_tag" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          commit_message="$(git log -1 --pretty=%B)"
+          source_branch="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_SHA}/pulls" \
+              --jq 'map(select(.base.ref == "master")) | .[0].head.ref // ""'
+          )"
+          echo "Source branch: ${source_branch:-direct push}"
+
+          next_tag="$(./bin/next-version.sh "$commit_message" "" "$source_branch")"
+          if git rev-parse --quiet --verify "refs/tags/$next_tag" >/dev/null; then
+            echo "Version tag $next_tag already exists on another commit" >&2
+            exit 1
+          fi
+
+          echo "Calculated tag $next_tag"
+          echo "tag=$next_tag" >> "$GITHUB_OUTPUT"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Push version tag
+        if: steps.version.outputs.created == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git tag "$RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
+
+  release:
+    name: Release
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
