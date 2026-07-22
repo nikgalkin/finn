@@ -4,6 +4,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { API_URL, getCurrencyColor } from '../types';
 import type { CashFlowSettings, LocalAISettings, LocalAIStatus, Snapshot } from '../types';
 import { isValidCountryCode } from '../lib/countries';
+import {
+  UNSAVED_NAVIGATION_REQUEST_EVENT,
+  type UnsavedNavigationRequestDetail
+} from '../lib/unsavedNavigation';
 import { SETTINGS_UPDATED_EVENT, useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
@@ -236,6 +240,18 @@ export default function Settings() {
     document.addEventListener('click', handleInternalLinkClick, true);
     return () => document.removeEventListener('click', handleInternalLinkClick, true);
   }, [isDirty, showLeaveConfirm]);
+
+  useEffect(() => {
+    const handleNavigationRequest = (event: Event) => {
+      const route = (event as CustomEvent<UnsavedNavigationRequestDetail>).detail?.route;
+      if (!route) return;
+      setPendingNavigation(route);
+      setShowLeaveConfirm(true);
+    };
+
+    window.addEventListener(UNSAVED_NAVIGATION_REQUEST_EVENT, handleNavigationRequest);
+    return () => window.removeEventListener(UNSAVED_NAVIGATION_REQUEST_EVENT, handleNavigationRequest);
+  }, []);
 
   const handleSave = () => {
     const issues: SettingsValidationIssue[] = [

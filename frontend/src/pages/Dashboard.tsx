@@ -12,6 +12,7 @@ import { SnapshotNotesModal } from './components/SnapshotNotesModal';
 import { PageLoader } from './components/PageLoader';
 import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphTooltip';
 import { ScrollForMore } from './components/ScrollForMore';
+import { SnapshotDraftsNotice } from './components/SnapshotDraftsNotice';
 import { isTextInputTarget } from '../lib/hotkeys';
 import {
   calculateCurrencyTotals,
@@ -278,6 +279,8 @@ export default function Dashboard() {
           New Snapshot
         </Link>
       </div>
+
+      <SnapshotDraftsNotice />
 
       {loading ? (
         <PageLoader label="Loading dashboard" />

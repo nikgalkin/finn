@@ -1,5 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { SnapshotData } from '../../types';
+import {
+  readSnapshotDraft,
+  removeSnapshotDraft,
+  writeSnapshotDraft,
+  type SnapshotDraft
+} from '../../lib/snapshotDraftStorage';
+import { summarizeSnapshotDraftChanges } from '../../lib/snapshotDraftDiff';
 
 interface UseSnapshotDraftProps {
   draftKey: string;
@@ -8,6 +15,10 @@ interface UseSnapshotDraftProps {
   currentMonth: string;
   durationSeconds: number;
   isNew: boolean;
+  baseline: {
+    data: SnapshotData;
+    currentMonth: string;
+  } | null;
 }
 
 export function useSnapshotDraft({
@@ -16,19 +27,20 @@ export function useSnapshotDraft({
   data,
   currentMonth,
   durationSeconds,
-  isNew
+  isNew,
+  baseline
 }: UseSnapshotDraftProps) {
-  const [draftToRestore, setDraftToRestore] = useState<any>(null);
+  const [draftState, setDraftState] = useState<{ key: string; draft: SnapshotDraft | null }>(() => ({
+    key: draftKey,
+    draft: readSnapshotDraft(draftKey)
+  }));
+  const draftToRestore = draftState.key === draftKey ? draftState.draft : null;
+  const setDraftToRestore = useCallback((draft: SnapshotDraft | null) => {
+    setDraftState({ key: draftKey, draft });
+  }, [draftKey]);
 
   useEffect(() => {
-    const savedDraft = localStorage.getItem(draftKey);
-    if (savedDraft) {
-      try {
-        setDraftToRestore(JSON.parse(savedDraft));
-      } catch {
-        localStorage.removeItem(draftKey);
-      }
-    }
+    setDraftState({ key: draftKey, draft: readSnapshotDraft(draftKey) });
   }, [draftKey]);
 
   useEffect(() => {
@@ -36,19 +48,19 @@ export function useSnapshotDraft({
     if (draftToRestore) return;
     if (isNew && data.organizations.length === 0) return;
 
-    const draftData = {
+    writeSnapshotDraft(draftKey, {
       data,
       currentMonth,
       durationSeconds,
-      timestamp: Date.now()
-    };
-    localStorage.setItem(draftKey, JSON.stringify(draftData));
-  }, [isDirty, data, currentMonth, durationSeconds, draftKey, isNew, draftToRestore]);
+      timestamp: Date.now(),
+      changeSummary: baseline ? summarizeSnapshotDraftChanges(baseline, { data, currentMonth }) : undefined
+    });
+  }, [isDirty, data, currentMonth, durationSeconds, draftKey, isNew, draftToRestore, baseline]);
 
-  const discardDraft = () => {
-    localStorage.removeItem(draftKey);
+  const discardDraft = useCallback(() => {
+    removeSnapshotDraft(draftKey);
     setDraftToRestore(null);
-  };
+  }, [draftKey, setDraftToRestore]);
 
   return {
     draftToRestore,

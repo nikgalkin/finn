@@ -8,6 +8,8 @@ import { AppFooter } from './pages/components/AppFooter';
 import { PageLoader } from './pages/components/PageLoader';
 import { API_URL } from './types';
 import { useSettings } from './hooks/useSettings';
+import { pruneExpiredSnapshotDrafts } from './lib/snapshotDraftStorage';
+import { requestUnsavedNavigation } from './lib/unsavedNavigation';
 
 const loadDeferredRoutes = () => import('./pages/routeChunks/DeferredRoutes');
 const SnapshotEdit = lazy(() => loadDeferredRoutes().then(module => ({ default: module.SnapshotEdit })));
@@ -51,6 +53,10 @@ function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    pruneExpiredSnapshotDrafts();
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || isTextInputTarget(event.target)) return;
 
@@ -65,7 +71,10 @@ function App() {
         const hotkey = getNavigationHotkey(event);
         if (hotkey && hotkey.route !== location.pathname) {
           event.preventDefault();
-          if (document.querySelector('[data-unsaved-changes="true"]') && !window.confirm('Leave this page and discard unsaved changes?')) return;
+          if (document.querySelector('[data-unsaved-changes="true"]')) {
+            requestUnsavedNavigation(hotkey.route);
+            return;
+          }
           navigate(hotkey.route);
         }
       }

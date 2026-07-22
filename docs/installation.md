@@ -8,12 +8,24 @@ Install the latest version of Finn with the following command. The installer det
 curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.sh | sh
 ```
 
+To install a specific release, pass its tag (the leading `v` is optional):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.sh | sh -s -- --version v1.8.0
+```
+
 ## Windows PowerShell
 
 Open PowerShell and run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1 | iex"
+```
+
+To install a specific release:
+
+```powershell
+powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1))) -Version v1.8.0"
 ```
 
 ## Configuration

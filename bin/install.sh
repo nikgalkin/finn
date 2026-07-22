@@ -6,6 +6,65 @@ GITHUB_USER="nikgalkin"
 REPO_NAME="finn"
 APP_NAME="finn"
 
+usage() {
+    echo "Usage: $0 [--version <version> | <version>]"
+    echo "Example: $0 --version v1.8.0"
+}
+
+VERSION="${FINN_VERSION:-}"
+
+case "$#" in
+    0) ;;
+    1)
+        case "$1" in
+            -h|--help) usage; exit 0 ;;
+            --version) echo "❌ Missing value for --version"; usage; exit 1 ;;
+            -*) echo "❌ Unknown argument: $1"; usage; exit 1 ;;
+            *) VERSION="$1" ;;
+        esac
+        ;;
+    2)
+        if [ "$1" != "--version" ]; then
+            echo "❌ Unknown argument: $1"
+            usage
+            exit 1
+        fi
+        VERSION="$2"
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
+
+if [ -n "$VERSION" ]; then
+    case "$VERSION" in
+        v*) ;;
+        *) VERSION="v${VERSION}" ;;
+    esac
+
+    case "$VERSION" in
+        v[0-9]*) ;;
+        *)
+            echo "❌ Invalid version: $VERSION"
+            exit 1
+            ;;
+    esac
+
+    case "$VERSION" in
+        *[!A-Za-z0-9._-]*)
+            echo "❌ Invalid version: $VERSION"
+            exit 1
+            ;;
+    esac
+
+    RELEASE_PATH="download/${VERSION}"
+    VERSION_LABEL="$VERSION"
+else
+    RELEASE_PATH="latest/download"
+    VERSION_LABEL="latest"
+fi
+
 echo "========================================="
 echo "📥 Starting installation of $APP_NAME..."
 echo "========================================="
@@ -48,7 +107,7 @@ fi
 ARTIFACT_NAME="${APP_NAME}-${TARGET_OS}-${TARGET_ARCH}${SUFFIX}"
 
 # --- 3. THE DIRECT DOWNLOAD URL (Reliable & bypasses API rate limits) ---
-DOWNLOAD_URL="https://github.com/${GITHUB_USER}/${REPO_NAME}/releases/latest/download/${ARTIFACT_NAME}"
+DOWNLOAD_URL="https://github.com/${GITHUB_USER}/${REPO_NAME}/releases/${RELEASE_PATH}/${ARTIFACT_NAME}"
 
 # --- 4. DETERMINE INSTALL DIRECTORY ---
 if [ "$TARGET_OS" = "windows" ]; then
@@ -62,6 +121,7 @@ mkdir -p "$INSTALL_DIR"
 FINAL_PATH="$INSTALL_DIR/${APP_NAME}${SUFFIX}"
 
 echo "ℹ️  Detected platform: $TARGET_OS / $TARGET_ARCH"
+echo "ℹ️  Version: $VERSION_LABEL"
 echo "🚚 Downloading $ARTIFACT_NAME..."
 echo "From: $DOWNLOAD_URL"
 echo "To: $FINAL_PATH"
