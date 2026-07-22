@@ -367,26 +367,12 @@ export default function GraphsPage() {
       percent: getSignedPercent(currentTotal, startTotal),
       help: `Difference between the latest and first snapshots in the selected range. Percent is this change divided by the first snapshot total.`
     },
-    ...(cashFlowEnabled ? [
-      {
-        label: 'External flow',
-        value: Math.round(periodExternalFlow),
-        suffix: baseCurrency,
-        help: `Net recorded Cash Flow across the selected range: after-tax incoming minus outgoing. Every movement is converted to ${baseCurrency} using its month's snapshot rates.`
-      },
-      {
-        label: 'Capital earnings',
-        value: Math.round(periodEstimatedReturn),
-        suffix: baseCurrency,
-        percent: (periodReturnMultiplier - 1) * 100,
-        help: `Approximate earnings from unlogged deposits, stocks, and other capital: balance change without FX minus net external Cash Flow. Each month's opening capital, movements, and earnings use that month's closing rates, keeping FX outside the return. The percentage is a time-weighted return: it follows a virtual unit of money through each month while ignoring deposits and withdrawals.`
-      }
-    ] : [{
+    ...(!cashFlowEnabled ? [{
       label: 'Organic flow',
       value: Math.round(periodOrganicDelta),
       suffix: baseCurrency,
       help: `Sum of balance amount changes across the selected range, valued in ${baseCurrency} at each current snapshot's rates. This is deposits, withdrawals, returns, and manual balance changes.`
-    }]),
+    }] : []),
     {
       label: 'FX impact',
       value: Math.round(periodFxImpactDelta),
@@ -508,6 +494,11 @@ export default function GraphsPage() {
       <GraphsAnalyticsSections
         baseCurrency={baseCurrency}
         cashFlowEnabled={cashFlowEnabled}
+        capitalOverview={cashFlowEnabled ? {
+          currentNetWorth: currentTotal,
+          periodChange: periodDelta,
+          fxImpact: periodFxImpactDelta
+        } : undefined}
         capitalReturnSummary={cashFlowEnabled ? {
           organicChange: periodExternalFlow + periodEstimatedReturn,
           externalFlow: periodExternalFlow,

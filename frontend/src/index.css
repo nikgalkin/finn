@@ -1062,41 +1062,69 @@ a { color: var(--accent); text-decoration: none; }
   scrollbar-gutter: stable;
 }
 
-.capital-return-formula { display: flex; flex-direction: column; gap: 8px; }
-
-.capital-return-formula > div,
-.capital-return-rate,
 .capital-return-tag-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 14px;
 }
 
-.capital-return-formula > div { padding: 7px 0; color: var(--text-secondary); font-size: 13px; }
-
-.capital-return-formula > div strong { color: var(--text-primary); }
-
-.capital-return-formula > div.is-result {
-  margin-top: 2px;
-  padding-top: 12px;
-  border-top: 1px solid var(--glass-border);
-  color: var(--text-primary);
-  font-weight: 700;
+.capital-return-headline {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(160px, 0.75fr);
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-.capital-return-formula > div.is-result strong { color: var(--success); font-size: 17px; }
-
-.capital-return-rate {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid rgba(34, 197, 94, 0.24);
+.capital-return-headline > div {
+  display: flex;
+  min-width: 0;
+  padding: 11px 13px;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid var(--glass-border);
   border-radius: 8px;
-  background: rgba(34, 197, 94, 0.06);
-  font-size: 13px;
+  background: rgba(15, 23, 42, 0.34);
 }
 
-.capital-return-rate strong { color: var(--success); font-size: 20px; }
+.capital-return-headline > div:first-child {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.capital-return-headline span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.capital-return-headline strong {
+  overflow: hidden;
+  font-size: 19px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capital-return-headline small { color: var(--text-secondary); font-size: 9px; }
+
+.capital-return-reconciliation { display: flex; flex-direction: column; }
+
+.capital-return-reconciliation > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.capital-return-reconciliation > div:last-child { border-bottom: 0; }
+
+.capital-return-reconciliation strong { color: var(--text-primary); }
 
 .capital-return-transfer-note {
   margin-top: 10px;

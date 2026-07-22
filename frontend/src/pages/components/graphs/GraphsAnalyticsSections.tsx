@@ -21,6 +21,12 @@ type CapitalReturnSummary = {
   ratePercent: number;
 };
 
+type CapitalOverview = {
+  currentNetWorth: number;
+  periodChange: number;
+  fxImpact: number;
+};
+
 type TagReturnStat = {
   tag: string;
   result: number;
@@ -40,6 +46,7 @@ export type HiddenLegendSeries = Record<LegendGroup, Record<string, boolean>>;
 type GraphsAnalyticsSectionsProps = {
   baseCurrency: string;
   cashFlowEnabled: boolean;
+  capitalOverview?: CapitalOverview;
   capitalReturnSummary?: CapitalReturnSummary;
   activeCurrencies: string[];
   allOrganizations: string[];
@@ -342,6 +349,7 @@ const CollapsibleSection = ({ children, contentStyle, help, icon, title }: Colla
 export function GraphsAnalyticsSections({
   baseCurrency,
   cashFlowEnabled,
+  capitalOverview,
   capitalReturnSummary,
   activeCurrencies,
   allOrganizations,
@@ -367,7 +375,7 @@ export function GraphsAnalyticsSections({
   formatFriendlyTime,
   handleLegendClickSmart
 }: GraphsAnalyticsSectionsProps) {
-  const [allocationMode, setAllocationMode] = useState<'percent' | 'value'>('percent');
+  const [allocationMode, setAllocationMode] = useState<'percent' | 'value'>('value');
   const [selectedTagReturn, setSelectedTagReturn] = useState<TagReturnStat | null>(null);
 
   useEffect(() => {
@@ -459,19 +467,25 @@ export function GraphsAnalyticsSections({
                 icon={<TrendingUp size={16} style={{ color: '#10b981' }} />}
                 help="This is an estimate from monthly snapshots, not a broker statement. Balance changes are measured without FX impact; recorded external money is removed, leaving estimated investment earnings."
               >
-                How estimated capital earnings are calculated
+                Estimated capital earnings
               </ChartTitle>
-              <div className="capital-return-formula">
-                <div><span>Balance change excluding FX</span><strong>{formatSigned(capitalReturnSummary.organicChange)} {baseCurrency}</strong></div>
-                <div><span>Minus net external Cash Flow</span><strong>{formatSigned(capitalReturnSummary.externalFlow)} {baseCurrency}</strong></div>
-                <div className="is-result"><span>Estimated capital earnings</span><strong style={{ color: getDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong></div>
+              <div className="capital-return-headline">
+                <div>
+                  <span>Estimated earnings</span>
+                  <strong style={{ color: getDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong>
+                </div>
+                <div>
+                  <span>Time-weighted return</span>
+                  <strong style={{ color: getDeltaColor(capitalReturnSummary.ratePercent) }}>{formatPercent(capitalReturnSummary.ratePercent)}</strong>
+                  <small>Selected period · not annualized</small>
+                </div>
               </div>
-              <div className="capital-return-rate">
-                <span>Time-weighted return for selected period (not annualized)</span>
-                <strong style={{ color: getDeltaColor(capitalReturnSummary.ratePercent) }}>{formatPercent(capitalReturnSummary.ratePercent)}</strong>
+              <div className="capital-return-reconciliation">
+                <div><span>Balance change excluding FX</span><strong>{formatSigned(capitalReturnSummary.organicChange)} {baseCurrency}</strong></div>
+                <div><span>External Cash Flow adjustment</span><strong>{formatSigned(-capitalReturnSummary.externalFlow)} {baseCurrency}</strong></div>
               </div>
               <div className="capital-return-transfer-note">
-                Internal transfers do not change net external Cash Flow. Any value difference between their sent and received legs remains in the balance reconciliation; both legs are mapped to their accounts for tag attribution.
+                Internal transfers do not change external Cash Flow. Any difference between their sent and received legs remains in the balance reconciliation and tag attribution.
               </div>
             </div>
 
