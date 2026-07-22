@@ -149,31 +149,6 @@ a { color: var(--accent); text-decoration: none; }
 
 .dashboard-pie-legend-value { margin-left: auto; font-weight: 600; }
 
-.dashboard-pie-legend-side-hint {
-  display: flex;
-  width: 28px;
-  height: 140px;
-  flex: 0 0 28px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1;
-  text-align: center;
-}
-
-.dashboard-pie-legend-side-hint > span {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  transform: rotate(180deg);
-  white-space: nowrap;
-}
-
-.dashboard-pie-legend-side-hint strong { color: var(--text-primary); }
-
 @media (prefers-reduced-motion: reduce) {
   .dashboard-comment-dot-halo { display: none; }
 }
@@ -916,19 +891,57 @@ a { color: var(--accent); text-decoration: none; }
 
 .cash-flow-settings-status label { flex: 0 0 auto; cursor: pointer; font-size: 13px; }
 
-.settings-scroll-hint {
+.scroll-for-more {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 20px;
-  margin-top: 5px;
   color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 10px;
   font-weight: 650;
+  line-height: 1;
+  outline: none;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 
-.settings-scroll-hint strong { color: var(--text-primary); }
+.scroll-for-more:hover {
+  color: var(--text-primary);
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(148, 163, 184, 0.055);
+}
+
+.scroll-for-more:focus-visible { box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.55); }
+
+.scroll-for-more strong { color: var(--text-primary); }
+
+.scroll-for-more svg { flex: 0 0 auto; transition: transform 0.18s ease; }
+
+.scroll-for-more svg.is-up { transform: rotate(180deg); }
+
+.scroll-for-more.is-horizontal { width: 100%; min-height: 20px; margin-top: 5px; }
+
+.scroll-for-more.is-horizontal.is-compact { min-height: 19px; margin-top: 0; font-weight: 700; }
+
+.scroll-for-more.is-vertical {
+  width: 28px;
+  height: 140px;
+  flex: 0 0 28px;
+  flex-direction: column;
+  padding: 3px;
+  text-align: center;
+}
+
+.scroll-for-more.is-vertical > span {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
 
 .currency-framework-panel { padding: 0; overflow: hidden; }
 
@@ -1316,17 +1329,6 @@ a { color: var(--accent); text-decoration: none; }
 .capital-return-tag-rate { text-align: right; }
 
 .capital-return-tag-chevron { color: var(--text-secondary); }
-
-.capital-return-tag-scroll-hint {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 19px;
-  color: var(--text-secondary);
-  font-size: 10px;
-  font-weight: 700;
-}
 
 .capital-return-tag-modal-backdrop {
   position: fixed;

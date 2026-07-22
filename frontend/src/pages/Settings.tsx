@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, ChevronDown, Coins, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
+import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, Coins, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL, getCurrencyColor } from '../types';
 import type { CashFlowSettings, LocalAISettings, LocalAIStatus, Snapshot } from '../types';
@@ -13,6 +13,7 @@ import { HelpTooltip } from './components/HelpTooltip';
 import { PageLoader, Spinner } from './components/PageLoader';
 import { SettingsValidationModal } from './components/SettingsValidationModal';
 import type { SettingsValidationIssue } from './components/SettingsValidationModal';
+import { ScrollForMore } from './components/ScrollForMore';
 
 type SettingsListKey = 'currencies' | 'tags';
 type FlowSettingsListKey = 'sources' | 'categories';
@@ -70,16 +71,6 @@ const findDuplicateValues = (values: string[]) => {
 const duplicateIssues = (duplicates: DuplicateValues, section: string, message: string): SettingsValidationIssue[] => (
   duplicates.items.map(item => ({ section, value: item.display, message }))
 );
-
-const SettingsScrollHint = ({ total, visible }: { total: number; visible: number }) => {
-  const remaining = Math.max(0, total - visible);
-  if (remaining === 0) return null;
-  return (
-    <div className="settings-scroll-hint">
-      <ChevronDown size={13} /> Scroll for <strong>{remaining}</strong> more
-    </div>
-  );
-};
 
 type SettingsPanelProps = {
   children: ReactNode; description: string; enabled: boolean; icon: ReactNode; intro: string; onEnabledChange: (enabled: boolean) => void; title: string;
@@ -520,7 +511,7 @@ export default function Settings() {
           <Plus size={14} /> Add
         </button>
       </div>
-      <div ref={element => { scrollBodyRefs.current[list] = element; }} style={listBodyStyle}>
+      <div id={`settings-${list}-scroll`} ref={element => { scrollBodyRefs.current[list] = element; }} style={listBodyStyle}>
         {(settings[list] || []).map((item, i) => {
           const isCurrency = list === 'currencies';
           const isBaseCurrency = isCurrency && item === (settings.baseCurrency || 'RUB');
@@ -578,7 +569,7 @@ export default function Settings() {
           );
         })}
       </div>
-      <SettingsScrollHint total={(settings[list] || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
+      <ScrollForMore scrollContainerId={`settings-${list}-scroll`} total={(settings[list] || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
     </div>
   );
 
@@ -593,7 +584,7 @@ export default function Settings() {
           <Plus size={14} /> Add
         </button>
       </div>
-      <div ref={element => { scrollBodyRefs.current.organizations = element; }} style={organizationListBodyStyle}>
+      <div id="settings-organizations-scroll" ref={element => { scrollBodyRefs.current.organizations = element; }} style={organizationListBodyStyle}>
         {activeOrganizations.map(({ organization, index }) => {
           const isDuplicate = duplicateOrganizations.names.has(normalizeListValue(organization.name));
           return (
@@ -621,13 +612,13 @@ export default function Settings() {
           <div style={{ padding: '10px 0', color: 'var(--text-secondary)', fontSize: '12px' }}>No active organizations.</div>
         )}
       </div>
-      <SettingsScrollHint total={activeOrganizations.length} visible={ORGANIZATION_LIST_VISIBLE_ROWS} />
+      <ScrollForMore scrollContainerId="settings-organizations-scroll" total={activeOrganizations.length} visible={ORGANIZATION_LIST_VISIBLE_ROWS} />
       {archivedOrganizations.length > 0 && (
         <details style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--glass-border)' }}>
           <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, userSelect: 'none' }}>
             Archived organizations ({archivedOrganizations.length})
           </summary>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px`, overflowY: 'auto', paddingRight: '4px' }}>
+          <div id="settings-archived-organizations-scroll" style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px`, overflowY: 'auto', paddingRight: '4px' }}>
             {archivedOrganizations.map(({ organization, index }) => (
               <div key={index} className="flex items-center gap-2" style={{ minHeight: '36px', padding: '5px 8px 5px 12px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.38)', border: '1px solid var(--glass-border)' }}>
                 <span style={{ flex: 1, fontSize: '13px' }}>{organization.name}</span>
@@ -638,7 +629,7 @@ export default function Settings() {
               </div>
             ))}
           </div>
-          <SettingsScrollHint total={archivedOrganizations.length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
+          <ScrollForMore scrollContainerId="settings-archived-organizations-scroll" total={archivedOrganizations.length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
         </details>
       )}
     </div>
@@ -719,7 +710,7 @@ export default function Settings() {
                 <span>Name</span>
                 <span>Default tax</span>
               </div>
-              <div ref={element => { scrollBodyRefs.current.sources = element; }} className="cash-flow-settings-list" style={{ maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px` }}>
+              <div id="settings-sources-scroll" ref={element => { scrollBodyRefs.current.sources = element; }} className="cash-flow-settings-list" style={{ maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px` }}>
                 {(settings.cashFlow?.sources || []).map((source, index) => {
                   const isDuplicate = duplicateFlowSources.names.has(normalizeListValue(source));
                   return (
@@ -750,7 +741,7 @@ export default function Settings() {
                   <div className="cash-flow-settings-empty">No sources configured yet.</div>
                 )}
               </div>
-              <SettingsScrollHint total={(settings.cashFlow?.sources || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
+              <ScrollForMore scrollContainerId="settings-sources-scroll" total={(settings.cashFlow?.sources || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
             </section>
 
             <section className="cash-flow-settings-section">
@@ -766,7 +757,7 @@ export default function Settings() {
               <div className="cash-flow-category-setting-labels" aria-hidden="true">
                 <span>Name</span>
               </div>
-              <div ref={element => { scrollBodyRefs.current.categories = element; }} className="cash-flow-settings-list" style={{ maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px` }}>
+              <div id="settings-categories-scroll" ref={element => { scrollBodyRefs.current.categories = element; }} className="cash-flow-settings-list" style={{ maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px` }}>
                 {(settings.cashFlow?.categories || []).map((category, index) => {
                   const isDuplicate = duplicateFlowCategories.names.has(normalizeListValue(category));
                   return (
@@ -787,7 +778,7 @@ export default function Settings() {
                   <div className="cash-flow-settings-empty">No categories configured yet.</div>
                 )}
               </div>
-              <SettingsScrollHint total={(settings.cashFlow?.categories || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
+              <ScrollForMore scrollContainerId="settings-categories-scroll" total={(settings.cashFlow?.categories || []).length} visible={SETTINGS_LIST_VISIBLE_ROWS} />
             </section>
           </div>
       </SettingsPanel>

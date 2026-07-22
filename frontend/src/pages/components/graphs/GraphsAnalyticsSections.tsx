@@ -3,6 +3,7 @@ import { Activity, ArrowLeftRight, ArrowRight, BarChart3, ChevronDown, ChevronRi
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
 import { HelpTooltip } from '../HelpTooltip';
+import { ScrollForMore } from '../ScrollForMore';
 import { GraphTooltip, SimpleGraphTooltip } from './GraphTooltip';
 
 type ChartDatum = Record<string, any>;
@@ -460,7 +461,7 @@ export function GraphsAnalyticsSections({
                 Estimated earnings by balance tag
               </ChartTitle>
               <div className="capital-return-tag-panel-body">
-                <div className="capital-return-tag-scroll">
+                <div id="capital-return-tag-scroll" className="capital-return-tag-scroll">
                   <div className="capital-return-tag-list">
                     {tagReturnStats.map(item => (
                       <button
@@ -487,11 +488,13 @@ export function GraphsAnalyticsSections({
                     {tagReturnStats.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '13px', padding: '8px 0' }}>Choose at least two snapshots to estimate earnings by tag.</div>}
                   </div>
                 </div>
-                {tagReturnStats.length > VISIBLE_TAG_RETURN_ROWS && (
-                  <div className="capital-return-tag-scroll-hint">
-                    <ChevronDown size={13} /> Scroll for {tagReturnStats.length - VISIBLE_TAG_RETURN_ROWS} more {tagReturnStats.length - VISIBLE_TAG_RETURN_ROWS === 1 ? 'tag' : 'tags'}
-                  </div>
-                )}
+                <ScrollForMore
+                  compact
+                  noun={{ singular: 'tag', plural: 'tags' }}
+                  scrollContainerId="capital-return-tag-scroll"
+                  total={tagReturnStats.length}
+                  visible={VISIBLE_TAG_RETURN_ROWS}
+                />
                 {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned < tagReturnCoverage.total && (
                   <div className="capital-return-coverage-warning">
                     Only {tagReturnCoverage.assigned} of {tagReturnCoverage.total} external movements have an own account. Assign the rest in Cash Flow to make this breakdown reliable.

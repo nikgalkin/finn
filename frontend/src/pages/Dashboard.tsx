@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, ChevronDown, Clock } from 'lucide-react';
+import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock } from 'lucide-react';
 import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
@@ -11,6 +11,7 @@ import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
 import { PageLoader } from './components/PageLoader';
 import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphTooltip';
+import { ScrollForMore } from './components/ScrollForMore';
 import { isTextInputTarget } from '../lib/hotkeys';
 import {
   calculateCurrencyTotals,
@@ -337,15 +338,16 @@ export default function Dashboard() {
                 </ResponsiveContainer>
               </div>
 
-              {pieData.length > DASHBOARD_PIE_VISIBLE_ROWS && (
-                <div className="dashboard-pie-legend-side-hint">
-                  <span>Scroll for <strong>{pieData.length - DASHBOARD_PIE_VISIBLE_ROWS}</strong> more</span>
-                  <ChevronDown size={13} />
-                </div>
-              )}
+              <ScrollForMore
+                orientation="vertical"
+                scrollContainerId="dashboard-pie-legend-scroll"
+                total={pieData.length}
+                visible={DASHBOARD_PIE_VISIBLE_ROWS}
+              />
 
               <div className="dashboard-pie-legend">
                 <div
+                  id="dashboard-pie-legend-scroll"
                   className="dashboard-pie-legend-scroll"
                   tabIndex={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 0 : undefined}
                   aria-label={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 'Organization allocation. Scroll for more organizations.' : 'Organization allocation'}
