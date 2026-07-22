@@ -8,6 +8,8 @@ import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
 import { FlowNetSummary } from './FlowNetSummary';
+import { HelpTooltip } from './HelpTooltip';
+import { ModalPortal } from './ModalPortal';
 import { SearchableSelect } from './graphs/SearchableSelect';
 
 type DiffStatus = 'new' | 'deleted' | 'up' | 'down' | 'stable';
@@ -54,7 +56,6 @@ type SnapshotDiffModalProps = {
   onClose: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0, zIndex: 10_000 } as const;
 const panelStyle = { width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflow: 'visible' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const balanceRowStyle = { display: 'grid', gridTemplateColumns: '68px minmax(130px, 1fr) 1fr 1fr 150px', alignItems: 'center', position: 'relative' as const, fontSize: '13px', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)', columnGap: '2px' };
 
@@ -383,6 +384,7 @@ export function SnapshotDiffModal({
     () => buildRateDiffData(selectedCurrent, selectedPrevious, onlyChanges),
     [onlyChanges, selectedCurrent, selectedPrevious]
   );
+  const compactRateChanges = rateDiffData.filter(rate => rate.status !== 'stable');
   const selectedMonthFlowEntries = useMemo(
     () => flowEntries.filter(entry => entry.month === selectedCurrent.month && entry.entryType !== 'transfer'),
     [flowEntries, selectedCurrent.month]
@@ -399,15 +401,10 @@ export function SnapshotDiffModal({
     }
   };
 
-  return createPortal(
-    <div
-      className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      data-hotkeys-guard="true"
-      style={overlayStyle}
-      onClick={onClose}
-    >
+  return (
+    <ModalPortal className="snapshot-diff-modal-backdrop" zIndex={10_000} onClose={onClose}>
       <div
-        className="glass-panel flex flex-col"
+        className="glass-panel snapshot-diff-modal flex flex-col"
         style={panelStyle}
         onClick={event => event.stopPropagation()}
       >
@@ -482,19 +479,21 @@ export function SnapshotDiffModal({
           {cashFlowEnabled && selectedMonthFlowEntries.length > 0 && (
             <section className="snapshot-diff-recorded-flow">
               <div className="snapshot-diff-recorded-flow-heading">
-                <div>
-                  <div className="snapshot-diff-recorded-flow-title">
-                    <ArrowDownUp size={15} />
-                    <strong>Recorded Cash Flow</strong>
-                    <span>{selectedCurrent.month}</span>
-                  </div>
-                  <p>Optional recorded movements. They are context and are not expected to match the snapshot change.</p>
+                <div className="snapshot-diff-recorded-flow-title">
+                  <ArrowDownUp size={15} />
+                  <strong>Recorded Cash Flow</strong>
+                  <span>{selectedCurrent.month}</span>
+                  <HelpTooltip
+                    text="Optional recorded movements. They provide context and are not expected to match the snapshot change."
+                    ariaLabel="Recorded Cash Flow explanation"
+                    width={340}
+                  />
                 </div>
+                <FlowNetSummary totals={selectedMonthFlowTotals} compact label="" />
                 <Link to={`/flow?month=${selectedCurrent.month}`} className="btn" onClick={onClose}>
                   Open month <ExternalLink size={14} />
                 </Link>
               </div>
-              <FlowNetSummary totals={selectedMonthFlowTotals} compact />
             </section>
           )}
 
@@ -503,7 +502,29 @@ export function SnapshotDiffModal({
               <summary className="snapshot-diff-rates-title">
                 <RefreshCw size={15} />
                 <strong>Exchange Rate Changes</strong>
-                <span>{rateDiffData.length} · {selectedPrevious?.month || '—'} → {selectedCurrent.month}</span>
+                <span className="snapshot-diff-rate-summary">
+                  {compactRateChanges.slice(0, 4).map(rate => {
+                    const positive = rate.status === 'up' || rate.status === 'new';
+                    const negative = rate.status === 'down' || rate.status === 'deleted';
+                    const sign = rate.delta !== null && rate.delta > 0 ? '+' : '';
+                    const value = rate.status === 'new'
+                      ? 'NEW'
+                      : rate.status === 'deleted'
+                        ? 'REMOVED'
+                        : rate.delta === null ? '—' : `${sign}${formatRate(rate.delta)}`;
+                    return (
+                      <span
+                        key={rate.key}
+                        style={{ color: positive ? 'var(--diff-positive)' : negative ? 'var(--diff-negative)' : 'var(--text-secondary)' }}
+                      >
+                        <b>{rate.key}</b> {value}
+                      </span>
+                    );
+                  })}
+                  {compactRateChanges.length > 4 && <em>+{compactRateChanges.length - 4}</em>}
+                  {compactRateChanges.length === 0 && <em>No changes</em>}
+                </span>
+                <span className="snapshot-diff-rates-period">{rateDiffData.length} · {selectedPrevious?.month || '—'} → {selectedCurrent.month}</span>
                 <ChevronDown className="snapshot-diff-rates-chevron" size={15} />
               </summary>
               <div className="snapshot-diff-rate-list">
@@ -652,7 +673,6 @@ export function SnapshotDiffModal({
           </div>
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 }

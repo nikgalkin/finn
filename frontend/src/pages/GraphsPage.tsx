@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Eye } from 'lucide-react';
 import type { ParsedSnapshot } from '../types';
@@ -13,10 +13,79 @@ import { StickyPageHeader } from './components/StickyPageHeader';
 import { TimeframeControl } from './components/TimeframeControl';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
+const LEGEND_DOUBLE_CLICK_WINDOW_MS = 700;
 const getSignedPercent = (current: number, previous: number) => {
   if (previous === 0) return 0;
   return ((current - previous) / previous) * 100;
 };
+
+type ValueMap = Record<string, number>;
+type SnapshotBreakdown = {
+  organizations: ValueMap;
+  currencies: ValueMap;
+  chartCurrencies: ValueMap;
+  tags: ValueMap;
+  chartTags: ValueMap;
+  currencyKeys: string[];
+  tagKeys: string[];
+};
+
+const addValue = (values: ValueMap, key: string, amount: number) => {
+  values[key] = (values[key] || 0) + amount;
+};
+
+const buildSnapshotBreakdown = (snapshot: ParsedSnapshot, baseCurrency: string): SnapshotBreakdown => {
+  const organizations: ValueMap = {};
+  const currencies: ValueMap = {};
+  const chartCurrencies: ValueMap = {};
+  const tags: ValueMap = {};
+  const chartTags: ValueMap = {};
+  const currencyKeys = new Set<string>();
+  const tagKeys = new Set<string>();
+
+  snapshot.data.organizations.forEach(org => {
+    let organizationValue = 0;
+    org.balances.forEach(balance => {
+      const rawAmount = Number(balance.amount || 0);
+      const amount = convertAmount(rawAmount, balance.currency, baseCurrency, snapshot.data.rates);
+      organizationValue += amount;
+      if (balance.currency) {
+        addValue(currencies, balance.currency, amount);
+        addValue(chartCurrencies, balance.currency, Math.round(amount));
+        if (rawAmount > 0) currencyKeys.add(balance.currency);
+      }
+
+      const balanceTags = balance.tags?.length ? balance.tags : ['untagged'];
+      const roundedAmount = Math.round(amount);
+      balanceTags.forEach(tag => {
+        tagKeys.add(tag);
+        addValue(tags, tag, amount / balanceTags.length);
+        addValue(chartTags, tag, Math.round(roundedAmount / balanceTags.length));
+      });
+    });
+    if (org.name) organizations[org.name] = organizationValue;
+  });
+
+  return { organizations, currencies, chartCurrencies, tags, chartTags, currencyKeys: [...currencyKeys], tagKeys: [...tagKeys] };
+};
+
+const collectKeys = (breakdowns: SnapshotBreakdown[], getKeys: (breakdown: SnapshotBreakdown) => string[]) => (
+  Array.from(new Set(breakdowns.flatMap(getKeys)))
+);
+
+const buildBreakdownSeries = (
+  snapshots: ParsedSnapshot[],
+  breakdowns: SnapshotBreakdown[],
+  keys: string[],
+  getValues: (breakdown: SnapshotBreakdown) => ValueMap,
+  round = false
+) => snapshots.map((snapshot, index) => {
+  const values = getValues(breakdowns[index]);
+  return Object.fromEntries([
+    ['month', snapshot.month],
+    ...keys.map(key => [key, round ? Math.round(values[key] || 0) : values[key] || 0])
+  ]);
+});
 
 export default function GraphsPage() {
   const { settings } = useSettings();
@@ -33,7 +102,7 @@ export default function GraphsPage() {
   });
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
-  const [lastClick, setLastClick] = useState<{ group: LegendGroup; key: string; time: number } | null>(null);
+  const lastLegendClickRef = useRef<{ group: LegendGroup; key: string; time: number } | null>(null);
 
   useEffect(() => {
     if (snapshots.length > 0 && !startMonth && !endMonth) {
@@ -45,15 +114,11 @@ export default function GraphsPage() {
   const availableMonths = snapshots.map(snapshot => snapshot.month);
   const effectiveEndMonth = (endMonth && startMonth && endMonth < startMonth) ? startMonth : endMonth;
 
-  const filteredSnapshots = snapshots.filter(snapshot => {
+  const filteredSnapshots = useMemo(() => snapshots.filter(snapshot => {
     const startOk = startMonth ? snapshot.month >= startMonth : true;
     const endOk = effectiveEndMonth ? snapshot.month <= effectiveEndMonth : true;
     return startOk && endOk;
-  });
-
-  const getAmountInBase = (amount: number, currency: string, snapshot: ParsedSnapshot) => {
-    return convertAmount(amount, currency, baseCurrency, snapshot.data.rates);
-  };
+  }), [effectiveEndMonth, snapshots, startMonth]);
 
   const getSnapshotTotalBase = (snapshot: ParsedSnapshot) => {
     return calculateTotals(snapshot, baseCurrency).totalBase;
@@ -92,100 +157,53 @@ export default function GraphsPage() {
     return point;
   });
 
-  const allUsedCurrencies = useMemo(() => {
-    const currencies = new Set<string>();
-
-    filteredSnapshots.forEach(snapshot => {
-      snapshot.data.organizations.forEach(org => {
-        org.balances.forEach(balance => {
-          if (balance.currency && Number(balance.amount) > 0) {
-            currencies.add(balance.currency);
-          }
-        });
-      });
-    });
-
-    return Array.from(currencies);
-  }, [filteredSnapshots]);
-
-  const allOrganizations = useMemo(() => {
-    const organizations = new Set<string>();
-    filteredSnapshots.forEach(snapshot => {
-      snapshot.data.organizations.forEach(org => org.name && organizations.add(org.name));
-    });
-    return Array.from(organizations);
-  }, [filteredSnapshots]);
-
-  const orgTrendData = filteredSnapshots.map(snapshot => {
-    const point: any = { month: snapshot.month };
-    allOrganizations.forEach(orgName => point[orgName] = 0);
-
-    snapshot.data.organizations.forEach(org => {
-      const orgTotalBase = org.balances.reduce((total, balance) => {
-        return total + getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot);
-      }, 0);
-
-      if (org.name) point[org.name] = Math.round(orgTotalBase);
-    });
-
-    return point;
-  });
-
-  const currencyDistributionData = filteredSnapshots.map(snapshot => {
-    const point: any = { month: snapshot.month };
-    allUsedCurrencies.forEach(currency => point[currency] = 0);
-
-    snapshot.data.organizations.forEach(org => {
-      org.balances.forEach(balance => {
-        point[balance.currency] += Math.round(getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot));
-      });
-    });
-
-    return point;
-  });
-
-  const allUsedTags = useMemo(() => {
-    const tags = new Set<string>();
-
-    filteredSnapshots.forEach(snapshot => {
-      snapshot.data.organizations.forEach(org => {
-        org.balances.forEach(balance => {
-          if (balance.tags && balance.tags.length > 0) {
-            balance.tags.forEach(tag => tags.add(tag));
-          } else {
-            tags.add('untagged');
-          }
-        });
-      });
-    });
-
-    return Array.from(tags);
-  }, [filteredSnapshots]);
-
-  const tagDistributionData = filteredSnapshots.map(snapshot => {
-    const point: any = { month: snapshot.month };
-    allUsedTags.forEach(tag => point[tag] = 0);
-
-    snapshot.data.organizations.forEach(org => {
-      org.balances.forEach(balance => {
-        const amountInBase = Math.round(getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot));
-        const currentTags = balance.tags;
-
-        if (currentTags && currentTags.length > 0) {
-          currentTags.forEach(tag => {
-            point[tag] += Math.round(amountInBase / currentTags.length);
-          });
-        } else {
-          point.untagged += amountInBase;
-        }
-      });
-    });
-
-    return point;
-  });
+  const snapshotBreakdowns = useMemo(
+    () => filteredSnapshots.map(snapshot => buildSnapshotBreakdown(snapshot, baseCurrency)),
+    [baseCurrency, filteredSnapshots]
+  );
+  const allOrganizations = useMemo(() => collectKeys(snapshotBreakdowns, breakdown => Object.keys(breakdown.organizations)), [snapshotBreakdowns]);
+  const allUsedCurrencies = useMemo(() => collectKeys(snapshotBreakdowns, breakdown => breakdown.currencyKeys), [snapshotBreakdowns]);
+  const allUsedTags = useMemo(() => collectKeys(snapshotBreakdowns, breakdown => breakdown.tagKeys), [snapshotBreakdowns]);
+  const orgTrendData = buildBreakdownSeries(filteredSnapshots, snapshotBreakdowns, allOrganizations, breakdown => breakdown.organizations, true);
+  const currencyDistributionData = buildBreakdownSeries(filteredSnapshots, snapshotBreakdowns, allUsedCurrencies, breakdown => breakdown.chartCurrencies);
+  const tagDistributionData = buildBreakdownSeries(filteredSnapshots, snapshotBreakdowns, allUsedTags, breakdown => breakdown.chartTags);
 
   const latestSnapshot = filteredSnapshots[filteredSnapshots.length - 1];
   const firstSnapshot = filteredSnapshots[0];
+  const organizationCurrencyBreakdown = useMemo(() => {
+    if (!latestSnapshot) return [];
+
+    return latestSnapshot.data.organizations.flatMap(organization => {
+      if (!organization.name) return [];
+      const currencies = new Map<string, { amount: number; valueBase: number }>();
+      organization.balances.forEach(balance => {
+        if (!balance.currency) return;
+        const amount = Number(balance.amount || 0);
+        const valueBase = convertAmount(amount, balance.currency, baseCurrency, latestSnapshot.data.rates);
+        const current = currencies.get(balance.currency) || { amount: 0, valueBase: 0 };
+        current.amount += amount;
+        current.valueBase += valueBase;
+        currencies.set(balance.currency, current);
+      });
+
+      const holdings = Array.from(currencies.entries())
+        .map(([currency, values]) => ({ currency, ...values }))
+        .filter(holding => Math.abs(holding.valueBase) >= 0.01)
+        .sort((left, right) => Math.abs(right.valueBase) - Math.abs(left.valueBase));
+      const totalBase = holdings.reduce((sum, holding) => sum + holding.valueBase, 0);
+      const shareBasis = holdings.reduce((sum, holding) => sum + Math.abs(holding.valueBase), 0);
+
+      return [{
+        organization: organization.name,
+        totalBase,
+        holdings: holdings.map(holding => ({
+          ...holding,
+          percent: shareBasis > 0 ? (Math.abs(holding.valueBase) / shareBasis) * 100 : 0
+        }))
+      }];
+    }).filter(item => item.holdings.length > 0)
+      .sort((left, right) => Math.abs(right.totalBase) - Math.abs(left.totalBase));
+  }, [baseCurrency, latestSnapshot]);
 
   const netWorthData = filteredSnapshots.map(snapshot => {
     const globalIndex = snapshots.findIndex(s => s.month === snapshot.month);
@@ -199,39 +217,6 @@ export default function GraphsPage() {
       delta: Math.round(total - previousTotal)
     };
   });
-
-  const treemapData: any[] = [];
-  if (latestSnapshot) {
-    latestSnapshot.data.organizations.forEach((org, index) => {
-      const orgValue = org.balances.reduce((total, balance) => {
-        return total + getAmountInBase(Number(balance.amount || 0), balance.currency, latestSnapshot);
-      }, 0);
-
-      if (orgValue > 0 && org.name) {
-        treemapData.push({
-          name: org.name,
-          value: Math.round(orgValue),
-          color: CHART_COLORS[index % CHART_COLORS.length]
-        });
-      }
-    });
-  }
-
-  const flowChartData: any[] = [];
-  if (latestSnapshot) {
-    latestSnapshot.data.organizations.forEach(org => {
-      if (!org.name) return;
-
-      const point: any = { name: org.name };
-      allUsedCurrencies.forEach(currency => point[currency] = 0);
-
-      org.balances.forEach(balance => {
-        point[balance.currency] += Math.round(getAmountInBase(Number(balance.amount || 0), balance.currency, latestSnapshot));
-      });
-
-      flowChartData.push(point);
-    });
-  }
 
   const decompositionData = filteredSnapshots.map((snapshot, index) => {
     const previousSnapshot = index > 0 ? filteredSnapshots[index - 1] : null;
@@ -321,75 +306,6 @@ export default function GraphsPage() {
     }];
   }).sort((left, right) => left.month.localeCompare(right.month) || left.id - right.id);
 
-  const buildOrgValues = (snapshot?: ParsedSnapshot) => {
-    const values: Record<string, number> = {};
-    if (!snapshot) return values;
-
-    snapshot.data.organizations.forEach(org => {
-      if (!org.name) return;
-      values[org.name] = org.balances.reduce((total, balance) => {
-        return total + getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot);
-      }, 0);
-    });
-
-    return values;
-  };
-
-  const buildCurrencyValues = (snapshot?: ParsedSnapshot) => {
-    const values: Record<string, number> = {};
-    if (!snapshot) return values;
-
-    snapshot.data.organizations.forEach(org => {
-      org.balances.forEach(balance => {
-        if (!balance.currency) return;
-        values[balance.currency] = (values[balance.currency] || 0) + getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot);
-      });
-    });
-
-    return values;
-  };
-
-  const buildTagValues = (snapshot?: ParsedSnapshot) => {
-    const values: Record<string, number> = {};
-    if (!snapshot) return values;
-
-    snapshot.data.organizations.forEach(org => {
-      org.balances.forEach(balance => {
-        const amountInBase = getAmountInBase(Number(balance.amount || 0), balance.currency, snapshot);
-        const currentTags = balance.tags && balance.tags.length > 0 ? balance.tags : ['untagged'];
-        currentTags.forEach(tag => {
-          values[tag] = (values[tag] || 0) + (amountInBase / currentTags.length);
-        });
-      });
-    });
-
-    return values;
-  };
-
-  const buildMovers = (startValues: Record<string, number>, endValues: Record<string, number>) => {
-    return Array.from(new Set([...Object.keys(startValues), ...Object.keys(endValues)]))
-      .map(name => {
-        const start = startValues[name] || 0;
-        const end = endValues[name] || 0;
-        return {
-          name,
-          value: Math.round(end),
-          delta: Math.round(end - start),
-          percent: getSignedPercent(end, start)
-        };
-      })
-      .filter(item => Math.abs(item.delta) >= 1 || item.value > 0)
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-      .slice(0, 6);
-  };
-
-  const latestOrgValues = buildOrgValues(latestSnapshot);
-  const latestCurrencyValues = buildCurrencyValues(latestSnapshot);
-  const latestTagValues = buildTagValues(latestSnapshot);
-  const topOrganizationMovers = buildMovers(buildOrgValues(firstSnapshot), latestOrgValues);
-  const topCurrencyMovers = buildMovers(buildCurrencyValues(firstSnapshot), latestCurrencyValues);
-  const topTagMovers = buildMovers(buildTagValues(firstSnapshot), latestTagValues);
-
   const currentTotal = latestSnapshot ? getSnapshotTotalBase(latestSnapshot) : 0;
   const startTotal = firstSnapshot ? getSnapshotTotalBase(firstSnapshot) : 0;
   const periodDelta = latestSnapshot && firstSnapshot ? currentTotal - startTotal : 0;
@@ -401,21 +317,36 @@ export default function GraphsPage() {
     return typeof rate === 'number' && Number.isFinite(rate) ? multiplier * (1 + rate / 100) : multiplier;
   }, 1);
   const periodFxImpactDelta = decompositionData.reduce((total, point) => total + Number(point['FX Impact'] || 0), 0);
-  const taggedReturnTotals = new Map<string, { result: number; multiplier: number; months: number }>();
+  const taggedReturnTotals = new Map<string, {
+    result: number;
+    multiplier: number;
+    ratedMonths: number;
+    monthly: Array<{ month: string; openingCapital: number; closingCapital: number; assignedFlow: number; result: number; ratePercent: number | null }>;
+  }>();
   let assignedExternalEntries = 0;
   let totalExternalEntries = 0;
+  let proportionallyAllocatedEntries = 0;
   filteredSnapshots.forEach((snapshot, index) => {
     if (!cashFlowEnabled || index === 0) return;
     const monthEntries = flowEntries.filter(entry => entry.month === snapshot.month);
     const breakdown = calculateTaggedCapitalReturns(snapshot, filteredSnapshots[index - 1], monthEntries, baseCurrency);
     assignedExternalEntries += breakdown.assignedExternalEntries;
     totalExternalEntries += breakdown.totalExternalEntries;
+    proportionallyAllocatedEntries += breakdown.proportionallyAllocatedEntries;
     breakdown.returns.forEach(item => {
-      const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, months: 0 };
+      const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, ratedMonths: 0, monthly: [] };
       total.result += item.result;
+      total.monthly.push({
+        month: snapshot.month,
+        openingCapital: item.openingCapital,
+        closingCapital: item.closingCapital,
+        assignedFlow: item.assignedFlow,
+        result: item.result,
+        ratePercent: item.ratePercent
+      });
       if (item.ratePercent !== null && Number.isFinite(item.ratePercent)) {
         total.multiplier *= 1 + item.ratePercent / 100;
-        total.months += 1;
+        total.ratedMonths += 1;
       }
       taggedReturnTotals.set(item.tag, total);
     });
@@ -424,7 +355,8 @@ export default function GraphsPage() {
     .map(([tag, total]) => ({
       tag,
       result: total.result,
-      ratePercent: total.months > 0 ? (total.multiplier - 1) * 100 : null
+      ratePercent: total.ratedMonths > 0 ? (total.multiplier - 1) * 100 : null,
+      monthly: total.monthly
     }))
     .filter(item => Math.abs(item.result) >= 0.01 || item.ratePercent !== null)
     .sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
@@ -442,50 +374,18 @@ export default function GraphsPage() {
       percent: getSignedPercent(currentTotal, startTotal),
       help: `Difference between the latest and first snapshots in the selected range. Percent is this change divided by the first snapshot total.`
     },
-    ...(cashFlowEnabled ? [
-      {
-        label: 'External flow',
-        value: Math.round(periodExternalFlow),
-        suffix: baseCurrency,
-        help: `Net recorded Cash Flow across the selected range: after-tax incoming minus outgoing. Every movement is converted to ${baseCurrency} using its month's snapshot rates.`
-      },
-      {
-        label: 'Capital earnings',
-        value: Math.round(periodEstimatedReturn),
-        suffix: baseCurrency,
-        percent: (periodReturnMultiplier - 1) * 100,
-        help: `Approximate earnings from unlogged deposits, stocks, and other capital: balance change without FX minus net external Cash Flow. Each month's opening capital, movements, and earnings use that month's closing rates, keeping FX outside the return. The percentage is a time-weighted return: it follows a virtual unit of money through each month while ignoring deposits and withdrawals.`
-      }
-    ] : [{
+    ...(!cashFlowEnabled ? [{
       label: 'Organic flow',
       value: Math.round(periodOrganicDelta),
       suffix: baseCurrency,
       help: `Sum of balance amount changes across the selected range, valued in ${baseCurrency} at each current snapshot's rates. This is deposits, withdrawals, returns, and manual balance changes.`
-    }]),
+    }] : []),
     {
       label: 'FX impact',
       value: Math.round(periodFxImpactDelta),
       suffix: baseCurrency,
       help: `Estimated change caused by exchange-rate movement. Previous currency balances are revalued with current rates and compared with their previous-rate value.`
     }
-  ];
-
-  const buildConcentrationStat = (label: string, values: Record<string, number>) => {
-    const top = Object.entries(values).sort((a, b) => b[1] - a[1])[0];
-    const total = Object.values(values).reduce((sum, value) => sum + value, 0);
-
-    return {
-      label,
-      name: top?.[0] || 'N/A',
-      value: Math.round(top?.[1] || 0),
-      percent: total > 0 ? ((top?.[1] || 0) / total) * 100 : 0
-    };
-  };
-
-  const concentrationStats = [
-    buildConcentrationStat('Top organization', latestOrgValues),
-    buildConcentrationStat('Top currency', latestCurrencyValues),
-    buildConcentrationStat('Top tag', latestTagValues)
   ];
 
   const uxMetricsData = filteredSnapshots.map(snapshot => {
@@ -514,8 +414,9 @@ export default function GraphsPage() {
     if (!clickedKey) return;
 
     const now = Date.now();
-    const isDoubleClick = lastClick && lastClick.group === group && lastClick.key === clickedKey && (now - lastClick.time < 300);
-    setLastClick({ group, key: clickedKey, time: now });
+    const lastClick = lastLegendClickRef.current;
+    const isDoubleClick = lastClick && lastClick.group === group && lastClick.key === clickedKey && (now - lastClick.time < LEGEND_DOUBLE_CLICK_WINDOW_MS);
+    lastLegendClickRef.current = { group, key: clickedKey, time: now };
 
     setHiddenSeries(prev => {
       const currentGroup = prev[group];
@@ -611,25 +512,20 @@ export default function GraphsPage() {
         allUsedCurrencies={allUsedCurrencies}
         allUsedTags={allUsedTags}
         chartColors={CHART_COLORS}
-        concentrationStats={concentrationStats}
         currencyDistributionData={currencyDistributionData}
         currencyRatesData={currencyRatesData}
         cashFlowMonthlyData={cashFlowMonthlyData}
         cashFlowEventsData={cashFlowEventsData}
         decompositionData={decompositionData}
-        flowChartData={flowChartData}
         hiddenSeries={hiddenSeries}
-        latestSnapshotMonth={latestSnapshot?.month}
         netWorthData={netWorthData}
         orgTrendData={orgTrendData}
+        organizationCurrencyBreakdown={organizationCurrencyBreakdown}
+        organizationCurrencyMonth={latestSnapshot?.month}
         summaryStats={summaryStats}
         tagDistributionData={tagDistributionData}
-        tagReturnCoverage={{ assigned: assignedExternalEntries, total: totalExternalEntries }}
+        tagReturnCoverage={{ assigned: assignedExternalEntries, total: totalExternalEntries, proportional: proportionallyAllocatedEntries }}
         tagReturnStats={tagReturnStats}
-        topCurrencyMovers={topCurrencyMovers}
-        topOrganizationMovers={topOrganizationMovers}
-        topTagMovers={topTagMovers}
-        treemapData={treemapData}
         uxMetricsData={uxMetricsData}
         formatCompact={formatCompact}
         formatFriendlyTime={formatFriendlyTime}

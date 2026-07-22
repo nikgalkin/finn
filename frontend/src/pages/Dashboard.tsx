@@ -10,6 +10,9 @@ import { useFlowEntries } from '../hooks/useFlowEntries';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
 import { PageLoader } from './components/PageLoader';
+import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphTooltip';
+import { ScrollForMore } from './components/ScrollForMore';
+import { SnapshotDraftsNotice } from './components/SnapshotDraftsNotice';
 import { isTextInputTarget } from '../lib/hotkeys';
 import {
   calculateCurrencyTotals,
@@ -20,43 +23,34 @@ import {
   hasAnyComments
 } from '../lib/finance';
 
+const DASHBOARD_PIE_VISIBLE_ROWS = 7;
+
 const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency }: any) => {
   if (!active || !payload || !payload.length) return null;
 
   const hasComment = payload[0]?.payload?.hasComment;
+  const rows = [
+    { name: 'BASE', currency: baseCurrency, color: '#10b981' },
+    { name: 'SECONDARY', currency: secondaryCurrency, color: '#6366f1' }
+  ].flatMap(series => {
+    const item = payload.find((entry: any) => entry.name === series.name);
+    if (!item || !series.currency) return [];
+    return [{
+      key: series.name,
+      label: `Total ${series.currency}`,
+      value: Number(item.value || 0).toLocaleString('en-US'),
+      color: series.color,
+      markerColor: series.color
+    }];
+  });
 
   return (
-    <div 
-      className="custom-tooltip" 
-      style={{
-        backgroundColor: 'var(--bg-color)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '8px',
-        padding: '10px 14px',
-        fontSize: '14px'
-      }}
-    >
-      <div style={{ fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-primary)' }}>
-        {label} {hasComment && '📝 (Click to view notes)'}
-      </div>
-
-      <ul style={{ listStyleType: 'none', padding: 0, margin: 0 }}>
-        {payload.filter((item: any) => item.name === 'BASE' || item.name === 'SECONDARY').map((item: any) => {
-          const isBase = item.name === 'BASE';
-          const numValue = Number(item.value) || 0;
-          const formattedValue = numValue.toLocaleString('en-US');
-
-          const color = isBase ? '#10b981' : '#6366f1';
-          const title = isBase ? `Total ${baseCurrency}` : `Total ${secondaryCurrency}`;
-
-          return (
-            <li key={item.name} style={{ color, padding: '2px 0', fontWeight: 500 }}>
-              {title} : {formattedValue}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <GraphTooltip
+      title={label}
+      titleValue={hasComment ? '📝 Click for notes' : undefined}
+      rows={rows}
+      style={{ minWidth: '250px' }}
+    />
   );
 };
 
@@ -140,22 +134,46 @@ export default function Dashboard() {
   }, [snapshots, baseCurrency, secondaryCurrency]);
 
   const CommentDot = (props: any) => {
-    const { cx, cy, payload } = props;
+    const { cx, cy, index, payload } = props;
     if (payload && payload.hasComment) {
       return (
-        <g key={cx} style={{ cursor: 'pointer' }}>
+        <g key={cx} style={{ cursor: 'pointer', filter: 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.34))' }}>
           <line
             x1={cx}
-            y1={cy + 6}
+            y1={cy + 7}
             x2={cx}
             y2="calc(100% - 45px)"
             stroke="#34d399"
             strokeWidth={1}
             strokeDasharray="3 5"
-            opacity={0.18}
+            opacity={0.28}
           />
-          <circle cx={cx} cy={cy} r={4.60} fill="var(--bg-color)" fillOpacity={0.62} stroke="#34d399" strokeWidth={2} strokeOpacity={0.68} />
-          <circle cx={cx} cy={cy} r={2.00} fill="#10b981" opacity={0.59} />
+          <circle
+            className="dashboard-comment-dot-halo"
+            cx={cx}
+            cy={cy}
+            r={6.4}
+            fill="none"
+            stroke="rgba(110, 231, 183, 0.56)"
+            strokeWidth={1}
+          >
+            <animate
+              attributeName="r"
+              values="6.4;11.5"
+              dur="2.8s"
+              begin={`${(Number(index || 0) % 5) * 0.42}s`}
+              repeatCount="indefinite"
+            />
+            <animate
+              attributeName="opacity"
+              values="0.82;0"
+              dur="2.8s"
+              begin={`${(Number(index || 0) % 5) * 0.42}s`}
+              repeatCount="indefinite"
+            />
+          </circle>
+          <circle cx={cx} cy={cy} r={5.25} fill="var(--bg-color)" fillOpacity={0.96} stroke="#6ee7b7" strokeWidth={2.5} />
+          <circle cx={cx} cy={cy} r={2.25} fill="#10b981" />
         </g>
       );
     }
@@ -262,6 +280,8 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      <SnapshotDraftsNotice />
+
       {loading ? (
         <PageLoader label="Loading dashboard" />
       ) : snapshots.length === 0 ? (
@@ -304,8 +324,8 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="glass-panel" style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '24px' }}>
-              <div style={{ flex: 1, height: '140px' }}>
+            <div className="glass-panel dashboard-pie-panel">
+              <div className="dashboard-pie-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={3} dataKey="value">
@@ -313,30 +333,39 @@ export default function Dashboard() {
                         <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }}
-                      formatter={(value: any, _name: any, props: any) => [
-                        `${Number(value).toLocaleString('en-US')} ${baseCurrency}`,
-                        props.payload.name
-                      ]}
-                    />
+                    <Tooltip content={<SimpleGraphTooltip formatter={(value, _name, item) => [
+                      `${Number(value).toLocaleString('en-US')} ${baseCurrency}`,
+                      item.payload.name
+                    ]} />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem', maxHeight: '140px', overflowY: 'auto', minWidth: '160px' }}>
-                {pieData.map((entry, idx) => {
-                  const percent = latestTotals.totalBase > 0 ? (entry.value / latestTotals.totalBase) * 100 : 0;
-                  return (
-                    <div key={entry.name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: CHART_COLORS[idx % CHART_COLORS.length], flexShrink: 0 }} />
-                      <span style={{ color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '100px' }} title={entry.name}>
-                        {entry.name}:
-                      </span>
-                      <span style={{ fontWeight: 600, marginLeft: 'auto' }}>{percent.toFixed(1)}%</span>
-                    </div>
-                  );
-                })}
+              <ScrollForMore
+                orientation="vertical"
+                scrollContainerId="dashboard-pie-legend-scroll"
+                total={pieData.length}
+                visible={DASHBOARD_PIE_VISIBLE_ROWS}
+              />
+
+              <div className="dashboard-pie-legend">
+                <div
+                  id="dashboard-pie-legend-scroll"
+                  className="dashboard-pie-legend-scroll"
+                  tabIndex={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 0 : undefined}
+                  aria-label={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 'Organization allocation. Scroll for more organizations.' : 'Organization allocation'}
+                >
+                  {pieData.map((entry, idx) => {
+                    const percent = latestTotals.totalBase > 0 ? (entry.value / latestTotals.totalBase) * 100 : 0;
+                    return (
+                      <div key={entry.name} className="dashboard-pie-legend-row">
+                        <span className="dashboard-pie-legend-marker" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                        <span className="dashboard-pie-legend-name" title={entry.name}>{entry.name}:</span>
+                        <span className="dashboard-pie-legend-value">{percent.toFixed(1)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -360,10 +389,20 @@ export default function Dashboard() {
                       <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => formatCompactNumber(val)} />
                     )}
                     <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} secondaryCurrency={secondaryCurrency} />} />
-                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" dot={<CommentDot />} />
+                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE_FILL" stroke="none" fillOpacity={1} fill="url(#colorBase)" dot={false} activeDot={false} />
                     {secondaryCurrency && secondaryCurrency !== baseCurrency && (
                       <Line yAxisId="right" type="monotone" dataKey="SECONDARY" name="SECONDARY" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                     )}
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="BASE"
+                      name="BASE"
+                      stroke="#10b981"
+                      strokeWidth={2.5}
+                      dot={<CommentDot />}
+                      activeDot={{ r: 6, fill: '#10b981', stroke: '#d1fae5', strokeWidth: 2 }}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

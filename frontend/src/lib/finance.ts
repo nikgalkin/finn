@@ -19,6 +19,7 @@ export type EstimatedCapitalReturn = {
 export type TaggedCapitalReturn = {
   tag: string;
   openingCapital: number;
+  closingCapital: number;
   assignedFlow: number;
   result: number;
   ratePercent: number | null;
@@ -28,6 +29,7 @@ export type TaggedCapitalReturnBreakdown = {
   returns: TaggedCapitalReturn[];
   assignedExternalEntries: number;
   totalExternalEntries: number;
+  proportionallyAllocatedEntries: number;
 };
 
 export type CommentItem = {
@@ -212,7 +214,10 @@ export const calculateEstimatedCapitalReturn = (
 };
 
 const balanceAccountKey = (account: string, currency: string) => `${account}\u001f${currency}`;
-const analyticalTags = (tags?: string[]) => tags && tags.length > 0 ? tags.filter(Boolean) : ['untagged'];
+const analyticalTags = (tags?: string[]) => {
+  const filteredTags = tags?.filter(Boolean) || [];
+  return filteredTags.length > 0 ? filteredTags : ['untagged'];
+};
 
 export const calculateTaggedCapitalReturns = (
   current: ParsedSnapshot,
@@ -220,20 +225,22 @@ export const calculateTaggedCapitalReturns = (
   entries: FlowEntry[],
   baseCurrency: string
 ): TaggedCapitalReturnBreakdown => {
-  type AccountBalance = { amount: number; tags: string[] };
+  type AccountBalance = { amount: number; amountsByTag: Map<string, number> };
   const collectBalances = (snapshot: ParsedSnapshot) => {
     const balances = new Map<string, AccountBalance>();
     snapshot.data.organizations.forEach(organization => {
       organization.balances.forEach(balance => {
         if (!organization.name || !balance.currency) return;
         const key = balanceAccountKey(organization.name, balance.currency);
-        const existing = balances.get(key);
+        const existing = balances.get(key) || { amount: 0, amountsByTag: new Map<string, number>() };
         const amount = toNumber(balance.amount);
         const tags = analyticalTags(balance.tags);
-        balances.set(key, {
-          amount: (existing?.amount || 0) + amount,
-          tags: Array.from(new Set([...(existing?.tags || []), ...tags]))
+        const tagShare = amount / tags.length;
+        tags.forEach(tag => {
+          existing.amountsByTag.set(tag, (existing.amountsByTag.get(tag) || 0) + tagShare);
         });
+        existing.amount += amount;
+        balances.set(key, existing);
       });
     });
     return balances;
@@ -241,15 +248,17 @@ export const calculateTaggedCapitalReturns = (
 
   const currentBalances = collectBalances(current);
   const previousBalances = collectBalances(previous);
-  const accountTags = new Map<string, string[]>();
+  const accountTags = new Map<string, Set<string>>();
   [previous, current].forEach(snapshot => {
     snapshot.data.organizations.forEach(organization => {
       if (!organization.name) return;
-      const tags = organization.balances.flatMap(balance => balance.tags?.filter(Boolean) || []);
-      accountTags.set(organization.name, Array.from(new Set([...(accountTags.get(organization.name) || []), ...tags])));
+      const tags = accountTags.get(organization.name) || new Set<string>();
+      organization.balances.forEach(balance => analyticalTags(balance.tags).forEach(tag => tags.add(tag)));
+      accountTags.set(organization.name, tags);
     });
   });
   const assignedFlows = new Map<string, number>();
+  const assignedExternalKeys: string[] = [];
   const addAssignedFlow = (account: string, currency: string, amount: number) => {
     if (!account || !currency || amount === 0) return;
     const key = balanceAccountKey(account, currency);
@@ -267,6 +276,7 @@ export const calculateTaggedCapitalReturns = (
     totalExternalEntries += 1;
     if (!entry.account) return;
     assignedExternalEntries += 1;
+    assignedExternalKeys.push(balanceAccountKey(entry.account, entry.currency));
     const tax = entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0;
     addAssignedFlow(entry.account, entry.currency, entry.direction === 'in' ? entry.amount - tax : -entry.amount);
   });
@@ -279,30 +289,67 @@ export const calculateTaggedCapitalReturns = (
   };
 
   const allKeys = new Set([...currentBalances.keys(), ...previousBalances.keys(), ...assignedFlows.keys()]);
+  const allocationTagCounts = new Map<string, number>();
   allKeys.forEach(key => {
     const separator = key.lastIndexOf('\u001f');
     const account = key.slice(0, separator);
     const currency = key.slice(separator + 1);
     const currentBalance = currentBalances.get(key);
     const previousBalance = previousBalances.get(key);
-    const tags = currentBalance?.tags.length
-      ? currentBalance.tags
-      : previousBalance?.tags.length
-        ? previousBalance.tags
-        : accountTags.get(account)?.length
-          ? accountTags.get(account)!
-          : ['untagged'];
-    const tagShare = 1 / tags.length;
+    const previousTags = Array.from(previousBalance?.amountsByTag.keys() || []);
+    const currentTags = Array.from(currentBalance?.amountsByTag.keys() || []);
+    const fallbackTags = Array.from(accountTags.get(account) || []);
+    const directTags = Array.from(new Set([...previousTags, ...currentTags]));
+    const tags = directTags.length > 0 ? directTags : fallbackTags;
+    if (tags.length === 0) tags.push('untagged');
+
+    const previousSet = new Set(previousTags);
+    const currentSet = new Set(currentTags);
+    const tagSetChanged = previousTags.length > 0
+      && currentTags.length > 0
+      && (previousSet.size !== currentSet.size || previousTags.some(tag => !currentSet.has(tag)));
+
+    const rawOpeningByTag = new Map(tags.map(tag => [tag, previousBalance?.amountsByTag.get(tag) || 0]));
+    const rawClosingByTag = new Map(tags.map(tag => [tag, currentBalance?.amountsByTag.get(tag) || 0]));
+
+    // A tag edit is a classification change, not an investment gain or loss.
+    // When the tag set changes, use one blended allocation for both snapshots so
+    // the account still reconciles without manufacturing returns from retagging.
+    let openingByTag = rawOpeningByTag;
+    let closingByTag = rawClosingByTag;
+    if (tagSetChanged) {
+      const weights = new Map(tags.map(tag => [
+        tag,
+        Math.abs(rawOpeningByTag.get(tag) || 0) + Math.abs(rawClosingByTag.get(tag) || 0)
+      ]));
+      const weightTotal = Array.from(weights.values()).reduce((sum, value) => sum + value, 0);
+      openingByTag = new Map(tags.map(tag => [tag, (previousBalance?.amount || 0) * (weightTotal > 0 ? (weights.get(tag) || 0) / weightTotal : 1 / tags.length)]));
+      closingByTag = new Map(tags.map(tag => [tag, (currentBalance?.amount || 0) * (weightTotal > 0 ? (weights.get(tag) || 0) / weightTotal : 1 / tags.length)]));
+    }
+
+    const flowWeights = new Map(tags.map(tag => [
+      tag,
+      Math.max(0, openingByTag.get(tag) || 0) + Math.max(0, closingByTag.get(tag) || 0)
+    ]));
+    let flowWeightTotal = Array.from(flowWeights.values()).reduce((sum, value) => sum + value, 0);
+    if (flowWeightTotal === 0) {
+      tags.forEach(tag => flowWeights.set(tag, Math.abs(openingByTag.get(tag) || 0) + Math.abs(closingByTag.get(tag) || 0)));
+      flowWeightTotal = Array.from(flowWeights.values()).reduce((sum, value) => sum + value, 0);
+    }
+    allocationTagCounts.set(key, tags.length);
+
     // Keep the return denominator in the same valuation basis as organicDelta
     // and assignedFlow, while FX impact remains a separate reconciliation item.
-    const openingCapital = convertAmount(previousBalance?.amount || 0, currency, baseCurrency, current.data.rates);
-    const organicDelta = convertAmount((currentBalance?.amount || 0) - (previousBalance?.amount || 0), currency, baseCurrency, current.data.rates);
     const assignedFlow = assignedFlows.get(key) || 0;
 
     tags.forEach(tag => {
-      addToTag(tag, 'openingCapital', openingCapital * tagShare);
-      addToTag(tag, 'assignedFlow', assignedFlow * tagShare);
-      addToTag(tag, 'result', (organicDelta - assignedFlow) * tagShare);
+      const flowShare = flowWeightTotal > 0 ? (flowWeights.get(tag) || 0) / flowWeightTotal : 1 / tags.length;
+      const openingCapital = convertAmount(openingByTag.get(tag) || 0, currency, baseCurrency, current.data.rates);
+      const closingCapital = convertAmount(closingByTag.get(tag) || 0, currency, baseCurrency, current.data.rates);
+      const tagAssignedFlow = assignedFlow * flowShare;
+      addToTag(tag, 'openingCapital', openingCapital);
+      addToTag(tag, 'assignedFlow', tagAssignedFlow);
+      addToTag(tag, 'result', closingCapital - openingCapital - tagAssignedFlow);
     });
   });
 
@@ -311,11 +358,13 @@ export const calculateTaggedCapitalReturns = (
     return {
       tag,
       ...total,
+      closingCapital: total.openingCapital + total.assignedFlow + total.result,
       ratePercent: averageCapital > 0 ? (total.result / averageCapital) * 100 : null
     };
   }).sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
 
-  return { returns, assignedExternalEntries, totalExternalEntries };
+  const proportionallyAllocatedEntries = assignedExternalKeys.filter(key => (allocationTagCounts.get(key) || 0) > 1).length;
+  return { returns, assignedExternalEntries, totalExternalEntries, proportionallyAllocatedEntries };
 };
 
 export const hasAnyComments = (snapshot: ParsedSnapshot) => {

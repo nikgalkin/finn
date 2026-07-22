@@ -4,9 +4,15 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and publish
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-frontend:
@@ -15,6 +21,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -56,6 +64,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Download Frontend Dist
         uses: actions/download-artifact@v4
@@ -70,15 +80,52 @@ jobs:
 
       - name: Execute Full Autonomous Build Script
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ inputs.tag || github.ref_name }}
+          SKIP_FRONTEND_BUILD: '1'
         run: |
           chmod +x bin/build.sh
           ./bin/build.sh ${{ matrix.goos }} ${{ matrix.goarch }}
 
-      - name: Upload to GitHub Release
+      - name: Upload release binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/${{ matrix.artifact_name }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-and-release
+    permissions:
+      contents: write
+    steps:
+      - name: Download release binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: build
+          merge-multiple: true
+
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="${RELEASE_TAG}" \
+            --jq '.body' > release-notes.md
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/${{ matrix.artifact_name }}
+          files: build/*
+          fail_on_unmatched_files: true
+          body_path: release-notes.md
+          append_body: false
+          tag_name: ${{ inputs.tag || github.ref_name }}
           draft: false
           prerelease: false
-          generate_release_notes: true

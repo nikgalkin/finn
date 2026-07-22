@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { API_URL } from '../types';
-import type { Balance, FlowEntry } from '../types';
+import type { Balance, FlowEntry, SnapshotData } from '../types';
 import { DraftRestoreBanner } from './components/DraftRestoreBanner';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { OrganizationsEditor } from './components/OrganizationsEditor';
@@ -16,11 +16,25 @@ import type { FlowPeriodDraft } from './components/FlowPeriodModal';
 import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
+import { copyFlowPeriodEntries } from '../lib/cashFlow';
+import { removeSnapshotDraft } from '../lib/snapshotDraftStorage';
+import {
+  UNSAVED_NAVIGATION_REQUEST_EVENT,
+  type UnsavedNavigationRequestDetail
+} from '../lib/unsavedNavigation';
+
+const previousMonth = (month: string) => {
+  const [year, monthNumber] = month.split('-').map(Number);
+  if (!year || !monthNumber) return '';
+  const date = new Date(year, monthNumber - 2, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+};
 
 export default function SnapshotEdit() {
   const { month, sourceMonth } = useParams<{ month?: string; sourceMonth?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const restoreDraftOnOpen = Boolean((location.state as { restoreDraft?: boolean } | null)?.restoreDraft);
 
   const isNew = !month && !sourceMonth;
   const isCopy = !!sourceMonth;
@@ -47,20 +61,21 @@ export default function SnapshotEdit() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const [recentlyAddedOrgId, setRecentlyAddedOrgId] = useState<string | null>(null);
-  const [cashFlowEditor, setCashFlowEditor] = useState<{ month: string; entries: FlowEntry[] } | null>(null);
+  const [cashFlowEditor, setCashFlowEditor] = useState<{ month: string; entries: FlowEntry[]; previousEntries: ReturnType<typeof copyFlowPeriodEntries> } | null>(null);
   const [cashFlowLoading, setCashFlowLoading] = useState(false);
   const [cashFlowSaving, setCashFlowSaving] = useState(false);
   const [cashFlowError, setCashFlowError] = useState('');
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const addOrganizationScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialDataHash = useRef<string>('');
+  const [initialDataHash, setInitialDataHash] = useState('');
+  const [draftBaseline, setDraftBaseline] = useState<{ data: SnapshotData; currentMonth: string } | null>(null);
   const draftKey = isCopy ? `finn_draft_copy_${sourceMonth}` : `finn_draft_${month || 'new'}`;
 
   const isDirty = useMemo(() => {
-    if (!initialDataHash.current) return false;
-    return initialDataHash.current !== JSON.stringify({ data, currentMonth });
-  }, [data, currentMonth]);
+    if (!initialDataHash) return false;
+    return initialDataHash !== JSON.stringify({ data, currentMonth });
+  }, [data, currentMonth, initialDataHash]);
 
   const { draftToRestore, setDraftToRestore, discardDraft } = useSnapshotDraft({
     draftKey,
@@ -68,7 +83,8 @@ export default function SnapshotEdit() {
     data,
     currentMonth,
     durationSeconds,
-    isNew: isNew || isCopy
+    isNew: isNew || isCopy,
+    baseline: draftBaseline
   });
 
   useEscapeToDashboard({
@@ -110,6 +126,18 @@ export default function SnapshotEdit() {
     return () => document.removeEventListener('click', handleInternalLinkClick, true);
   }, [isDirty, showLeaveConfirm]);
 
+  useEffect(() => {
+    const handleNavigationRequest = (event: Event) => {
+      const route = (event as CustomEvent<UnsavedNavigationRequestDetail>).detail?.route;
+      if (!route) return;
+      setPendingNavigation(route);
+      setShowLeaveConfirm(true);
+    };
+
+    window.addEventListener(UNSAVED_NAVIGATION_REQUEST_EVENT, handleNavigationRequest);
+    return () => window.removeEventListener(UNSAVED_NAVIGATION_REQUEST_EVENT, handleNavigationRequest);
+  }, []);
+
   useEffect(() => () => {
     if (addOrganizationScrollTimer.current) clearTimeout(addOrganizationScrollTimer.current);
   }, []);
@@ -123,10 +151,43 @@ export default function SnapshotEdit() {
     }
   };
 
+  useEffect(() => {
+    if (loading || !initialDataHash || !restoreDraftOnOpen) return;
+
+    if (draftToRestore) {
+      setData(draftToRestore.data);
+      setCurrentMonth(draftToRestore.currentMonth);
+      setDurationSeconds(draftToRestore.durationSeconds || 0);
+      setDraftToRestore(null);
+    }
+
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [
+    draftToRestore,
+    initialDataHash,
+    loading,
+    location.pathname,
+    location.search,
+    navigate,
+    restoreDraftOnOpen,
+    setCurrentMonth,
+    setData,
+    setDraftToRestore,
+    setDurationSeconds
+  ]);
+
   const handleDiscardDraft = () => {
     if (confirm('Are you sure you want to discard this draft? This cannot be undone.')) {
       discardDraft();
     }
+  };
+
+  const leaveEditor = (removeDraft: boolean) => {
+    const target = pendingNavigation || '/';
+    if (removeDraft) discardDraft();
+    setShowLeaveConfirm(false);
+    setPendingNavigation(null);
+    navigate(target);
   };
 
   useEffect(() => {
@@ -139,16 +200,23 @@ export default function SnapshotEdit() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [loading]);
+  }, [loading, setDurationSeconds]);
 
   useEffect(() => {
-    if (!loading && settingsLoaded && !initialDataHash.current) {
+    setInitialDataHash('');
+    setDraftBaseline(null);
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!loading && settingsLoaded && !initialDataHash) {
       const timer = setTimeout(() => {
-        initialDataHash.current = JSON.stringify({ data, currentMonth });
+        const baseline = { data, currentMonth };
+        setDraftBaseline(baseline);
+        setInitialDataHash(JSON.stringify(baseline));
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [loading, settingsLoaded, data, currentMonth]);
+  }, [loading, settingsLoaded, data, currentMonth, initialDataHash]);
 
   useEffect(() => {
     if (!loading && data.organizations.length > 0) {
@@ -185,10 +253,10 @@ export default function SnapshotEdit() {
         return prev;
       });
     }
-  }, [settings.currencies, settings.baseCurrency]);
+  }, [settings.currencies, settings.baseCurrency, setData]);
 
   const completeSave = () => {
-    localStorage.removeItem(draftKey);
+    removeSnapshotDraft(draftKey);
     navigate('/');
   };
 
@@ -199,21 +267,21 @@ export default function SnapshotEdit() {
     try {
       const response = await fetch(`${API_URL}/flows`);
       if (!response.ok) throw new Error('Could not load Cash Flow.');
-      const entries = await response.json() as FlowEntry[];
+      const entries = (await response.json() as FlowEntry[] || []).map(entry => ({
+        ...entry,
+        entryType: entry.entryType || 'external' as const,
+        account: entry.account || '',
+        taxRate: entry.taxRate || 0,
+        toAccount: entry.toAccount || '',
+        toCurrency: entry.toCurrency || '',
+        toAmount: entry.toAmount || 0
+      }));
       setCashFlowEditor({
         month: currentMonth,
-        entries: (entries || [])
+        entries: entries
           .filter(entry => entry.month === currentMonth)
-          .map(entry => ({
-            ...entry,
-            entryType: entry.entryType || 'external' as const,
-            account: entry.account || '',
-            taxRate: entry.taxRate || 0,
-            toAccount: entry.toAccount || '',
-            toCurrency: entry.toCurrency || '',
-            toAmount: entry.toAmount || 0
-          }))
-          .sort((left, right) => right.id - left.id)
+          .sort((left, right) => right.id - left.id),
+        previousEntries: copyFlowPeriodEntries(entries, previousMonth(currentMonth))
       });
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Could not load Cash Flow.');
@@ -673,7 +741,9 @@ export default function SnapshotEdit() {
     setActiveComment(null);
   };
 
-  if (loading) return <PageLoader label="Loading snapshot" />;
+  if (loading || restoreDraftOnOpen) {
+    return <PageLoader label={restoreDraftOnOpen ? 'Restoring draft' : 'Loading snapshot'} />;
+  }
 
   return (
     <div data-unsaved-changes={isDirty ? 'true' : undefined}>
@@ -711,6 +781,7 @@ export default function SnapshotEdit() {
           key={`snapshot-cash-flow-${cashFlowEditor.month}`}
           month={cashFlowEditor.month}
           entries={cashFlowEditor.entries}
+          copyPreviousEntries={cashFlowEditor.previousEntries}
           settings={settings}
           appendBlank={cashFlowEditor.entries.length === 0}
           lockMonth
@@ -769,12 +840,14 @@ export default function SnapshotEdit() {
 
       {showLeaveConfirm && (
         <ConfirmLeaveModal
-          message="This snapshot has unsaved changes. Leave without saving?"
+          message="This snapshot has unsaved changes. You can keep a draft for 90 days or discard it before leaving."
           onCancel={() => {
             setShowLeaveConfirm(false);
             setPendingNavigation(null);
           }}
-          onConfirm={() => navigate(pendingNavigation || '/')}
+          secondaryAction={{ label: 'Leave & keep draft', onClick: () => leaveEditor(false) }}
+          confirmLabel="Discard & leave"
+          onConfirm={() => leaveEditor(true)}
         />
       )}
     </div>

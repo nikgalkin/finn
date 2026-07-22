@@ -1,21 +1,20 @@
-import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Edit, X } from 'lucide-react';
 import { getCurrencyColor } from '../../types';
 import type { ParsedSnapshot } from '../../types';
+import { ModalPortal } from './ModalPortal';
 
 type SnapshotNotesModalProps = {
   snapshot: ParsedSnapshot;
   onClose: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0 } as const;
 const panelStyle = { width: '500px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' as const, padding: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const noteCardStyle = { padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' };
 
 export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProps) {
-  return createPortal(
-    <div className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-hotkeys-guard="true" style={overlayStyle} onClick={onClose}>
+  return (
+    <ModalPortal className="fixed z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" zIndex={null} onClose={onClose}>
       <div className="glass-panel flex flex-col" style={panelStyle} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-6" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '12px' }}>
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Notes for {snapshot.month}</h3>
@@ -74,7 +73,6 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
           })}
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 }

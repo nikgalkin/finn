@@ -1,12 +1,32 @@
 # Install script for Finn App on Windows
+param(
+    [string]$Version = $env:FINN_VERSION
+)
+
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $ReleasePath = "latest/download"
+    $VersionLabel = "latest"
+} else {
+    $Version = $Version.Trim()
+    if (-not $Version.StartsWith("v")) {
+        $Version = "v$Version"
+    }
+
+    if ($Version -notmatch '^v[0-9][A-Za-z0-9._-]*$') {
+        throw "Invalid version: $Version"
+    }
+
+    $ReleasePath = "download/$Version"
+    $VersionLabel = $Version
+}
 
 # 1. Setup paths
 $BinDir = Join-Path $HOME ".finn\bin"
 $BinaryPath = Join-Path $BinDir "finn.exe"
 
-# Change this URL to your actual hosted windows binary (e.g., GitHub Releases)
-$BinaryUrl = "https://github.com/nikgalkin/finn/releases/latest/download/finn-windows-amd64.exe"
+$BinaryUrl = "https://github.com/nikgalkin/finn/releases/$ReleasePath/finn-windows-amd64.exe"
 
 Write-Host "🚀 Starting Finn installation for Windows..." -ForegroundColor Cyan
 Write-Host "--------------------------------------------------"
@@ -18,7 +38,8 @@ if (-not (Test-Path $BinDir)) {
 }
 
 # 3. Download the executable artifact
-Write-Host "📥 Downloading latest application binary..." -ForegroundColor Yellow
+Write-Host "ℹ️ Version: $VersionLabel" -ForegroundColor Gray
+Write-Host "📥 Downloading application binary..." -ForegroundColor Yellow
 try {
     Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UserAgent "Mozilla/5.0"
     Write-Host "✅ Binary successfully saved to $BinaryPath" -ForegroundColor Green

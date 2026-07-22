@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, FileJson, X } from 'lucide-react';
 import type { LocalAIContextPreview } from '../../types';
+import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { Spinner } from './PageLoader';
 
 type AIContextPreviewModalProps = {
@@ -17,18 +18,7 @@ export function AIContextPreviewModal({ preview, loading, error, includesRequest
 
   useEffect(() => setCopied(false), [preview]);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onClose]);
+  useCloseOnEscape(onClose);
 
   const copyPrompt = async () => {
     if (!preview?.prompt) return;

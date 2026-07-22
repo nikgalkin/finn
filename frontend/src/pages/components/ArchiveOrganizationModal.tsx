@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Archive, AlertTriangle, X } from 'lucide-react';
+import { ModalPortal } from './ModalPortal';
 import { Spinner } from './PageLoader';
 
 type ArchiveOrganizationModalProps = {
@@ -14,7 +13,6 @@ type ArchiveOrganizationModalProps = {
   onConfirm: () => void;
 };
 
-const overlayStyle = { position: 'fixed', inset: 0, zIndex: 100000 } as const;
 const panelStyle = { width: '500px', maxWidth: '94vw', padding: 0, overflow: 'hidden', boxShadow: '0 30px 80px rgba(0, 0, 0, 0.55)' } as const;
 
 export function ArchiveOrganizationModal({
@@ -29,20 +27,8 @@ export function ArchiveOrganizationModal({
 }: ArchiveOrganizationModalProps) {
   const isBlocked = loading || !!error || latestNonZeroBalances.length > 0;
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      onCancel();
-    };
-    window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onCancel]);
-
-  return createPortal(
-    <div className="fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-escape-guard="true" data-hotkeys-guard="true" style={overlayStyle} onClick={onCancel}>
+  return (
+    <ModalPortal onClose={onCancel} closeOnEscape>
       <div className="glass-panel" role="dialog" aria-modal="true" aria-labelledby="archive-organization-title" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div style={{ display: 'grid', gridTemplateColumns: '38px minmax(0, 1fr) auto', alignItems: 'start', gap: '14px', padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
           <div style={{ display: 'grid', placeItems: 'center', width: '38px', height: '38px', flex: '0 0 38px', borderRadius: '12px', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.22)' }}>
@@ -85,7 +71,6 @@ export function ArchiveOrganizationModal({
           {!isBlocked && <button className="btn" style={{ color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.35)' }} onClick={onConfirm}>Archive</button>}
         </div>
       </div>
-    </div>,
-    document.body
+    </ModalPortal>
   );
 }

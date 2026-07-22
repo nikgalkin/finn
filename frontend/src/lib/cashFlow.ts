@@ -1,5 +1,7 @@
 import type { FlowEntry } from '../types';
 
+export type FlowPeriodSeed = Omit<FlowEntry, 'id' | 'month'>;
+
 export type FlowCurrencySummary = {
   incoming: number;
   incomingNet: number;
@@ -13,6 +15,10 @@ export type FlowSummary = Array<[string, FlowCurrencySummary]>;
 export const calculateFlowTax = (
   entry: Pick<FlowEntry, 'entryType' | 'direction' | 'amount' | 'taxRate'>
 ) => entry.entryType !== 'transfer' && entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0;
+
+export const copyFlowPeriodEntries = (entries: FlowEntry[], month: string): FlowPeriodSeed[] => entries
+  .filter(entry => entry.month === month && entry.entryType !== 'transfer')
+  .map(({ id: _id, month: _month, ...entry }) => ({ ...entry, taxRate: entry.taxRate || 0, comment: '' }));
 
 export const summarizeFlowEntries = (entries: FlowEntry[]): FlowSummary => {
   const byCurrency = new Map<string, FlowCurrencySummary>();
