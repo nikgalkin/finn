@@ -44,8 +44,17 @@ build_target() {
 
 # --- ОСНОВНАЯ ЛОГИКА ВЫПОЛНЕНИЯ ---
 
-# 1. Всегда сначала собираем фронтенд, чтобы go:embed запекал свежую статику
-build_frontend
+# 1. Собираем фронтенд локально или используем готовый dist из CI artifact
+if [ "${SKIP_FRONTEND_BUILD:-0}" = "1" ]; then
+    if [ ! -f "frontend/dist/index.html" ]; then
+        echo "❌ SKIP_FRONTEND_BUILD=1 requires frontend/dist/index.html"
+        exit 1
+    fi
+
+    echo "♻️  Reusing existing frontend/dist..."
+else
+    build_frontend
+fi
 
 # 2. Создаем папку для готовых бинарников
 mkdir -p "$BUILD_DIR"

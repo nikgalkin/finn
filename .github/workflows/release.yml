@@ -71,6 +71,7 @@ jobs:
       - name: Execute Full Autonomous Build Script
         env:
           VERSION: ${{ github.ref_name }}
+          SKIP_FRONTEND_BUILD: '1'
         run: |
           chmod +x bin/build.sh
           ./bin/build.sh ${{ matrix.goos }} ${{ matrix.goarch }}
