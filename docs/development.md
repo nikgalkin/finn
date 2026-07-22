@@ -28,6 +28,12 @@ Use `--force-build` to rebuild both the frontend and backend even when no change
 
 The script caches build results and rebuilds only when it detects relevant source changes.
 
+## Releases
+
+Successful pushes to `master` are tested, versioned, tagged, and published automatically. Prefer a source branch such as `feat-v1.8.1` when the release version is known; otherwise, use `#major`, `#minor`, or `#bugfix` in the final commit message.
+
+See [Release Pipeline](releases.md) for the complete workflow, version precedence, artifacts, manual releases, and retry behavior.
+
 ## Project structure
 
 ```text
@@ -35,6 +41,7 @@ The script caches build results and rebuilds only when it detects relevant sourc
 ├── bin/                  # Installers and development startup scripts
 │   ├── install.sh        # Linux/macOS installer
 │   ├── install.ps1       # Windows PowerShell installer
+│   ├── next-version.sh   # Semantic version calculation for releases
 │   └── up.sh             # Local hot-rebuild startup script
 ├── cmd/finn/             # Go entry point, backend logic, API handlers, and tests
 ├── demo/                 # Demo dataset embedded into the application

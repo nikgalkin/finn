@@ -42,3 +42,4 @@ When enabled, Cash Flow also provides:
 * [Backups and recovery](docs/backups.md) — configure targets, encryption, retention, and restore a backup
 * [Local AI Assistant](docs/local-ai.md) — connect a local model or prepare a prompt for another AI tool
 * [Development](docs/development.md) — prerequisites, project structure, tech stack, and local startup
+* [Release pipeline](docs/releases.md) — CI checks, automatic versioning, tags, artifacts, and release publication
