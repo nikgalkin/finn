@@ -38,6 +38,67 @@ a { color: var(--accent); text-decoration: none; }
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
+.graph-tooltip {
+  min-width: 220px;
+  max-width: 320px;
+  padding: 11px 14px;
+  overflow-y: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--bg-color);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+  font-size: 12px;
+}
+
+.graph-tooltip-header {
+  display: flex;
+  margin-bottom: 8px;
+  padding-bottom: 7px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.graph-tooltip-rows { display: flex; flex-direction: column; gap: 7px; }
+
+.graph-tooltip-row {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) minmax(100px, auto) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.graph-tooltip-row.is-two-column { grid-template-columns: minmax(70px, 1fr) auto; }
+
+.graph-tooltip-label { display: flex; min-width: 0; align-items: center; gap: 7px; font-weight: 650; }
+
+.graph-tooltip-label i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; }
+
+.graph-tooltip-value { display: flex; min-width: 0; align-items: flex-end; flex-direction: column; line-height: 1.25; text-align: right; }
+
+.graph-tooltip-value small { color: var(--text-secondary); }
+
+.graph-tooltip-trailing { text-align: right; }
+
+.graph-tooltip-highlight { margin-bottom: 8px; font-size: 17px; font-weight: 850; }
+
+.graph-tooltip-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px 10px;
+  color: var(--text-secondary);
+}
+
+.graph-tooltip-note {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
 .btn {
   background: var(--glass-bg);
   color: var(--text-primary);
@@ -1489,12 +1550,36 @@ a { color: var(--accent); text-decoration: none; }
 
 .snapshot-diff-rates-title svg { color: #818cf8; }
 
-.snapshot-diff-rates-title span {
+.snapshot-diff-rates-period {
   margin-left: auto;
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 650;
 }
+
+.snapshot-diff-rate-summary {
+  display: flex;
+  min-width: 0;
+  margin-left: auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  overflow: hidden;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.snapshot-diff-rate-summary > span { font-weight: 700; }
+
+.snapshot-diff-rate-summary b { color: currentColor; font-weight: 800; }
+
+.snapshot-diff-rate-summary em { color: var(--text-secondary); font-style: normal; font-weight: 650; }
+
+.snapshot-diff-rates-period { display: none; }
+
+.snapshot-diff-rates[open] .snapshot-diff-rate-summary { display: none; }
+
+.snapshot-diff-rates[open] .snapshot-diff-rates-period { display: inline; }
 
 .snapshot-diff-rates-chevron { color: var(--text-secondary) !important; transition: transform 0.15s ease; }
 
@@ -1528,24 +1613,21 @@ a { color: var(--accent); text-decoration: none; }
 
 .snapshot-diff-recorded-flow {
   margin-bottom: 12px;
-  padding: 10px 12px;
+  padding: 7px 10px;
   border: 1px solid rgba(59, 130, 246, 0.24);
   border-radius: 9px;
   background: rgba(59, 130, 246, 0.055);
 }
 
-.snapshot-diff-recorded-flow-heading,
-.snapshot-diff-recorded-flow-title { display: flex; align-items: center; }
+.snapshot-diff-recorded-flow-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 
-.snapshot-diff-recorded-flow-heading { justify-content: space-between; gap: 14px; margin-bottom: 8px; }
-
-.snapshot-diff-recorded-flow-title { gap: 7px; font-size: 13px; }
+.snapshot-diff-recorded-flow-title { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 
 .snapshot-diff-recorded-flow-title svg { color: var(--accent); }
 
 .snapshot-diff-recorded-flow-title span { color: var(--text-secondary); font-size: 11px; }
 
-.snapshot-diff-recorded-flow .btn { flex: 0 0 auto; padding: 6px 9px; font-size: 11px; }
+.snapshot-diff-recorded-flow .btn { flex: 0 0 auto; padding: 4px 7px; font-size: 10px; }
 
 .cash-flow-period-group {
   display: grid;
@@ -2061,10 +2143,11 @@ a { color: var(--accent); text-decoration: none; }
   .cash-flow-period-group { grid-template-columns: 1fr; gap: 9px; }
 
   .cash-flow-overview-summary,
-  .snapshot-diff-recorded-flow-heading,
   .cash-flow-year-summary,
   .ai-chat-page .sticky-page-header,
   .ai-status-card { align-items: flex-start; flex-direction: column; }
+
+  .snapshot-diff-recorded-flow-heading { grid-template-columns: 1fr; gap: 8px; }
 
   .cash-flow-month-summary { grid-template-columns: 1fr; gap: 9px; padding: 12px 14px; }
 

@@ -10,6 +10,7 @@ import { useFlowEntries } from '../hooks/useFlowEntries';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
 import { PageLoader } from './components/PageLoader';
+import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphTooltip';
 import { isTextInputTarget } from '../lib/hotkeys';
 import {
   calculateCurrencyTotals,
@@ -24,39 +25,28 @@ const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency
   if (!active || !payload || !payload.length) return null;
 
   const hasComment = payload[0]?.payload?.hasComment;
+  const rows = [
+    { name: 'BASE', currency: baseCurrency, color: '#10b981' },
+    { name: 'SECONDARY', currency: secondaryCurrency, color: '#6366f1' }
+  ].flatMap(series => {
+    const item = payload.find((entry: any) => entry.name === series.name);
+    if (!item || !series.currency) return [];
+    return [{
+      key: series.name,
+      label: `Total ${series.currency}`,
+      value: Number(item.value || 0).toLocaleString('en-US'),
+      color: series.color,
+      markerColor: series.color
+    }];
+  });
 
   return (
-    <div 
-      className="custom-tooltip" 
-      style={{
-        backgroundColor: 'var(--bg-color)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '8px',
-        padding: '10px 14px',
-        fontSize: '14px'
-      }}
-    >
-      <div style={{ fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-primary)' }}>
-        {label} {hasComment && '📝 (Click to view notes)'}
-      </div>
-
-      <ul style={{ listStyleType: 'none', padding: 0, margin: 0 }}>
-        {payload.filter((item: any) => item.name === 'BASE' || item.name === 'SECONDARY').map((item: any) => {
-          const isBase = item.name === 'BASE';
-          const numValue = Number(item.value) || 0;
-          const formattedValue = numValue.toLocaleString('en-US');
-
-          const color = isBase ? '#10b981' : '#6366f1';
-          const title = isBase ? `Total ${baseCurrency}` : `Total ${secondaryCurrency}`;
-
-          return (
-            <li key={item.name} style={{ color, padding: '2px 0', fontWeight: 500 }}>
-              {title} : {formattedValue}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <GraphTooltip
+      title={label}
+      titleValue={hasComment ? '📝 Click for notes' : undefined}
+      rows={rows}
+      style={{ minWidth: '250px' }}
+    />
   );
 };
 
@@ -143,19 +133,20 @@ export default function Dashboard() {
     const { cx, cy, payload } = props;
     if (payload && payload.hasComment) {
       return (
-        <g key={cx} style={{ cursor: 'pointer' }}>
+        <g key={cx} style={{ cursor: 'pointer', filter: 'drop-shadow(0 0 3px rgba(52, 211, 153, 0.34))' }}>
           <line
             x1={cx}
-            y1={cy + 6}
+            y1={cy + 7}
             x2={cx}
             y2="calc(100% - 45px)"
             stroke="#34d399"
             strokeWidth={1}
             strokeDasharray="3 5"
-            opacity={0.18}
+            opacity={0.28}
           />
-          <circle cx={cx} cy={cy} r={4.60} fill="var(--bg-color)" fillOpacity={0.62} stroke="#34d399" strokeWidth={2} strokeOpacity={0.68} />
-          <circle cx={cx} cy={cy} r={2.00} fill="#10b981" opacity={0.59} />
+          <circle cx={cx} cy={cy} r={7} fill="rgba(16, 185, 129, 0.08)" />
+          <circle cx={cx} cy={cy} r={5.25} fill="var(--bg-color)" fillOpacity={0.96} stroke="#6ee7b7" strokeWidth={2.5} />
+          <circle cx={cx} cy={cy} r={2.25} fill="#10b981" />
         </g>
       );
     }
@@ -313,13 +304,10 @@ export default function Dashboard() {
                         <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{ backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 }}
-                      formatter={(value: any, _name: any, props: any) => [
-                        `${Number(value).toLocaleString('en-US')} ${baseCurrency}`,
-                        props.payload.name
-                      ]}
-                    />
+                    <Tooltip content={<SimpleGraphTooltip formatter={(value, _name, item) => [
+                      `${Number(value).toLocaleString('en-US')} ${baseCurrency}`,
+                      item.payload.name
+                    ]} />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -360,10 +348,20 @@ export default function Dashboard() {
                       <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => formatCompactNumber(val)} />
                     )}
                     <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} secondaryCurrency={secondaryCurrency} />} />
-                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE" stroke="#10b981" fillOpacity={1} fill="url(#colorBase)" dot={<CommentDot />} />
+                    <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE_FILL" stroke="none" fillOpacity={1} fill="url(#colorBase)" dot={false} activeDot={false} />
                     {secondaryCurrency && secondaryCurrency !== baseCurrency && (
                       <Line yAxisId="right" type="monotone" dataKey="SECONDARY" name="SECONDARY" stroke="#6366f1" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 6 }} />
                     )}
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="BASE"
+                      name="BASE"
+                      stroke="#10b981"
+                      strokeWidth={2.5}
+                      dot={<CommentDot />}
+                      activeDot={{ r: 6, fill: '#10b981', stroke: '#d1fae5', strokeWidth: 2 }}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

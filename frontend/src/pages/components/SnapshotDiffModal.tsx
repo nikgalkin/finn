@@ -384,6 +384,7 @@ export function SnapshotDiffModal({
     () => buildRateDiffData(selectedCurrent, selectedPrevious, onlyChanges),
     [onlyChanges, selectedCurrent, selectedPrevious]
   );
+  const compactRateChanges = rateDiffData.filter(rate => rate.status !== 'stable');
   const selectedMonthFlowEntries = useMemo(
     () => flowEntries.filter(entry => entry.month === selectedCurrent.month && entry.entryType !== 'transfer'),
     [flowEntries, selectedCurrent.month]
@@ -478,23 +479,21 @@ export function SnapshotDiffModal({
           {cashFlowEnabled && selectedMonthFlowEntries.length > 0 && (
             <section className="snapshot-diff-recorded-flow">
               <div className="snapshot-diff-recorded-flow-heading">
-                <div>
-                  <div className="snapshot-diff-recorded-flow-title">
-                    <ArrowDownUp size={15} />
-                    <strong>Recorded Cash Flow</strong>
-                    <span>{selectedCurrent.month}</span>
-                    <HelpTooltip
-                      text="Optional recorded movements. They provide context and are not expected to match the snapshot change."
-                      ariaLabel="Recorded Cash Flow explanation"
-                      width={340}
-                    />
-                  </div>
+                <div className="snapshot-diff-recorded-flow-title">
+                  <ArrowDownUp size={15} />
+                  <strong>Recorded Cash Flow</strong>
+                  <span>{selectedCurrent.month}</span>
+                  <HelpTooltip
+                    text="Optional recorded movements. They provide context and are not expected to match the snapshot change."
+                    ariaLabel="Recorded Cash Flow explanation"
+                    width={340}
+                  />
                 </div>
+                <FlowNetSummary totals={selectedMonthFlowTotals} compact label="" />
                 <Link to={`/flow?month=${selectedCurrent.month}`} className="btn" onClick={onClose}>
                   Open month <ExternalLink size={14} />
                 </Link>
               </div>
-              <FlowNetSummary totals={selectedMonthFlowTotals} compact />
             </section>
           )}
 
@@ -503,7 +502,29 @@ export function SnapshotDiffModal({
               <summary className="snapshot-diff-rates-title">
                 <RefreshCw size={15} />
                 <strong>Exchange Rate Changes</strong>
-                <span>{rateDiffData.length} · {selectedPrevious?.month || '—'} → {selectedCurrent.month}</span>
+                <span className="snapshot-diff-rate-summary">
+                  {compactRateChanges.slice(0, 4).map(rate => {
+                    const positive = rate.status === 'up' || rate.status === 'new';
+                    const negative = rate.status === 'down' || rate.status === 'deleted';
+                    const sign = rate.delta !== null && rate.delta > 0 ? '+' : '';
+                    const value = rate.status === 'new'
+                      ? 'NEW'
+                      : rate.status === 'deleted'
+                        ? 'REMOVED'
+                        : rate.delta === null ? '—' : `${sign}${formatRate(rate.delta)}`;
+                    return (
+                      <span
+                        key={rate.key}
+                        style={{ color: positive ? 'var(--diff-positive)' : negative ? 'var(--diff-negative)' : 'var(--text-secondary)' }}
+                      >
+                        <b>{rate.key}</b> {value}
+                      </span>
+                    );
+                  })}
+                  {compactRateChanges.length > 4 && <em>+{compactRateChanges.length - 4}</em>}
+                  {compactRateChanges.length === 0 && <em>No changes</em>}
+                </span>
+                <span className="snapshot-diff-rates-period">{rateDiffData.length} · {selectedPrevious?.month || '—'} → {selectedCurrent.month}</span>
                 <ChevronDown className="snapshot-diff-rates-chevron" size={15} />
               </summary>
               <div className="snapshot-diff-rate-list">

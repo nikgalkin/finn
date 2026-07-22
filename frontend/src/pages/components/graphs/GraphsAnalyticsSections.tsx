@@ -3,6 +3,7 @@ import { Activity, ArrowLeftRight, BarChart3, ChevronDown, ChevronRight, Clock, 
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
 import { HelpTooltip } from '../HelpTooltip';
+import { GraphTooltip, SimpleGraphTooltip } from './GraphTooltip';
 
 type ChartDatum = Record<string, any>;
 
@@ -70,7 +71,6 @@ const LEGEND_STYLE = { cursor: 'pointer', fontSize: '12px', userSelect: 'none' a
 const CARD_STYLE = { height: '350px', display: 'flex', flexDirection: 'column' as const };
 const GRID_2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' };
 const SECTION_TITLE_STYLE = { color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' };
-const TOOLTIP_STYLE = { backgroundColor: 'var(--bg-color)', borderColor: 'var(--glass-border)', borderRadius: 8 };
 const VISIBLE_TAG_RETURN_ROWS = 3;
 
 const normalizeDisplayNumber = (value: number, precision = 0.005) => Math.abs(value) < precision ? 0 : value;
@@ -108,34 +108,15 @@ const normalizeStackData = (data: ChartDatum[], keys: string[]) => {
 };
 
 const OrgCustomTooltip = ({ active, payload, label, allocationMode, baseCurrency }: any) => {
-  if (!active || !payload || !payload.length) return null;
-  const sortedPayload = [...payload].sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
-
   return (
-    <div className="custom-tooltip shadow-2xl" style={{ ...TOOLTIP_STYLE, padding: '10px 14px', fontSize: '13px', width: '280px', maxHeight: '260px', overflowY: 'auto' }}>
-      <div style={{ fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-primary)', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '4px' }}>
-        {label}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {sortedPayload.map((item: any) => {
-          const numValue = Number(item.value) || 0;
-          if (numValue === 0) return null;
-          return (
-            <div key={item.name} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: item.color, flexShrink: 0 }} />
-                <span style={{ color: item.color, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', fontWeight: 500 }}>
-                  {item.name}:
-                </span>
-              </div>
-              <span style={{ fontWeight: 600, color: item.color }}>
-                {allocationMode === 'percent' ? `${numValue.toFixed(1)}%` : formatMoney(numValue, baseCurrency)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <SimpleGraphTooltip
+      active={active}
+      payload={payload?.filter((item: any) => Number(item.value || 0) !== 0)}
+      label={label}
+      sortByValue
+      formatter={(value, name) => [allocationMode === 'percent' ? `${Number(value).toFixed(1)}%` : formatMoney(Number(value), baseCurrency), name]}
+      style={{ width: '280px', maxHeight: '260px' }}
+    />
   );
 };
 
@@ -144,27 +125,19 @@ const OrganizationCurrencyTooltip = ({ active, payload, baseCurrency }: any) => 
   const point = payload[0].payload as OrganizationCurrencyBreakdown;
 
   return (
-    <div className="custom-tooltip shadow-2xl" style={{ ...TOOLTIP_STYLE, padding: '11px 14px', fontSize: '12px', minWidth: '250px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', marginBottom: '8px', paddingBottom: '7px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <strong>{point.organization}</strong>
-        <strong>{formatMoney(point.totalBase, baseCurrency)}</strong>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-        {point.holdings.map(holding => (
-          <div key={holding.currency} style={{ display: 'grid', gridTemplateColumns: '60px minmax(100px, 1fr) auto', alignItems: 'center', gap: '10px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 800 }}>
-              <i style={{ width: '7px', height: '7px', borderRadius: '50%', background: getCurrencyColor(holding.currency) }} />
-              {holding.currency}
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.25 }}>
-              <strong>{formatNativeAmount(holding.amount)} {holding.currency}</strong>
-              {holding.currency !== baseCurrency && <small style={{ color: 'var(--text-secondary)' }}>≈ {formatMoney(holding.valueBase, baseCurrency)}</small>}
-            </span>
-            <strong>{holding.percent.toFixed(1)}%</strong>
-          </div>
-        ))}
-      </div>
-    </div>
+    <GraphTooltip
+      title={point.organization}
+      titleValue={formatMoney(point.totalBase, baseCurrency)}
+      rows={point.holdings.map(holding => ({
+        key: holding.currency,
+        label: holding.currency,
+        markerColor: getCurrencyColor(holding.currency),
+        value: `${formatNativeAmount(holding.amount)} ${holding.currency}`,
+        detail: holding.currency !== baseCurrency ? `≈ ${formatMoney(holding.valueBase, baseCurrency)}` : undefined,
+        trailing: `${holding.percent.toFixed(1)}%`
+      }))}
+      style={{ minWidth: '250px' }}
+    />
   );
 };
 
@@ -193,21 +166,17 @@ const CashFlowEventTooltip = ({ active, payload, baseCurrency }: any) => {
   const event = payload[0].payload;
 
   return (
-    <div className="custom-tooltip shadow-2xl" style={{ ...TOOLTIP_STYLE, padding: '11px 14px', fontSize: '12px', minWidth: '220px', maxWidth: '300px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '9px', paddingBottom: '7px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <strong style={{ color: event.fill }}>{event.category}</strong>
-        <span style={{ color: 'var(--text-secondary)', fontWeight: 700 }}>{event.month}</span>
-      </div>
-      <div style={{ color: event.fill, fontSize: '17px', fontWeight: 850, marginBottom: '8px' }}>
+    <GraphTooltip title={<span style={{ color: event.fill }}>{event.category}</span>} titleValue={event.month} style={{ minWidth: '220px', maxWidth: '300px' }}>
+      <div className="graph-tooltip-highlight" style={{ color: event.fill }}>
         {formatSigned(Number(event.amount))} {baseCurrency}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', gap: '5px 10px', color: 'var(--text-secondary)' }}>
+      <div className="graph-tooltip-meta">
         {event.counterparty && <><span>Counterparty</span><strong style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{event.counterparty}</strong></>}
         {Number(event.taxAmount) > 0 && <><span>Gross incoming</span><strong style={{ color: 'var(--text-primary)', textAlign: 'right' }}>{formatMoney(Number(event.grossAmount), baseCurrency)}</strong></>}
         {Number(event.taxAmount) > 0 && <><span>Tax</span><strong style={{ color: '#f97316', textAlign: 'right' }}>−{formatMoney(Number(event.taxAmount), baseCurrency)}</strong></>}
       </div>
-      {event.comment && <div style={{ marginTop: '9px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{event.comment}</div>}
-    </div>
+      {event.comment && <div className="graph-tooltip-note">{event.comment}</div>}
+    </GraphTooltip>
   );
 };
 
@@ -217,17 +186,14 @@ const NetWorthTooltip = ({ active, payload, label, baseCurrency }: any) => {
   const delta = Number(point.delta || 0);
 
   return (
-    <div className="custom-tooltip shadow-2xl" style={{ ...TOOLTIP_STYLE, padding: '10px 14px', fontSize: '13px', minWidth: '190px' }}>
-      <strong style={{ display: 'block', marginBottom: '7px' }}>{label}</strong>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px' }}>
-        <span style={{ color: 'var(--text-secondary)' }}>Net worth</span>
-        <strong>{formatMoney(Number(point.total || 0), baseCurrency)}</strong>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', marginTop: '5px' }}>
-        <span style={{ color: 'var(--text-secondary)' }}>Change</span>
-        <strong style={{ color: getDeltaColor(delta) }}>{formatSigned(delta)} {baseCurrency}</strong>
-      </div>
-    </div>
+    <GraphTooltip
+      title={label}
+      rows={[
+        { key: 'total', label: 'Net worth', value: formatMoney(Number(point.total || 0), baseCurrency) },
+        { key: 'delta', label: 'Change', value: `${formatSigned(delta)} ${baseCurrency}`, color: getDeltaColor(delta) }
+      ]}
+      style={{ minWidth: '210px' }}
+    />
   );
 };
 
@@ -263,7 +229,7 @@ const DecompositionSmallMultiples = ({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="month" hide={!isLast} stroke="var(--text-secondary)" style={{ fontSize: '11px' }} />
                 <YAxis width={54} stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '11px' }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [formatMoney(Number(value), baseCurrency), item.label]} />
+                <Tooltip content={<SimpleGraphTooltip formatter={(value) => [formatMoney(Number(value), baseCurrency), item.label]} />} />
                 <ReferenceLine y={0} stroke="rgba(148, 163, 184, 0.55)" />
                 <Bar dataKey={item.key} name={item.label} fill={item.color} radius={[3, 3, 0, 0]} maxBarSize={42}>
                   {data.map(point => (
@@ -439,7 +405,7 @@ export function GraphsAnalyticsSections({
           tickFormatter={(val) => allocationMode === 'percent' ? `${val}%` : formatCompact(val)}
           style={{ fontSize: '12px' }}
         />
-        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={allocationFormatter} />
+        <Tooltip content={<SimpleGraphTooltip formatter={(value, name) => [allocationFormatter(value), name]} />} />
         <Legend onClick={(event) => handleLegendClickSmart(group, event, keys)} wrapperStyle={LEGEND_STYLE} />
         {keys.map(key => <Bar key={key} dataKey={key} stackId={stackId} fill={getColor(key)} hide={hiddenSeries[group][key]} />)}
       </BarChart>
@@ -761,13 +727,11 @@ export function GraphsAnalyticsSections({
               <YAxis yAxisId="left" stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
               <YAxis yAxisId="right" orientation="right" stroke="#64748b" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
               <Tooltip
-                contentStyle={TOOLTIP_STYLE}
-                formatter={(value, name, props) => {
-                  const isInverted = props.payload[`${name}_isInverted`];
+                content={<SimpleGraphTooltip formatter={(value, name, item) => {
+                  const isInverted = item.payload[`${name}_isInverted`];
                   const num = Number(value).toLocaleString('en-US');
-                  if (isInverted) return [`${num} per ${baseCurrency}`, name];
-                  return [`${num} ${baseCurrency}`, name];
-                }}
+                  return [isInverted ? `${num} per ${baseCurrency}` : `${num} ${baseCurrency}`, name];
+                }} />}
               />
               <Legend onClick={(event) => handleLegendClickSmart('currencies', event, activeCurrencies)} wrapperStyle={LEGEND_STYLE} />
               {activeCurrencies.map(currency => {
@@ -802,7 +766,7 @@ export function GraphsAnalyticsSections({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
                   <YAxis stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '12px' }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => formatMoney(Number(value), baseCurrency)} />
+                  <Tooltip content={<SimpleGraphTooltip formatter={(value, name) => [formatMoney(Number(value), baseCurrency), name]} />} />
                   <Legend wrapperStyle={LEGEND_STYLE} />
                   <Bar dataKey="After-tax income" fill="#10b981" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Spending" fill="#ef4444" radius={[0, 0, 4, 4]} />
@@ -823,7 +787,7 @@ export function GraphsAnalyticsSections({
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
                   <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => `${Math.round(value)}%`} style={{ fontSize: '12px' }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]} />
+                  <Tooltip content={<SimpleGraphTooltip formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name]} />} />
                   <Legend wrapperStyle={LEGEND_STYLE} />
                   <ReferenceLine y={0} stroke="rgba(148, 163, 184, 0.55)" />
                   <Bar dataKey="Savings rate" fill="#10b981" radius={[4, 4, 0, 0]}>
@@ -883,7 +847,7 @@ export function GraphsAnalyticsSections({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
                 <YAxis stroke="var(--text-secondary)" tickFormatter={(value) => formatFriendlyTime(Number(value))} style={{ fontSize: '11px' }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => [formatFriendlyTime(Number(value)), 'Session Duration']} />
+                <Tooltip content={<SimpleGraphTooltip formatter={(value) => [formatFriendlyTime(Number(value)), 'Session Duration']} />} />
                 <Area type="monotone" dataKey="duration_seconds_raw" stroke="var(--accent)" fillOpacity={1} fill="url(#colorUxDuration)" strokeWidth={2} dot={{ r: 4, fill: 'var(--bg-color)', strokeWidth: 2 }} />
               </AreaChart>
             </ResponsiveContainer>
@@ -902,7 +866,7 @@ export function GraphsAnalyticsSections({
                 <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '12px' }} />
                 <YAxis yAxisId="left" stroke="#10b981" style={{ fontSize: '12px' }} />
                 <YAxis yAxisId="right" orientation="right" stroke="#eab308" label={{ value: 'Sec / Account', angle: 90, position: 'insideRight', fill: '#eab308', offset: 10, style: { fontSize: '12px' } }} style={{ fontSize: '12px' }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip content={<SimpleGraphTooltip />} />
                 <Legend wrapperStyle={{ fontSize: '12px', userSelect: 'none' }} />
                 <Bar yAxisId="left" dataKey="accounts_count" name="Total Tracked Accounts" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 <Line yAxisId="right" type="monotone" dataKey="cost_per_account" name="Time Cost per Account (Sec)" stroke="#eab308" strokeWidth={3} dot={{ r: 3, fill: 'var(--bg-color)' }} />
