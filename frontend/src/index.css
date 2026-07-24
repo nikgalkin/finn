@@ -1460,6 +1460,154 @@ a { color: var(--accent); text-decoration: none; }
   background: rgba(29, 39, 56, 0.63);
   -webkit-backdrop-filter: blur(22.5px);
   backdrop-filter: blur(22.5px);
+  animation: snapshot-diff-modal-enter 0.2s cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
+.snapshot-diff-header-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+}
+
+.snapshot-diff-edit-link {
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.snapshot-diff-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.snapshot-diff-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.snapshot-diff-period-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.045);
+  font-size: 11px;
+  font-weight: 650;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.snapshot-diff-period-picker:hover {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.snapshot-diff-period-arrow { opacity: 0.45; }
+
+.snapshot-diff-only-changes {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.045);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.snapshot-diff-only-changes:hover {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--text-primary);
+}
+
+.snapshot-diff-only-changes input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.snapshot-diff-switch {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.3);
+  transition: background 0.4s ease;
+}
+
+.snapshot-diff-switch i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f8fafc;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.snapshot-diff-only-changes input:checked + .snapshot-diff-switch { background: var(--accent); }
+
+.snapshot-diff-only-changes input:checked + .snapshot-diff-switch i { transform: translateX(12px); }
+
+.snapshot-diff-only-changes:focus-within {
+  border-color: rgba(96, 165, 250, 0.7);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.16);
+}
+
+.snapshot-diff-only-changes kbd,
+.snapshot-diff-edit-link kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: rgba(15, 23, 42, 0.42);
+  font: inherit;
+  font-size: 10px;
+}
+
+.snapshot-diff-content {
+  flex: 1;
+  will-change: opacity, transform, filter;
+  animation: snapshot-diff-content-enter 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes snapshot-diff-modal-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes snapshot-diff-content-enter {
+  from { opacity: 0.35; filter: blur(1.5px); transform: translateY(3px); }
+  to { opacity: 1; filter: blur(0); transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snapshot-diff-modal,
+  .snapshot-diff-content { animation: none; }
+
+  .snapshot-diff-switch,
+  .snapshot-diff-switch i { transition: none; }
 }
 
 .capital-return-tag-modal {
@@ -1742,6 +1890,7 @@ a { color: var(--accent); text-decoration: none; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 8px;
+  margin-top: 6px;
   margin-bottom: 12px;
 }
 
