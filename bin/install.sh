@@ -119,6 +119,20 @@ fi
 # --- 5. DOWNLOAD AND INSTALL ---
 mkdir -p "$INSTALL_DIR"
 FINAL_PATH="$INSTALL_DIR/${APP_NAME}${SUFFIX}"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/${APP_NAME}.XXXXXX")"
+TEMP_PATH="$TEMP_DIR/$ARTIFACT_NAME"
+STAGED_PATH=""
+
+cleanup() {
+    if [ -n "$STAGED_PATH" ]; then
+        rm -f "$STAGED_PATH" 2>/dev/null || true
+    fi
+    rm -f "$TEMP_PATH" 2>/dev/null || true
+    rmdir "$TEMP_DIR" 2>/dev/null || true
+}
+
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
 
 echo "ℹ️  Detected platform: $TARGET_OS / $TARGET_ARCH"
 echo "ℹ️  Version: $VERSION_LABEL"
@@ -126,28 +140,66 @@ echo "🚚 Downloading $ARTIFACT_NAME..."
 echo "From: $DOWNLOAD_URL"
 echo "To: $FINAL_PATH"
 
-# Check for write permissions, use sudo if required (except on Windows)
-if [ "$TARGET_OS" != "windows" ] && [ ! -w "$INSTALL_DIR" ]; then
-    echo "🔐 Required root privileges to write into $INSTALL_DIR"
-    sudo curl -fsSL -o "$FINAL_PATH" "$DOWNLOAD_URL"
-    sudo chmod +x "$FINAL_PATH"
-    
-    # Bypass macOS Gatekeeper quarantine attributes if running on Mac
-    if [ "$TARGET_OS" = "darwin" ]; then
-        sudo xattr -d com.apple.quarantine "$FINAL_PATH" 2>/dev/null || true
-    fi
-else
-    curl -fsSL -o "$FINAL_PATH" "$DOWNLOAD_URL"
-    chmod +x "$FINAL_PATH"
-    
-    # Bypass macOS Gatekeeper quarantine attributes if running on Mac
-    if [ "$TARGET_OS" = "darwin" ]; then
-        xattr -d com.apple.quarantine "$FINAL_PATH" 2>/dev/null || true
+# Download and validate before touching an existing installation
+curl -fsSL -o "$TEMP_PATH" "$DOWNLOAD_URL"
+chmod +x "$TEMP_PATH"
+
+if [ "$TARGET_OS" = "darwin" ]; then
+    xattr -d com.apple.quarantine "$TEMP_PATH" 2>/dev/null || true
+    if ! codesign --verify --strict "$TEMP_PATH"; then
+        echo "❌ Downloaded binary has an invalid code signature; existing installation was not changed"
+        exit 1
     fi
 fi
+
+echo "🔎 Validating downloaded binary..."
+if ! INSTALLED_VERSION="$("$TEMP_PATH" -v)"; then
+    echo "❌ Downloaded binary failed validation; existing installation was not changed"
+    exit 1
+fi
+
+case "$INSTALLED_VERSION" in
+    "$APP_NAME version "*) ;;
+    *)
+        echo "❌ Downloaded file returned an unexpected version; existing installation was not changed"
+        exit 1
+        ;;
+esac
+
+# Stage the validated binary beside the destination, then replace it atomically
+if [ "$TARGET_OS" != "windows" ] && [ ! -w "$INSTALL_DIR" ]; then
+    echo "🔐 Required root privileges to write into $INSTALL_DIR"
+    STAGED_PATH="$(sudo mktemp "${INSTALL_DIR}/.${APP_NAME}.XXXXXX")"
+
+    if ! sudo install -m 0755 "$TEMP_PATH" "$STAGED_PATH"; then
+        sudo rm -f "$STAGED_PATH"
+        exit 1
+    fi
+
+    if [ "$TARGET_OS" = "darwin" ]; then
+        sudo xattr -d com.apple.quarantine "$STAGED_PATH" 2>/dev/null || true
+    fi
+
+    if ! sudo mv -f "$STAGED_PATH" "$FINAL_PATH"; then
+        sudo rm -f "$STAGED_PATH"
+        exit 1
+    fi
+else
+    STAGED_PATH="$(mktemp "${INSTALL_DIR}/.${APP_NAME}.XXXXXX")"
+    cp "$TEMP_PATH" "$STAGED_PATH"
+    chmod +x "$STAGED_PATH"
+
+    if [ "$TARGET_OS" = "darwin" ]; then
+        xattr -d com.apple.quarantine "$STAGED_PATH" 2>/dev/null || true
+    fi
+
+    mv -f "$STAGED_PATH" "$FINAL_PATH"
+fi
+
+STAGED_PATH=""
 
 echo "========================================="
 echo "🎉 $APP_NAME has been successfully installed!"
 echo "Run it anywhere by typing: $APP_NAME"
-echo "$($FINAL_PATH -v)"
+echo "$INSTALLED_VERSION"
 echo "========================================="

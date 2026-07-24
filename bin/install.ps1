@@ -25,6 +25,8 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 # 1. Setup paths
 $BinDir = Join-Path $HOME ".finn\bin"
 $BinaryPath = Join-Path $BinDir "finn.exe"
+$TempName = ".finn.$([guid]::NewGuid().ToString('N')).tmp.exe"
+$TempPath = Join-Path $BinDir $TempName
 
 $BinaryUrl = "https://github.com/nikgalkin/finn/releases/$ReleasePath/finn-windows-amd64.exe"
 
@@ -37,14 +39,41 @@ if (-not (Test-Path $BinDir)) {
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 }
 
-# 3. Download the executable artifact
+# 3. Download, validate, and atomically replace the executable artifact
 Write-Host "ℹ️ Version: $VersionLabel" -ForegroundColor Gray
 Write-Host "📥 Downloading application binary..." -ForegroundColor Yellow
+$InstallError = $null
 try {
-    Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UserAgent "Mozilla/5.0"
+    Invoke-WebRequest -Uri $BinaryUrl -OutFile $TempPath -UserAgent "Mozilla/5.0"
+    Unblock-File -Path $TempPath -ErrorAction SilentlyContinue
+
+    Write-Host "🔎 Validating downloaded binary..." -ForegroundColor Gray
+    $InstalledVersion = (& $TempPath -v | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Downloaded binary failed validation with exit code $LASTEXITCODE"
+    }
+    if (-not $InstalledVersion.StartsWith("finn version ")) {
+        throw "Downloaded file returned an unexpected version: $InstalledVersion"
+    }
+
+    if (Test-Path $BinaryPath) {
+        [System.IO.File]::Replace($TempPath, $BinaryPath, $null)
+    } else {
+        [System.IO.File]::Move($TempPath, $BinaryPath)
+    }
+
+    $TempPath = $null
     Write-Host "✅ Binary successfully saved to $BinaryPath" -ForegroundColor Green
 } catch {
-    Write-Host "❌ Failed to download binary: $_" -ForegroundColor Red
+    $InstallError = $_
+} finally {
+    if ($TempPath -and (Test-Path $TempPath)) {
+        Remove-Item -Force $TempPath
+    }
+}
+
+if ($InstallError) {
+    Write-Host "❌ Installation failed; existing binary was not changed: $InstallError" -ForegroundColor Red
     Exit 1
 }
 
@@ -62,6 +91,7 @@ if ($UserPath -split ';' -notcontains $BinDir) {
 # 4. Success info
 Write-Host "--------------------------------------------------"
 Write-Host "🎉 Finn installation completed successfully!" -ForegroundColor Green
+Write-Host "   $InstalledVersion" -ForegroundColor Gray
 Write-Host ""
 Write-Host "📢 IMPORTANT: Please open a NEW terminal window to apply changes." -ForegroundColor Yellow
 Write-Host ""

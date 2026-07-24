@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, memo, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Activity, ArrowLeftRight, ArrowRight, BarChart3, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import { getCurrencyColor, getTagColor } from '../../../types';
@@ -66,6 +66,7 @@ type GraphsAnalyticsSectionsProps = {
   formatCompact: (value: number) => string;
   formatFriendlyTime: (seconds: number) => string;
   handleLegendClickSmart: (group: LegendGroup, event: any, allKeys: string[]) => void;
+  onOpenSnapshotDiff: (month: string) => void;
 };
 
 const LEGEND_STYLE = { cursor: 'pointer', fontSize: '12px', userSelect: 'none' as const };
@@ -165,6 +166,49 @@ const renderCurrencySegmentLabel = (currency: string) => ({ x, y, width, height,
   );
 };
 
+const OrganizationCurrencyChart = memo(function OrganizationCurrencyChart({
+  baseCurrency,
+  data,
+  currencies,
+  hiddenCurrencies,
+  onLegendClick
+}: {
+  baseCurrency: string;
+  data: ChartDatum[];
+  currencies: string[];
+  hiddenCurrencies: Record<string, boolean>;
+  onLegendClick: (group: LegendGroup, event: any, allKeys: string[]) => void;
+}) {
+  return (
+    <div data-testid="organization-currency-chart" style={{ flex: 1, minHeight: 0 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 18, left: 8, bottom: 4 }} barCategoryGap="16%">
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
+          <XAxis type="number" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} stroke="var(--text-secondary)" tickFormatter={value => `${value}%`} style={{ fontSize: '11px' }} />
+          <YAxis type="category" dataKey="organization" width={108} stroke="var(--text-secondary)" tickLine={false} style={{ fontSize: '11px', fontWeight: 700 }} />
+          <Tooltip content={<OrganizationCurrencyTooltip baseCurrency={baseCurrency} />} cursor={{ fill: 'rgba(148, 163, 184, 0.05)' }} />
+          <Legend onClick={(event) => onLegendClick('currencies', event, currencies)} wrapperStyle={LEGEND_STYLE} />
+          {currencies.map(currency => (
+            <Bar
+              key={currency}
+              dataKey={currency}
+              stackId="currency-share"
+              name={currency}
+              fill={getCurrencyColor(currency)}
+              hide={hiddenCurrencies[currency]}
+              maxBarSize={36}
+              style={{ cursor: 'pointer' }}
+              onClick={() => onLegendClick('currencies', { dataKey: currency }, currencies)}
+            >
+              <LabelList dataKey={currency} content={renderCurrencySegmentLabel(currency)} />
+            </Bar>
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+
 const CashFlowEventTooltip = ({ active, payload, baseCurrency }: any) => {
   if (!active || !payload || !payload.length) return null;
   const event = payload[0].payload;
@@ -192,9 +236,14 @@ const NetWorthTooltip = ({ active, payload, label, baseCurrency }: any) => {
   return (
     <GraphTooltip
       title={label}
+      titleValue="🔎 click to diff"
       rows={[
-        { key: 'total', label: 'Net worth', value: formatMoney(Number(point.total || 0), baseCurrency) },
-        { key: 'delta', label: 'Change', value: `${formatSigned(delta)} ${baseCurrency}`, color: getDeltaColor(delta) }
+        { key: 'total', label: <span style={{ color: '#10b981' }}>Net worth</span>, value: formatMoney(Number(point.total || 0), baseCurrency) },
+        {
+          key: 'delta',
+          label: <span style={{ color: '#eab308' }}>Change</span>,
+          value: <span style={{ color: getDeltaColor(delta) }}>{formatSigned(delta)} {baseCurrency}</span>
+        }
       ]}
       style={{ minWidth: '210px' }}
     />
@@ -249,11 +298,30 @@ const DecompositionSmallMultiples = ({
   </div>
 );
 
-const SummaryCard = ({ stat }: { stat: SummaryStat }) => {
+const SummaryCard = ({
+  stat,
+  onOpenDiff
+}: {
+  stat: SummaryStat;
+  onOpenDiff?: () => void;
+}) => {
   const color = stat.label === 'Net worth' ? 'var(--text-primary)' : getDeltaColor(stat.value);
+  const isClickable = Boolean(onOpenDiff);
 
   return (
-    <div className="glass-panel" style={{ minHeight: '92px', padding: '14px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '8px' }}>
+    <div
+      className={`glass-panel graphs-summary-card${isClickable ? ' is-clickable' : ''}`}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      title={isClickable ? 'Open diff for the selected period' : undefined}
+      onClick={onOpenDiff}
+      onKeyDown={event => {
+        if (!onOpenDiff || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onOpenDiff();
+      }}
+      style={{ minHeight: '84px', padding: '14px 18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '8px' }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
           <span>{stat.label}</span>
@@ -275,9 +343,21 @@ const SummaryCard = ({ stat }: { stat: SummaryStat }) => {
   );
 };
 
-const ChartTitle = ({ icon, children, help }: { icon: ReactNode; children: ReactNode; help: string }) => {
+const ChartTitle = ({ icon, children, help, onClick }: { icon: ReactNode; children: ReactNode; help: string; onClick?: () => void }) => {
   return (
-    <h4 className="flex items-center gap-2" style={{ margin: '0 0 16px 0', fontSize: '14px', minWidth: 0 }}>
+    <h4
+      className="flex items-center gap-2"
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      title={onClick ? 'Open diff for the selected period' : undefined}
+      onClick={onClick}
+      onKeyDown={event => {
+        if (!onClick || (event.key !== 'Enter' && event.key !== ' ')) return;
+        event.preventDefault();
+        onClick();
+      }}
+      style={{ margin: '0 0 16px 0', fontSize: '14px', minWidth: 0, cursor: onClick ? 'pointer' : undefined }}
+    >
       {icon}
       <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{children}</span>
       <HelpTooltip text={help} />
@@ -286,11 +366,11 @@ const ChartTitle = ({ icon, children, help }: { icon: ReactNode; children: React
 };
 
 type TitledContentProps = { children: ReactNode; icon: ReactNode; title: ReactNode };
-type ChartCardProps = TitledContentProps & { help: string; panel?: boolean; style?: CSSProperties };
+type ChartCardProps = TitledContentProps & { help: string; onTitleClick?: () => void; panel?: boolean; style?: CSSProperties };
 
-const ChartCard = ({ children, help, icon, title, panel = true, style }: ChartCardProps) => (
+const ChartCard = ({ children, help, icon, onTitleClick, title, panel = true, style }: ChartCardProps) => (
   <div className={panel ? 'glass-panel' : undefined} style={{ ...CARD_STYLE, ...style }}>
-    <ChartTitle icon={icon} help={help}>{title}</ChartTitle>
+    <ChartTitle icon={icon} help={help} onClick={onTitleClick}>{title}</ChartTitle>
     {children}
   </div>
 );
@@ -335,7 +415,8 @@ export function GraphsAnalyticsSections({
   uxMetricsData,
   formatCompact,
   formatFriendlyTime,
-  handleLegendClickSmart
+  handleLegendClickSmart,
+  onOpenSnapshotDiff
 }: GraphsAnalyticsSectionsProps) {
   const [allocationMode, setAllocationMode] = useState<'percent' | 'value'>('value');
   const [selectedTagReturn, setSelectedTagReturn] = useState<TagReturnStat | null>(null);
@@ -630,7 +711,14 @@ export function GraphsAnalyticsSections({
             style={{ gridColumn: 'span 2', height: '390px' }}
           >
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={netWorthData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+              <AreaChart
+                data={netWorthData}
+                margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
+                onClick={(chartState: any) => {
+                  const month = chartState?.activeLabel || chartState?.activePayload?.[0]?.payload?.month;
+                  if (month) onOpenSnapshotDiff(String(month));
+                }}
+              >
                 <defs>
                   <linearGradient id="netWorthFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
@@ -740,32 +828,13 @@ export function GraphsAnalyticsSections({
             style={{ gridColumn: 'span 2', height: '410px' }}
           >
             {organizationCurrencyBreakdown.length > 0 ? (
-              <div data-testid="organization-currency-chart" style={{ flex: 1, minHeight: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={visibleOrganizationCurrencyChartData} layout="vertical" margin={{ top: 4, right: 18, left: 8, bottom: 4 }} barCategoryGap="16%">
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
-                    <XAxis type="number" domain={[0, 100]} ticks={[0, 25, 50, 75, 100]} stroke="var(--text-secondary)" tickFormatter={value => `${value}%`} style={{ fontSize: '11px' }} />
-                    <YAxis type="category" dataKey="organization" width={108} stroke="var(--text-secondary)" tickLine={false} style={{ fontSize: '11px', fontWeight: 700 }} />
-                    <Tooltip content={<OrganizationCurrencyTooltip baseCurrency={baseCurrency} />} cursor={{ fill: 'rgba(148, 163, 184, 0.05)' }} />
-                    <Legend onClick={(event) => handleLegendClickSmart('currencies', event, organizationCurrencies)} wrapperStyle={LEGEND_STYLE} />
-                    {organizationCurrencies.map(currency => (
-                      <Bar
-                        key={currency}
-                        dataKey={currency}
-                        stackId="currency-share"
-                        name={currency}
-                        fill={getCurrencyColor(currency)}
-                        hide={hiddenSeries.currencies[currency]}
-                        maxBarSize={36}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => handleLegendClickSmart('currencies', { dataKey: currency }, organizationCurrencies)}
-                      >
-                        <LabelList dataKey={currency} content={renderCurrencySegmentLabel(currency)} />
-                      </Bar>
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <OrganizationCurrencyChart
+                baseCurrency={baseCurrency}
+                data={visibleOrganizationCurrencyChartData}
+                currencies={organizationCurrencies}
+                hiddenCurrencies={hiddenSeries.currencies}
+                onLegendClick={handleLegendClickSmart}
+              />
             ) : (
               <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>No organization balances in the selected snapshot.</div>
             )}

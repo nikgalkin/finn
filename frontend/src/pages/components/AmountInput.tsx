@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ClipboardEvent } from 'react';
 import { evaluateNumberExpression } from '../../lib/numberExpression';
 
 type AmountInputProps = {
@@ -65,6 +65,16 @@ export function AmountInput({
     onChange(committed);
   };
 
+  const handleCopy = (event: ClipboardEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const selectionStart = input.selectionStart;
+    const selectionEnd = input.selectionEnd;
+    if (selectionStart === null || selectionEnd === null || selectionStart === selectionEnd) return;
+
+    event.preventDefault();
+    event.clipboardData.setData('text/plain', input.value.slice(selectionStart, selectionEnd).replace(/\s/g, ''));
+  };
+
   return (
     <input
       type="text"
@@ -79,6 +89,7 @@ export function AmountInput({
         setDraft(event.target.value);
         onChange(event.target.value);
       }}
+      onCopy={handleCopy}
       onBlur={event => commitValue(event.target.value)}
       onKeyDown={event => {
         if (event.key !== 'Enter') return;

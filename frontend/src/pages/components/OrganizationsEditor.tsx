@@ -35,7 +35,7 @@ const getIconStyle = (hasComment: boolean) => ({
 
 const cellStyle = { padding: '4px 6px 4px 0' };
 const headerStyle = { padding: '10px 5px', textTransform: 'uppercase' as const, fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' as const };
-const tableHeaders = [['20%', 'Currency'], ['35%', 'Tags'], ['35%', 'Amount'], ['10%', '']] as const;
+const tableHeaders = [['35%', 'Tags'], ['35%', 'Amount'], ['20%', 'Currency'], ['10%', '']] as const;
 export function OrganizationsEditor({
   activeDropdownOrgId,
   isNew,
@@ -186,20 +186,6 @@ export function OrganizationsEditor({
                   {org.balances.map((balance, index) => (
                     <tr key={index}>
                       <td style={cellStyle}>
-                        <select
-                          className="input"
-                          value={balance.currency}
-                          onChange={event => onUpdateBalance(org.id, index, 'currency', event.target.value)}
-                          style={{ width: '100%', paddingRight: '20px' }}
-                        >
-                          <option value="" disabled>Select</option>
-                          {settings.currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
-                          {!settings.currencies.includes(balance.currency) && balance.currency && (
-                            <option value={balance.currency}>{balance.currency}</option>
-                          )}
-                        </select>
-                      </td>
-                      <td style={cellStyle}>
                         <MultiTagSelect
                           selectedTags={balance.tags || []}
                           availableTags={settings.tags || []}
@@ -213,6 +199,20 @@ export function OrganizationsEditor({
                           value={balance.amount}
                           onChange={value => onUpdateBalance(org.id, index, 'amount', value)}
                         />
+                      </td>
+                      <td style={cellStyle}>
+                        <select
+                          className="input"
+                          value={balance.currency}
+                          onChange={event => onUpdateBalance(org.id, index, 'currency', event.target.value)}
+                          style={{ width: '100%', paddingRight: '20px' }}
+                        >
+                          <option value="" disabled>Select</option>
+                          {settings.currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
+                          {!settings.currencies.includes(balance.currency) && balance.currency && (
+                            <option value={balance.currency}>{balance.currency}</option>
+                          )}
+                        </select>
                       </td>
                       <td className="text-right" style={{ ...cellStyle, paddingRight: 0 }}>
                         <div className="flex justify-end gap-1.5">
