@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Eye } from 'lucide-react';
 import type { ParsedSnapshot } from '../types';
@@ -6,9 +6,11 @@ import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount } from '../lib/finance';
+import { isTextInputTarget } from '../lib/hotkeys';
 import { useFlowEntries } from '../hooks/useFlowEntries';
 import { GraphsAnalyticsSections, type HiddenLegendSeries, type LegendGroup } from './components/graphs/GraphsAnalyticsSections';
 import { PageLoader } from './components/PageLoader';
+import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { StickyPageHeader } from './components/StickyPageHeader';
 import { TimeframeControl } from './components/TimeframeControl';
 
@@ -93,7 +95,9 @@ export default function GraphsPage() {
   const cashFlowEnabled = Boolean(settings.cashFlow?.enabled);
   const { entries: flowEntries, error: flowError, loading: flowLoading } = useFlowEntries(cashFlowEnabled);
   const baseCurrency = settings.baseCurrency || 'RUB';
-  useEscapeToDashboard();
+  const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
+  const [onlyChanges, setOnlyChanges] = useState(true);
+  useEscapeToDashboard({ blocked: Boolean(diffModalData) });
 
   const [hiddenSeries, setHiddenSeries] = useState<HiddenLegendSeries>({
     currencies: {},
@@ -103,6 +107,26 @@ export default function GraphsPage() {
   const [startMonth, setStartMonth] = useState('');
   const [endMonth, setEndMonth] = useState('');
   const lastLegendClickRef = useRef<{ group: LegendGroup; key: string; time: number } | null>(null);
+
+  useEffect(() => {
+    if (!diffModalData) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || isTextInputTarget(event.target)) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setDiffModalData(null);
+      } else if (event.code === 'KeyD') {
+        event.preventDefault();
+        setOnlyChanges(previous => !previous);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [diffModalData]);
 
   useEffect(() => {
     if (snapshots.length > 0 && !startMonth && !endMonth) {
@@ -170,6 +194,15 @@ export default function GraphsPage() {
 
   const latestSnapshot = filteredSnapshots[filteredSnapshots.length - 1];
   const firstSnapshot = filteredSnapshots[0];
+  const handleOpenSnapshotDiff = (month: string) => {
+    const snapshotIndex = snapshots.findIndex(snapshot => snapshot.month === month);
+    if (snapshotIndex < 0) return;
+    setDiffModalData({
+      current: snapshots[snapshotIndex],
+      previous: snapshotIndex > 0 ? snapshots[snapshotIndex - 1] : null
+    });
+  };
+
   const organizationCurrencyBreakdown = useMemo(() => {
     if (!latestSnapshot) return [];
 
@@ -409,7 +442,7 @@ export default function GraphsPage() {
     return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
   };
 
-  const handleLegendClickSmart = (group: LegendGroup, event: any, allKeys: string[]) => {
+  const handleLegendClickSmart = useCallback((group: LegendGroup, event: any, allKeys: string[]) => {
     const clickedKey = event.dataKey;
     if (!clickedKey) return;
 
@@ -439,7 +472,7 @@ export default function GraphsPage() {
         [group]: { ...currentGroup, [clickedKey]: !currentGroup[clickedKey] }
       };
     });
-  };
+  }, []);
 
   const formatCompact = (value: number) => {
     return Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(value);
@@ -530,7 +563,21 @@ export default function GraphsPage() {
         formatCompact={formatCompact}
         formatFriendlyTime={formatFriendlyTime}
         handleLegendClickSmart={handleLegendClickSmart}
+        onOpenSnapshotDiff={handleOpenSnapshotDiff}
       />
+
+      {diffModalData && (
+        <SnapshotDiffModal
+          current={diffModalData.current}
+          previous={diffModalData.previous}
+          snapshots={snapshots}
+          cashFlowEnabled={cashFlowEnabled}
+          flowEntries={flowEntries}
+          onlyChanges={onlyChanges}
+          onOnlyChangesChange={setOnlyChanges}
+          onClose={() => setDiffModalData(null)}
+        />
+      )}
     </div>
   );
 }

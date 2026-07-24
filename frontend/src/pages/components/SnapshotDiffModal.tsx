@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FocusEvent, KeyboardEvent, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowDownUp, ChevronDown, Coins, ExternalLink, Folder, MessageSquare, RefreshCw, X } from 'lucide-react';
 import { getCurrencyColor, getTagColor } from '../../types';
 import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
+import { isTextInputTarget } from '../../lib/hotkeys';
 import { FlowNetSummary } from './FlowNetSummary';
 import { HelpTooltip } from './HelpTooltip';
 import { ModalPortal } from './ModalPortal';
@@ -369,6 +370,7 @@ export function SnapshotDiffModal({
   onOnlyChangesChange,
   onClose
 }: SnapshotDiffModalProps) {
+  const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(current.month);
   const [previousMonth, setPreviousMonth] = useState(previous?.month || '');
   const selectedCurrent = snapshots.find(snapshot => snapshot.month === currentMonth) || current;
@@ -401,6 +403,20 @@ export function SnapshotDiffModal({
     }
   };
 
+  useEffect(() => {
+    const handleEditHotkey = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || isTextInputTarget(event.target) || event.code !== 'KeyE') return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      onClose();
+      navigate(`/snapshot/${selectedCurrent.month}`);
+    };
+
+    window.addEventListener('keydown', handleEditHotkey, true);
+    return () => window.removeEventListener('keydown', handleEditHotkey, true);
+  }, [navigate, onClose, selectedCurrent.month]);
+
   return (
     <ModalPortal className="snapshot-diff-modal-backdrop" zIndex={10_000} onClose={onClose}>
       <div
@@ -408,53 +424,65 @@ export function SnapshotDiffModal({
         style={panelStyle}
         onClick={event => event.stopPropagation()}
       >
-        <div className="flex justify-between items-center mb-3" style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Granular Hierarchy Diff</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '6px', color: 'var(--text-secondary)', fontSize: '12px' }}>
-              <span>From</span>
-              <SearchableSelect
-                value={selectedPrevious?.month || ''}
-                onChange={handlePreviousMonthChange}
-                options={availableMonths}
-                placeholder="Select"
-                width="98px"
-                dropdownWidth="126px"
-                height="24px"
-              />
-              <span aria-hidden="true" style={{ opacity: 0.45 }}>→</span>
-              <span>To</span>
-              <SearchableSelect
-                value={selectedCurrent.month}
-                onChange={setCurrentMonth}
-                options={toOptions}
-                placeholder="Select"
-                width="98px"
-                dropdownWidth="126px"
-                height="24px"
-              />
-            </div>
+        <div className="snapshot-diff-header mb-3">
+          <div className="snapshot-diff-period-picker">
+            <span>From</span>
+            <SearchableSelect
+              ariaLabel="Diff start month"
+              value={selectedPrevious?.month || ''}
+              onChange={handlePreviousMonthChange}
+              options={availableMonths}
+              placeholder="Select"
+              width="104px"
+              dropdownWidth="132px"
+              height="24px"
+            />
+            <span aria-hidden="true" className="snapshot-diff-period-arrow">→</span>
+            <span>To</span>
+            <SearchableSelect
+              ariaLabel="Diff end month"
+              value={selectedCurrent.month}
+              onChange={setCurrentMonth}
+              options={toOptions}
+              placeholder="Select"
+              width="104px"
+              dropdownWidth="132px"
+              height="24px"
+            />
           </div>
-          <button className="btn" style={{ padding: '4px' }} onClick={onClose}>
-            <X size={18} />
-          </button>
+          <h3>Snapshot Diff</h3>
+          <div className="snapshot-diff-header-actions">
+            <Link
+              to={`/snapshot/${selectedCurrent.month}`}
+              className="btn snapshot-diff-edit-link"
+              title={`Edit snapshot ${selectedCurrent.month}`}
+              onClick={onClose}
+            >
+              <ExternalLink size={14} /> Edit <kbd>E</kbd>
+            </Link>
+            <label className="snapshot-diff-only-changes" title="Toggle changes only (D)">
+              <input
+                type="checkbox"
+                checked={onlyChanges}
+                onChange={event => onOnlyChangesChange(event.target.checked)}
+              />
+              <span className="snapshot-diff-switch" aria-hidden="true"><i /></span>
+              <span>Changes only</span>
+              <kbd>D</kbd>
+            </label>
+            <button className="btn" style={{ padding: '4px' }} onClick={onClose} aria-label="Close diff">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
-        <div style={{ overflowY: 'auto', minHeight: 0, paddingRight: '2px' }}>
-          <div className="mb-3 flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="onlyChangesCheckbox"
-              checked={onlyChanges}
-              onChange={event => onOnlyChangesChange(event.target.checked)}
-              title="Toggle changes only (D)"
-              style={{ cursor: 'pointer', width: '15px', height: '16px', accentColor: 'var(--accent)' }}
-            />
-            <label htmlFor="onlyChangesCheckbox" title="Toggle changes only (D)" style={{ fontSize: '14px', color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none' }}>
-              Show changes only (hide zero deltas)
-            </label>
-          </div>
-
+        <div
+          style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '2px' }}
+        >
+          <div
+            key={`${selectedPrevious?.month || 'none'}:${selectedCurrent.month}:${onlyChanges}`}
+            className="snapshot-diff-content"
+          >
           {(selectedCurrent.data.comment || selectedPrevious?.data.comment) && (
             <section className="snapshot-diff-period-notes">
               {selectedPrevious?.data.comment && (
@@ -671,6 +699,7 @@ export function SnapshotDiffModal({
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
     </ModalPortal>

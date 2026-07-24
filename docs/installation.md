@@ -2,7 +2,7 @@
 
 ## Linux and macOS
 
-Install the latest version of Finn with the following command. The installer detects your operating system and CPU architecture, downloads the correct executable, removes macOS Gatekeeper quarantine attributes when necessary, and moves the executable to your local path.
+Install the latest version of Finn with the following command. The installer detects your operating system and CPU architecture, downloads the correct executable, removes macOS Gatekeeper quarantine attributes when necessary, validates the binary, and atomically replaces the installed version. A failed or interrupted download leaves the existing installation unchanged.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.sh | sh
@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.s
 
 ## Windows PowerShell
 
-Open PowerShell and run:
+The Windows installer uses the same download, validation, and atomic replacement process. Open PowerShell and run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1 | iex"

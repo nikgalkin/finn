@@ -47,7 +47,7 @@ const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency
   return (
     <GraphTooltip
       title={label}
-      titleValue={hasComment ? '📝 Click for notes' : undefined}
+      titleValue={hasComment ? '📝 Click to view notes' : undefined}
       rows={rows}
       style={{ minWidth: '250px' }}
     />
