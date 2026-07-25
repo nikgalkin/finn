@@ -502,10 +502,15 @@ export default function GraphsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <StickyPageHeader marginBottom="0">
+      <StickyPageHeader marginBottom="0" compactTop>
         <div className="flex items-center gap-4">
           <Link to="/" title="Back to dashboard" className="btn"><ArrowLeft size={18} /></Link>
-          <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>
+          <div>
+            <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
+              {filteredSnapshots.length} {filteredSnapshots.length === 1 ? 'snapshot' : 'snapshots'} · valued in {baseCurrency}
+            </div>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
