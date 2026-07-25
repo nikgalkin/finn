@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestIsLocalShutdownRequest(t *testing.T) {
+func TestIsLocalRequest(t *testing.T) {
 	tests := []struct {
 		name       string
 		remoteAddr string
@@ -31,8 +31,8 @@ func TestIsLocalShutdownRequest(t *testing.T) {
 				request.Header.Set("Origin", tt.origin)
 			}
 
-			if got := isLocalShutdownRequest(request); got != tt.want {
-				t.Fatalf("isLocalShutdownRequest() = %v, want %v", got, tt.want)
+			if got := isLocalRequest(request); got != tt.want {
+				t.Fatalf("isLocalRequest() = %v, want %v", got, tt.want)
 			}
 		})
 	}

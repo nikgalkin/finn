@@ -101,6 +101,16 @@ func runApp(opts appOptions) error {
 		return RunBackupJob(cfg, db)
 	})
 
+	// The SQL console keeps its own restricted connection, so it registers apart
+	// from the main API and stays optional if it cannot be opened.
+	sqlConsole, err := newSQLConsole(cfg, db, activeDatabasePath(cfg, isDemoMode), isDemoMode)
+	if err != nil {
+		log.Printf("⚠️  SQL console: Disabled, failed to open a restricted connection: %v\n", err)
+	} else {
+		defer sqlConsole.Close()
+		sqlConsole.registerRoutes(r.Group("/api"))
+	}
+
 	// Inject the SPA frontend into the routing tree
 	dist, err := fs.Sub(appassets.FrontendFS, "frontend/dist")
 	if err == nil {

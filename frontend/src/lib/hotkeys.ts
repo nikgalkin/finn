@@ -19,9 +19,15 @@ export const NAVIGATION_HOTKEYS: NavigationHotkey[] = [
   { code: 'KeyW', label: 'W', description: 'Open Cash Flow', route: '/flow' },
   { code: 'KeyG', label: 'G', description: 'Open graphs', route: '/graphs' },
   { code: 'KeyF', label: 'F', description: 'Open feed', route: '/feed' },
-  { code: 'KeyS', label: 'S', description: 'Open settings', route: '/settings' }
+  { code: 'KeyS', label: 'S', description: 'Open settings', route: '/settings' },
+  { code: 'KeyT', label: 'T', description: 'Open tools', route: '/tools' }
 ];
 
 export const getNavigationHotkey = (event: KeyboardEvent) => (
   NAVIGATION_HOTKEYS.find(hotkey => hotkey.code === event.code && Boolean(hotkey.shiftKey) === event.shiftKey)
+);
+
+/** Label for the platform's primary modifier, so hints read correctly off macOS. */
+export const primaryModifierLabel = () => (
+  typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? '⌘' : 'Ctrl'
 );

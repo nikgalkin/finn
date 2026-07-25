@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Bot, Keyboard, Power, ArrowDownUp } from 'lucide-react';
+import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Bot, Keyboard, Power, ArrowDownUp, Wrench } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { getNavigationHotkey, isTextInputTarget } from './lib/hotkeys';
@@ -18,6 +18,7 @@ const GraphsPage = lazy(() => loadDeferredRoutes().then(module => ({ default: mo
 const Settings = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Settings })));
 const CashFlow = lazy(() => loadDeferredRoutes().then(module => ({ default: module.CashFlow })));
 const AIChat = lazy(() => loadDeferredRoutes().then(module => ({ default: module.AIChat })));
+const Tools = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Tools })));
 
 type BackupTargetResult = {
   name: string;
@@ -213,6 +214,9 @@ function App() {
           <Link to="/graphs" className="btn" style={{ color: 'var(--text-secondary)' }}>
             <BarChart3 size={18} /> Graphs
           </Link>
+          <Link to="/tools" className="btn" style={{ color: 'var(--text-secondary)' }}>
+            <Wrench size={18} /> Tools
+          </Link>
           <Link to="/feed" className="btn" style={{ color: 'var(--text-secondary)' }}>
             <MessageSquare size={18} /> Feed
           </Link>
@@ -234,6 +238,7 @@ function App() {
             <Route path="/graphs" element={<GraphsPage />} />
             <Route path="/flow" element={<CashFlow />} />
             <Route path="/assistant" element={<AIChat />} />
+            <Route path="/tools" element={<Tools />} />
           </Routes>
         </Suspense>
       </main>

@@ -54,7 +54,10 @@ type SnapshotRequest struct {
 	DurationSeconds int    `json:"duration_seconds"`
 }
 
-func isLocalShutdownRequest(r *http.Request) bool {
+// isLocalRequest guards endpoints that must never be reachable from another
+// origin. CORS allows all origins, so without this check any page open in the
+// browser could drive these endpoints against the local server.
+func isLocalRequest(r *http.Request) bool {
 	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || !net.ParseIP(remoteHost).IsLoopback() {
 		return false
@@ -89,7 +92,7 @@ func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBack
 	setupFlowAPI(api, db)
 
 	api.POST("/shutdown", func(c *gin.Context) {
-		if !isLocalShutdownRequest(c.Request) {
+		if !isLocalRequest(c.Request) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "shutdown is only available locally"})
 			return
 		}
