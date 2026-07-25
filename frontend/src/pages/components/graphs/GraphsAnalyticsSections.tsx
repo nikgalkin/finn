@@ -75,7 +75,7 @@ type GraphsAnalyticsSectionsProps = {
   organizationCurrencyMonth?: string;
   summaryStats: SummaryStat[];
   tagDistributionData: ChartDatum[];
-  tagReturnCoverage: { assigned: number; total: number; proportional: number };
+  tagReturnCoverage: { assigned: number; total: number; proportional: number; unattributedFlow: number; unknownAccounts: string[] };
   tagReturnStats: TagReturnStat[];
   uxMetricsData: ChartDatum[];
   handleLegendClickSmart: (group: LegendGroup, event: any, allKeys: string[]) => void;
@@ -569,18 +569,34 @@ export function GraphsAnalyticsSections({
                   total={tagReturnStats.length}
                   visible={VISIBLE_TAG_RETURN_ROWS}
                 />
+                {Math.abs(tagReturnCoverage.unattributedFlow) >= 1 && (
+                  <div className="capital-return-unattributed">
+                    <span>Movements without a tag</span>
+                    <strong style={{ color: getMoneyDeltaColor(tagReturnCoverage.unattributedFlow) }}>{formatSigned(tagReturnCoverage.unattributedFlow)} {baseCurrency}</strong>
+                    <HelpTooltip
+                      text="Recorded money that could not be attached to any tag, because the movement has neither a tag nor a known own account. It is not in the rows above, so their earnings are off by this amount."
+                      ariaLabel="Unattributed movements help"
+                      width={330}
+                    />
+                  </div>
+                )}
+                {tagReturnCoverage.unknownAccounts.length > 0 && (
+                  <div className="capital-return-coverage-warning">
+                    Cash Flow uses {tagReturnCoverage.unknownAccounts.length === 1 ? 'an account' : 'accounts'} no snapshot in this period knows: {tagReturnCoverage.unknownAccounts.join(', ')}. Fix the name or set a tag on those movements.
+                  </div>
+                )}
                 {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned < tagReturnCoverage.total && (
                   <div className="capital-return-coverage-warning">
-                    Only {tagReturnCoverage.assigned} of {tagReturnCoverage.total} external movements have an own account. Assign the rest in Cash Flow to make this breakdown reliable.
+                    Only {tagReturnCoverage.assigned} of {tagReturnCoverage.total} external movements reach a tag. Give the rest an own account or a tag in Cash Flow to make this breakdown reliable.
                   </div>
                 )}
                 {tagReturnCoverage.proportional > 0 && (
                   <div className="capital-return-coverage-warning">
-                    {tagReturnCoverage.proportional} {tagReturnCoverage.proportional === 1 ? 'movement was' : 'movements were'} assigned to an account with multiple tags and split in proportion to its tagged balances.
+                    {tagReturnCoverage.proportional} {tagReturnCoverage.proportional === 1 ? 'movement was' : 'movements were'} assigned to an account with multiple tags and split in proportion to its tagged balances. Set a tag on the movement to place it exactly.
                   </div>
                 )}
-                {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned === tagReturnCoverage.total && tagReturnCoverage.proportional === 0 && (
-                  <div className="capital-return-coverage-complete">All external movements in this period are assigned to accounts.</div>
+                {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned === tagReturnCoverage.total && tagReturnCoverage.proportional === 0 && tagReturnCoverage.unknownAccounts.length === 0 && (
+                  <div className="capital-return-coverage-complete">Every external movement in this period reaches a tag.</div>
                 )}
                 {tagReturnStats.length > 0 && (
                   <div className="capital-return-transfer-note">

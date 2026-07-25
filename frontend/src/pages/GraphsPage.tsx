@@ -359,6 +359,8 @@ export default function GraphsPage() {
   let assignedExternalEntries = 0;
   let totalExternalEntries = 0;
   let proportionallyAllocatedEntries = 0;
+  let unattributedFlow = 0;
+  const unknownFlowAccounts = new Set<string>();
   filteredSnapshots.forEach((snapshot, index) => {
     if (!cashFlowEnabled || index === 0) return;
     const monthEntries = flowEntries.filter(entry => entry.month === snapshot.month);
@@ -366,6 +368,8 @@ export default function GraphsPage() {
     assignedExternalEntries += breakdown.assignedExternalEntries;
     totalExternalEntries += breakdown.totalExternalEntries;
     proportionallyAllocatedEntries += breakdown.proportionallyAllocatedEntries;
+    unattributedFlow += breakdown.unattributedFlow;
+    breakdown.unknownAccounts.forEach(account => unknownFlowAccounts.add(account));
     breakdown.returns.forEach(item => {
       const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, ratedMonths: 0, monthly: [] };
       total.result += item.result;
@@ -550,7 +554,13 @@ export default function GraphsPage() {
         organizationCurrencyMonth={latestSnapshot?.month}
         summaryStats={summaryStats}
         tagDistributionData={tagDistributionData}
-        tagReturnCoverage={{ assigned: assignedExternalEntries, total: totalExternalEntries, proportional: proportionallyAllocatedEntries }}
+        tagReturnCoverage={{
+          assigned: assignedExternalEntries,
+          total: totalExternalEntries,
+          proportional: proportionallyAllocatedEntries,
+          unattributedFlow,
+          unknownAccounts: Array.from(unknownFlowAccounts)
+        }}
         tagReturnStats={tagReturnStats}
         uxMetricsData={uxMetricsData}
         handleLegendClickSmart={handleLegendClickSmart}

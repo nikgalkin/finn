@@ -64,12 +64,14 @@ export type FlowEntry = {
   direction: FlowDirection;
   counterparty: string;
   account: string;
+  tag: string;
   currency: string;
   amount: number;
   taxRate: number;
   category: string;
   comment: string;
   toAccount: string;
+  toTag: string;
   toCurrency: string;
   toAmount: number;
 };

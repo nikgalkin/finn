@@ -27,8 +27,8 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) != 4 {
-		t.Fatalf("applied migrations = %+v, want all four migrations", applied)
+	if len(applied) != 5 {
+		t.Fatalf("applied migrations = %+v, want all five migrations", applied)
 	}
 	if err := seedDemo(db); err != nil {
 		t.Fatal(err)
@@ -135,8 +135,8 @@ func TestSQLMigrationsBackfillCountriesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(applied) != 4 || applied[0].version != 1 || applied[1].version != 2 || applied[2].version != 3 || applied[3].version != 4 {
-		t.Fatalf("applied migrations = %+v, want versions 1, 2, 3, and 4", applied)
+	if len(applied) != 5 || applied[0].version != 1 || applied[1].version != 2 || applied[2].version != 3 || applied[3].version != 4 || applied[4].version != 5 {
+		t.Fatalf("applied migrations = %+v, want versions 1 through 5", applied)
 	}
 
 	var snapshotJSON string

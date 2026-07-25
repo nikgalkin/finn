@@ -6,12 +6,14 @@ export type FlowCsvEntry = {
   direction: FlowDirection;
   counterparty: string;
   account: string;
+  tag: string;
   amount: number;
   currency: string;
   taxRate: number;
   category: string;
   comment: string;
   toAccount: string;
+  toTag: string;
   toCurrency: string;
   toAmount: number;
 };
@@ -28,7 +30,7 @@ export type FlowCsvDuplicate = {
   reason: 'existing' | 'file';
 };
 
-const ALLOWED_HEADERS = ['month', 'entry_type', 'direction', 'counterparty', 'account', 'amount', 'currency', 'tax_rate', 'category', 'comment', 'to_account', 'to_amount', 'to_currency'] as const;
+const ALLOWED_HEADERS = ['month', 'entry_type', 'direction', 'counterparty', 'account', 'tag', 'amount', 'currency', 'tax_rate', 'category', 'comment', 'to_account', 'to_tag', 'to_amount', 'to_currency'] as const;
 const REQUIRED_HEADERS = ['month', 'amount', 'currency'] as const;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const CSV_SEPARATOR = ';';
@@ -150,6 +152,7 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
     const direction = read('direction').toLowerCase();
     const counterparty = read('counterparty');
     const account = read('account');
+    const tag = read('tag');
     const amountText = read('amount');
     const amount = parseNumber(amountText);
     const currency = read('currency').toUpperCase();
@@ -159,6 +162,7 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
     const toAmountText = read('to_amount');
     const toAmount = parseNumber(toAmountText);
     const toCurrency = read('to_currency').toUpperCase();
+    const toTag = read('to_tag');
     const rowErrors: string[] = [];
 
     if (row.length > headers.length) rowErrors.push('has more values than headers');
@@ -195,12 +199,14 @@ export const parseFlowCsv = (text: string, fileName: string, configuredCurrencie
       direction: entryTypeText === 'transfer' ? 'out' : direction as FlowDirection,
       counterparty: entryTypeText === 'transfer' ? '' : counterparty,
       account,
+      tag,
       amount,
       currency,
       taxRate: entryTypeText === 'transfer' ? 0 : taxRate,
       category: entryTypeText === 'transfer' ? '' : read('category'),
       comment: read('comment'),
       toAccount: entryTypeText === 'transfer' ? toAccount : '',
+      toTag: entryTypeText === 'transfer' ? toTag : '',
       toCurrency: entryTypeText === 'transfer' ? toCurrency : '',
       toAmount: entryTypeText === 'transfer' ? toAmount : 0
     });

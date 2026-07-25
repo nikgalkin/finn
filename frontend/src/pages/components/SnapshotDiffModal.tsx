@@ -8,33 +8,13 @@ import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
 import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR } from '../../lib/format';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
+import { buildTreeDiffData } from '../../lib/snapshotDiff';
+import type { DiffStatus } from '../../lib/snapshotDiff';
 import { isTextInputTarget } from '../../lib/hotkeys';
 import { FlowNetSummary } from './FlowNetSummary';
 import { HelpTooltip } from './HelpTooltip';
 import { ModalPortal } from './ModalPortal';
 import { SearchableSelect } from './graphs/SearchableSelect';
-
-type DiffStatus = 'new' | 'deleted' | 'up' | 'down' | 'stable';
-
-type DiffBalanceNode = {
-  currency: string;
-  currentTags: string[];
-  previousTags: string[];
-  tagsChanged: boolean;
-  comment?: string;
-  previousAmt: number;
-  currentAmt: number;
-  delta: number;
-  deltaPercent: number;
-  status: DiffStatus;
-};
-
-type DiffOrgNode = {
-  orgName: string;
-  comment?: string;
-  balances: DiffBalanceNode[];
-  hasChanges: boolean;
-};
 
 type DiffRateNode = {
   key: string;
@@ -60,17 +40,6 @@ type SnapshotDiffModalProps = {
 
 const panelStyle = { width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflow: 'visible' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const balanceRowStyle = { display: 'grid', gridTemplateColumns: '68px minmax(130px, 1fr) 1fr 1fr 150px', alignItems: 'center', position: 'relative' as const, fontSize: '13px', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)', columnGap: '2px' };
-
-const normalizeTags = (tags?: string[]) => {
-  return (tags && tags.length > 0 ? tags : ['untagged']).filter(Boolean);
-};
-
-const areTagsEqual = (left: string[], right: string[]) => {
-  if (left.length !== right.length) return false;
-  const leftSorted = [...left].sort();
-  const rightSorted = [...right].sort();
-  return leftSorted.every((tag, index) => tag === rightSorted[index]);
-};
 
 const getStatusDeltaColor = (status: DiffStatus) => {
   if (status === 'up' || status === 'new') return DELTA_POSITIVE_COLOR;
@@ -305,67 +274,6 @@ function CommentMarker({ comment, label }: { comment?: string; label?: string })
     </span>
   );
 }
-
-const buildTreeDiffData = (
-  current: ParsedSnapshot,
-  previous: ParsedSnapshot | null,
-  onlyChanges: boolean
-): DiffOrgNode[] => {
-  const currentOrgs = current.data.organizations;
-  const previousOrgs = previous ? previous.data.organizations : [];
-
-  const orgNames = new Set<string>();
-  currentOrgs.forEach(org => org.name && orgNames.add(org.name));
-  previousOrgs.forEach(org => org.name && orgNames.add(org.name));
-
-  const tree: DiffOrgNode[] = Array.from(orgNames).map(orgName => {
-    const currentOrg = currentOrgs.find(org => org.name === orgName);
-    const previousOrg = previousOrgs.find(org => org.name === orgName);
-
-    const currencies = new Set<string>();
-    currentOrg?.balances.forEach(balance => balance.currency && currencies.add(balance.currency));
-    previousOrg?.balances.forEach(balance => balance.currency && currencies.add(balance.currency));
-
-    let hasChanges = false;
-
-    const balances: DiffBalanceNode[] = Array.from(currencies).map(currency => {
-      const currentBalance = currentOrg?.balances.find(balance => balance.currency === currency);
-      const previousBalance = previousOrg?.balances.find(balance => balance.currency === currency);
-
-      const currentAmt = currentBalance ? Number(currentBalance.amount || 0) : 0;
-      const previousAmt = previousBalance ? Number(previousBalance.amount || 0) : 0;
-      const delta = currentAmt - previousAmt;
-      const deltaPercent = previousAmt > 0 ? (delta / previousAmt) * 100 : 0;
-      const currentTags = normalizeTags(currentBalance?.tags);
-      const previousTags = normalizeTags(previousBalance?.tags);
-      const tagsChanged = Boolean(currentBalance || previousBalance) && !areTagsEqual(currentTags, previousTags);
-      const comment = currentBalance?.comment || previousBalance?.comment || undefined;
-
-      if (Math.abs(delta) >= 0.01 || tagsChanged) {
-        hasChanges = true;
-      }
-
-      let status: DiffStatus = 'stable';
-      if (!previousBalance && currentBalance) status = 'new';
-      else if (previousBalance && !currentBalance) status = 'deleted';
-      else if (delta > 0) status = 'up';
-      else if (delta < 0) status = 'down';
-
-      return { currency, currentTags, previousTags, tagsChanged, comment, currentAmt, previousAmt, delta, deltaPercent, status };
-    }).sort((a, b) => a.currency.localeCompare(b.currency));
-
-    return { orgName, comment: currentOrg?.comment || previousOrg?.comment || undefined, balances, hasChanges };
-  }).sort((a, b) => a.orgName.localeCompare(b.orgName));
-
-  if (!onlyChanges) return tree;
-
-  return tree
-    .filter(org => org.hasChanges)
-    .map(org => ({
-      ...org,
-      balances: org.balances.filter(balance => Math.abs(balance.delta) >= 0.01 || balance.tagsChanged)
-    }));
-};
 
 export function SnapshotDiffModal({
   current,

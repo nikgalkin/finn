@@ -988,6 +988,8 @@ a { color: var(--accent); text-decoration: none; }
 
 .cash-flow-period-row .cash-flow-amount-control { grid-template-columns: minmax(105px, 1fr) 70px; gap: 6px; }
 
+.cash-flow-account-control { display: grid; grid-template-columns: minmax(0, 1fr) 108px; gap: 6px; align-items: end; }
+
 .cash-flow-tax-rate-control,
 .cash-flow-tax-rate-setting { position: relative; min-width: 0; }
 
@@ -1940,6 +1942,19 @@ a { color: var(--accent); text-decoration: none; }
 
 .capital-return-coverage-complete { border-color: rgba(34, 197, 94, 0.24); color: var(--success); background: rgba(34, 197, 94, 0.05); }
 
+.capital-return-unattributed {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  padding-top: 9px;
+  border-top: 1px dashed var(--glass-border);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.capital-return-unattributed strong { margin-left: auto; font-size: 13px; font-weight: 800; }
+
 .cash-flow-year-group { padding: 0; overflow: hidden; }
 
 .cash-flow-year-summary {
@@ -2195,6 +2210,26 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .cash-flow-entry-details span { color: #f59e0b; }
+
+.cash-flow-entry-tags {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.cash-flow-entry-tags span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cash-flow-entry-tags span.is-auto,
+.cash-flow-entry-tags span.is-account { color: var(--text-secondary); font-weight: 500; }
+
+.cash-flow-entry-tags i { flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; }
 
 /* Local AI assistant */
 .ai-chat-page {

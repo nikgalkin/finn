@@ -16,21 +16,24 @@ const snapshot = (month: string, balances: Array<{ amount: number; currency?: st
   }
 });
 
-const externalFlow = (amount: number): FlowEntry => ({
+const externalFlow = (amount: number, overrides: Partial<FlowEntry> = {}): FlowEntry => ({
   id: 1,
   month: '2026-02',
   entryType: 'external',
   direction: 'in',
   counterparty: 'Employer',
   account: 'Broker',
+  tag: '',
   currency: 'RUB',
   amount,
   taxRate: 0,
   category: 'Income',
   comment: '',
   toAccount: '',
+  toTag: '',
   toCurrency: '',
-  toAmount: 0
+  toAmount: 0,
+  ...overrides
 });
 
 test('uses actual tagged balance amounts when one account has multiple balances in the same currency', () => {
@@ -108,4 +111,85 @@ test('treats empty tag values as untagged and preserves reconciliation', () => {
   assert.equal(result.returns.length, 1);
   assert.equal(result.returns[0].tag, 'untagged');
   assert.equal(result.returns[0].result, 50);
+});
+
+test('sends a hand-tagged movement to its own tag instead of the account allocation', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 200, tags: ['deposit'] }, { amount: 900, tags: ['stocks'] }]),
+    snapshot('2026-01', [{ amount: 100, tags: ['deposit'] }, { amount: 900, tags: ['stocks'] }]),
+    [externalFlow(100, { tag: 'deposit' })],
+    'RUB'
+  );
+  const byTag = Object.fromEntries(result.returns.map(item => [item.tag, item]));
+
+  assert.equal(byTag.deposit.assignedFlow, 100);
+  assert.equal(byTag.deposit.result, 0);
+  assert.equal(byTag.stocks.assignedFlow, 0);
+  assert.equal(byTag.stocks.result, 0);
+  assert.equal(result.assignedExternalEntries, 1);
+  assert.equal(result.proportionallyAllocatedEntries, 0);
+  assert.equal(result.unattributedFlow, 0);
+});
+
+test('attributes a hand-tagged movement that names no account at all', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 200, tags: ['deposit'] }]),
+    snapshot('2026-01', [{ amount: 100, tags: ['deposit'] }]),
+    [externalFlow(100, { account: '', tag: 'deposit' })],
+    'RUB'
+  );
+
+  assert.equal(result.returns[0].tag, 'deposit');
+  assert.equal(result.returns[0].assignedFlow, 100);
+  assert.equal(result.returns[0].result, 0);
+  assert.equal(result.assignedExternalEntries, 1);
+  assert.equal(result.unattributedFlow, 0);
+});
+
+test('reports a movement on an unknown account instead of inventing an untagged bucket', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 1100, tags: ['deposit'] }]),
+    snapshot('2026-01', [{ amount: 100, tags: ['deposit'] }]),
+    [externalFlow(1000, { account: 'Brokr' })],
+    'RUB'
+  );
+
+  assert.equal(result.returns.length, 1);
+  assert.equal(result.returns[0].tag, 'deposit');
+  assert.equal(result.assignedExternalEntries, 0);
+  assert.equal(result.totalExternalEntries, 1);
+  assert.equal(result.unattributedFlow, 1000);
+  assert.deepEqual(result.unknownAccounts, ['Brokr']);
+});
+
+test('reports a movement with neither account nor tag as unattributed', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 1100, tags: ['deposit'] }]),
+    snapshot('2026-01', [{ amount: 100, tags: ['deposit'] }]),
+    [externalFlow(1000, { account: '' })],
+    'RUB'
+  );
+
+  assert.equal(result.assignedExternalEntries, 0);
+  assert.equal(result.unattributedFlow, 1000);
+  assert.deepEqual(result.unknownAccounts, []);
+});
+
+test('moves a transfer between the tags its two legs name', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 500, tags: ['deposit'] }, { amount: 500, tags: ['stocks'] }]),
+    snapshot('2026-01', [{ amount: 1000, tags: ['deposit'] }, { amount: 0, tags: ['stocks'] }]),
+    [externalFlow(500, {
+      entryType: 'transfer', direction: 'out', counterparty: '', account: 'Broker', tag: 'deposit',
+      toAccount: 'Broker', toTag: 'stocks', toCurrency: 'RUB', toAmount: 500
+    })],
+    'RUB'
+  );
+  const byTag = Object.fromEntries(result.returns.map(item => [item.tag, item]));
+
+  assert.equal(byTag.deposit.assignedFlow, -500);
+  assert.equal(byTag.deposit.result, 0);
+  assert.equal(byTag.stocks.assignedFlow, 500);
+  assert.equal(byTag.stocks.result, 0);
+  assert.equal(result.unattributedFlow, 0);
 });

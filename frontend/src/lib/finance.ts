@@ -30,6 +30,8 @@ export type TaggedCapitalReturnBreakdown = {
   assignedExternalEntries: number;
   totalExternalEntries: number;
   proportionallyAllocatedEntries: number;
+  unattributedFlow: number;
+  unknownAccounts: string[];
 };
 
 export type CommentItem = {
@@ -258,27 +260,44 @@ export const calculateTaggedCapitalReturns = (
     });
   });
   const assignedFlows = new Map<string, number>();
+  const directTagFlows = new Map<string, number>();
   const assignedExternalKeys: string[] = [];
-  const addAssignedFlow = (account: string, currency: string, amount: number) => {
-    if (!account || !currency || amount === 0) return;
-    const key = balanceAccountKey(account, currency);
-    assignedFlows.set(key, (assignedFlows.get(key) || 0) + convertAmount(amount, currency, baseCurrency, current.data.rates));
+  const unknownAccounts = new Set<string>();
+  let unattributedFlow = 0;
+
+  const routeFlow = (tag: string, account: string, currency: string, amount: number) => {
+    const explicitTag = tag?.trim() || '';
+    const knownAccount = Boolean(account) && accountTags.has(account);
+    if (!explicitTag && !knownAccount && account) unknownAccounts.add(account);
+    const baseAmount = currency ? convertAmount(amount, currency, baseCurrency, current.data.rates) : 0;
+
+    if (explicitTag) {
+      directTagFlows.set(explicitTag, (directTagFlows.get(explicitTag) || 0) + baseAmount);
+      return true;
+    }
+    if (knownAccount) {
+      const key = balanceAccountKey(account, currency);
+      if (currency) assignedFlows.set(key, (assignedFlows.get(key) || 0) + baseAmount);
+      return true;
+    }
+    unattributedFlow += baseAmount;
+    return false;
   };
 
   let totalExternalEntries = 0;
   let assignedExternalEntries = 0;
   entries.forEach(entry => {
     if (entry.entryType === 'transfer') {
-      addAssignedFlow(entry.account, entry.currency, -entry.amount);
-      addAssignedFlow(entry.toAccount, entry.toCurrency, entry.toAmount);
+      routeFlow(entry.tag, entry.account, entry.currency, -entry.amount);
+      routeFlow(entry.toTag, entry.toAccount, entry.toCurrency, entry.toAmount);
       return;
     }
     totalExternalEntries += 1;
-    if (!entry.account) return;
-    assignedExternalEntries += 1;
-    assignedExternalKeys.push(balanceAccountKey(entry.account, entry.currency));
     const tax = entry.direction === 'in' ? entry.amount * (entry.taxRate || 0) / 100 : 0;
-    addAssignedFlow(entry.account, entry.currency, entry.direction === 'in' ? entry.amount - tax : -entry.amount);
+    const netAmount = entry.direction === 'in' ? entry.amount - tax : -entry.amount;
+    if (!routeFlow(entry.tag, entry.account, entry.currency, netAmount)) return;
+    assignedExternalEntries += 1;
+    if (!entry.tag?.trim()) assignedExternalKeys.push(balanceAccountKey(entry.account, entry.currency));
   });
 
   const totals = new Map<string, { openingCapital: number; assignedFlow: number; result: number }>();
@@ -353,6 +372,11 @@ export const calculateTaggedCapitalReturns = (
     });
   });
 
+  directTagFlows.forEach((amount, tag) => {
+    addToTag(tag, 'assignedFlow', amount);
+    addToTag(tag, 'result', -amount);
+  });
+
   const returns = Array.from(totals.entries()).map(([tag, total]) => {
     const averageCapital = total.openingCapital + total.assignedFlow / 2;
     return {
@@ -364,7 +388,14 @@ export const calculateTaggedCapitalReturns = (
   }).sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
 
   const proportionallyAllocatedEntries = assignedExternalKeys.filter(key => (allocationTagCounts.get(key) || 0) > 1).length;
-  return { returns, assignedExternalEntries, totalExternalEntries, proportionallyAllocatedEntries };
+  return {
+    returns,
+    assignedExternalEntries,
+    totalExternalEntries,
+    proportionallyAllocatedEntries,
+    unattributedFlow,
+    unknownAccounts: Array.from(unknownAccounts)
+  };
 };
 
 export const hasAnyComments = (snapshot: ParsedSnapshot) => {

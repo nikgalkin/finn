@@ -57,12 +57,14 @@ func newAITestDB(t *testing.T, baseURL string) *sql.DB {
 			direction TEXT NOT NULL,
 			counterparty TEXT NOT NULL DEFAULT '',
 			account TEXT NOT NULL DEFAULT '',
+			tag TEXT NOT NULL DEFAULT '',
 			currency TEXT NOT NULL,
 			amount REAL NOT NULL,
 			tax_rate REAL NOT NULL DEFAULT 0,
 			category TEXT NOT NULL DEFAULT '',
 			comment TEXT NOT NULL DEFAULT '',
 			to_account TEXT NOT NULL DEFAULT '',
+			to_tag TEXT NOT NULL DEFAULT '',
 			to_currency TEXT NOT NULL DEFAULT '',
 			to_amount REAL NOT NULL DEFAULT 0
 		);

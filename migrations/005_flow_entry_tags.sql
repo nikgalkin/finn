@@ -1,0 +1,5 @@
+ALTER TABLE flow_entries
+ADD COLUMN tag TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE flow_entries
+ADD COLUMN to_tag TEXT NOT NULL DEFAULT '';

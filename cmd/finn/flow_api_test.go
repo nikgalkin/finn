@@ -27,12 +27,14 @@ func newFlowAPITestRouter(t *testing.T) (*gin.Engine, *sql.DB) {
 			direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
 			counterparty TEXT NOT NULL,
 			account TEXT NOT NULL DEFAULT '',
+			tag TEXT NOT NULL DEFAULT '',
 			currency TEXT NOT NULL,
 			amount REAL NOT NULL CHECK (amount > 0),
 			tax_rate REAL NOT NULL DEFAULT 0 CHECK (tax_rate >= 0 AND tax_rate <= 100),
 			category TEXT NOT NULL DEFAULT '',
 			comment TEXT NOT NULL DEFAULT '',
 			to_account TEXT NOT NULL DEFAULT '',
+			to_tag TEXT NOT NULL DEFAULT '',
 			to_currency TEXT NOT NULL DEFAULT '',
 			to_amount REAL NOT NULL DEFAULT 0 CHECK (to_amount >= 0)
 		)
@@ -308,4 +310,54 @@ func insertFlowTestEntry(t *testing.T, db *sql.DB, month, direction, counterpart
 		t.Fatal(err)
 	}
 	return id
+}
+
+func TestFlowAPIRoundTripsMovementTags(t *testing.T) {
+	router, _ := newFlowAPITestRouter(t)
+
+	created := performFlowRequest(router, http.MethodPost, "/api/flows", `{
+		"month":"2026-07", "direction":"in", "counterparty":"Acme", "tag":" stocks ", "toTag":"ignored",
+		"currency":"USD", "amount":1200, "category":"Salary"
+	}`)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body: %s", created.Code, http.StatusCreated, created.Body.String())
+	}
+	var entry FlowEntry
+	if err := json.Unmarshal(created.Body.Bytes(), &entry); err != nil {
+		t.Fatal(err)
+	}
+	if entry.Tag != "stocks" {
+		t.Fatalf("created tag = %q, want trimmed stocks", entry.Tag)
+	}
+	if entry.ToTag != "" {
+		t.Fatalf("external toTag = %q, want cleared", entry.ToTag)
+	}
+
+	transfer := performFlowRequest(router, http.MethodPost, "/api/flows", `{
+		"month":"2026-07", "entryType":"transfer", "account":"Alfa", "toAccount":"Broker",
+		"tag":"checking", "toTag":" stocks ", "currency":"RUB", "toCurrency":"USD",
+		"amount":100000, "toAmount":1100
+	}`)
+	if transfer.Code != http.StatusCreated {
+		t.Fatalf("create transfer status = %d, want %d; body: %s", transfer.Code, http.StatusCreated, transfer.Body.String())
+	}
+
+	listed := performFlowRequest(router, http.MethodGet, "/api/flows", "")
+	var entries []FlowEntry
+	if err := json.Unmarshal(listed.Body.Bytes(), &entries); err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("listed entries = %d, want 2", len(entries))
+	}
+	byType := make(map[string]FlowEntry, 2)
+	for _, listedEntry := range entries {
+		byType[listedEntry.EntryType] = listedEntry
+	}
+	if byType["external"].Tag != "stocks" {
+		t.Fatalf("listed external tag = %q, want stocks", byType["external"].Tag)
+	}
+	if byType["transfer"].Tag != "checking" || byType["transfer"].ToTag != "stocks" {
+		t.Fatalf("listed transfer tags = %q -> %q, want checking -> stocks", byType["transfer"].Tag, byType["transfer"].ToTag)
+	}
 }

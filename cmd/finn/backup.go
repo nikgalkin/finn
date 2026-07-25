@@ -120,7 +120,7 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 	rows.Close()
 
 	rows, err = db.Query(`
-		SELECT id, month, entry_type, direction, counterparty, account, currency, amount, tax_rate, category, comment, to_account, to_currency, to_amount
+		SELECT id, month, entry_type, direction, counterparty, account, tag, currency, amount, tax_rate, category, comment, to_account, to_tag, to_currency, to_amount
 		FROM flow_entries
 		ORDER BY id
 	`)
@@ -129,9 +129,9 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 	}
 	for rows.Next() {
 		var id int64
-		var month, entryType, direction, counterparty, account, currency, category, comment, toAccount, toCurrency string
+		var month, entryType, direction, counterparty, account, tag, currency, category, comment, toAccount, toTag, toCurrency string
 		var amount, taxRate, toAmount float64
-		if err := rows.Scan(&id, &month, &entryType, &direction, &counterparty, &account, &currency, &amount, &taxRate, &category, &comment, &toAccount, &toCurrency, &toAmount); err != nil {
+		if err := rows.Scan(&id, &month, &entryType, &direction, &counterparty, &account, &tag, &currency, &amount, &taxRate, &category, &comment, &toAccount, &toTag, &toCurrency, &toAmount); err != nil {
 			rows.Close()
 			return "", err
 		}
@@ -144,6 +144,7 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 		writeFingerprintString(h, direction)
 		writeFingerprintString(h, counterparty)
 		writeFingerprintString(h, account)
+		writeFingerprintString(h, tag)
 		writeFingerprintString(h, currency)
 		binary.BigEndian.PutUint64(number[:], math.Float64bits(amount))
 		_, _ = h.Write(number[:])
@@ -152,6 +153,7 @@ func databaseFingerprint(db *sql.DB) (string, error) {
 		writeFingerprintString(h, category)
 		writeFingerprintString(h, comment)
 		writeFingerprintString(h, toAccount)
+		writeFingerprintString(h, toTag)
 		writeFingerprintString(h, toCurrency)
 		binary.BigEndian.PutUint64(number[:], math.Float64bits(toAmount))
 		_, _ = h.Write(number[:])

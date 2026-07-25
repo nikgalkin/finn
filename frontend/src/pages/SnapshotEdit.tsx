@@ -77,6 +77,13 @@ export default function SnapshotEdit() {
     return initialDataHash !== JSON.stringify({ data, currentMonth });
   }, [data, currentMonth, initialDataHash]);
 
+  const accountTags = useMemo(() => new Map(data.organizations
+    .filter(organization => organization.name)
+    .map(organization => [
+      organization.name,
+      Array.from(new Set(organization.balances.flatMap(balance => balance.tags || []).filter(Boolean)))
+    ])), [data.organizations]);
+
   const { draftToRestore, setDraftToRestore, discardDraft } = useSnapshotDraft({
     draftKey,
     isDirty,
@@ -782,6 +789,7 @@ export default function SnapshotEdit() {
           month={cashFlowEditor.month}
           entries={cashFlowEditor.entries}
           copyPreviousEntries={cashFlowEditor.previousEntries}
+          accountTags={accountTags}
           settings={settings}
           appendBlank={cashFlowEditor.entries.length === 0}
           lockMonth
