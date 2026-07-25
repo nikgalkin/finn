@@ -14,6 +14,7 @@ import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphToolt
 import { ScrollForMore } from './components/ScrollForMore';
 import { SnapshotDraftsNotice } from './components/SnapshotDraftsNotice';
 import { isTextInputTarget } from '../lib/hotkeys';
+import { formatCompact, formatPercent, formatSigned, getDeltaColor, getMoneyDeltaColor } from '../lib/format';
 import {
   calculateCurrencyTotals,
   calculateFlowDecomposition,
@@ -212,19 +213,10 @@ export default function Dashboard() {
     const diff = current - previous;
     if (Math.abs(diff) < 1) return null;
     const percent = (diff / previous) * 100;
-    
-    // Используем CSS-переменные с безопасным фоллбэком на пастель
-    const color = diff > 0 
-      ? 'var(--diff-positive, hsl(142, 45%, 55%))' 
-      : 'var(--diff-negative, hsl(0, 45%, 60%))';
-      
-    const sign = diff > 0 ? '+' : '';
-    const formattedDiff = Math.round(diff).toLocaleString('en-US');
-    const formattedPercent = percent.toFixed(1);
 
     return (
-      <div style={{ color, fontSize: '0.85em', marginTop: '2px', fontWeight: 500 }}>
-        {sign}{formattedDiff} ({sign}{formattedPercent}%)
+      <div style={{ color: getDeltaColor(diff), fontSize: '0.85em', marginTop: '2px', fontWeight: 500 }}>
+        {formatSigned(diff)} ({formatPercent(percent, 1)})
       </div>
     );
   };
@@ -257,13 +249,6 @@ export default function Dashboard() {
     const sorted = Object.keys(groups).sort((a, b) => b.localeCompare(a));
     return { groupsByYear: groups, sortedYears: sorted, reversedSnapshots: reversed };
   }, [snapshots]);
-
-  const formatCompactNumber = (number: number) => {
-    return Intl.NumberFormat('en-US', {
-      notation: "compact",
-      maximumFractionDigits: 1
-    }).format(number);
-  };
 
   const handleOpenDiff = (currentSnapshot: ParsedSnapshot) => {
     const globalIndex = snapshots.findIndex(s => s.month === currentSnapshot.month);
@@ -384,9 +369,9 @@ export default function Dashboard() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="name" stroke="var(--text-secondary)" tickMargin={10} />
-                    <YAxis yAxisId="left" stroke="var(--text-secondary)" tickFormatter={(val) => formatCompactNumber(val)} />
+                    <YAxis yAxisId="left" stroke="var(--text-secondary)" tickFormatter={formatCompact} />
                     {secondaryCurrency && secondaryCurrency !== baseCurrency && (
-                      <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={(val) => formatCompactNumber(val)} />
+                      <YAxis yAxisId="right" orientation="right" stroke="#6366f1" tickFormatter={formatCompact} />
                     )}
                     <Tooltip content={<CustomTooltip baseCurrency={baseCurrency} secondaryCurrency={secondaryCurrency} />} />
                     <Area yAxisId="left" type="monotone" dataKey="BASE" name="BASE_FILL" stroke="none" fillOpacity={1} fill="url(#colorBase)" dot={false} activeDot={false} />
@@ -490,8 +475,8 @@ export default function Dashboard() {
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                 <span style={{ fontSize: '0.95em', fontWeight: 500, color: amt === 0 ? 'var(--text-secondary)' : 'inherit' }}>{Math.round(amt).toLocaleString('en-US')}</span>
                                 {Math.abs(diff) >= 1 && (
-                                  <span style={{ fontSize: '0.75em', color: diff > 0 ? 'var(--diff-positive, hsl(142, 45%, 55%))' : 'var(--diff-negative, hsl(0, 45%, 60%))', fontWeight: 500, marginTop: '1px' }}>
-                                    {diff > 0 ? '+' : ''}{Math.round(diff).toLocaleString('en-US')}{prevAmt > 0 && ` (${diff > 0 ? '+' : ''}${diffPercent.toFixed(1)}%)`}
+                                  <span style={{ fontSize: '0.75em', color: getDeltaColor(diff), fontWeight: 500, marginTop: '1px' }}>
+                                    {formatSigned(diff)}{prevAmt > 0 && ` (${formatPercent(diffPercent, 1)})`}
                                   </span>
                                 )}
                               </div>
@@ -517,14 +502,14 @@ export default function Dashboard() {
                                 <div style={{ fontSize: '0.75em', marginTop: '8px', padding: '6px 10px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '6px', display: 'inline-block', minWidth: '135px' }}>
                                   <div style={{ marginBottom: '2px', display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>Deposits:</span>
-                                    <span style={{ fontWeight: 600, color: organicBase > 0 ? 'var(--diff-positive, hsl(142, 45%, 55%))' : organicBase < 0 ? 'var(--diff-negative, hsl(0, 45%, 60%))' : 'inherit' }}>
-                                      {organicBase > 0 ? '+' : ''}{Math.round(organicBase).toLocaleString('en-US')}
+                                    <span style={{ fontWeight: 600, color: getMoneyDeltaColor(organicBase) }}>
+                                      {formatSigned(organicBase)}
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>FX Impact:</span>
-                                    <span style={{ fontWeight: 600, color: fxImpactBase > 0 ? 'var(--diff-positive, hsl(142, 45%, 55%))' : fxImpactBase < 0 ? 'var(--diff-negative, hsl(0, 45%, 60%))' : 'inherit' }}>
-                                      {fxImpactBase > 0 ? '+' : ''}{Math.round(fxImpactBase).toLocaleString('en-US')}
+                                    <span style={{ fontWeight: 600, color: getMoneyDeltaColor(fxImpactBase) }}>
+                                      {formatSigned(fxImpactBase)}
                                     </span>
                                   </div>
                                 </div>

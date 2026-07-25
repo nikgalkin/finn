@@ -276,6 +276,35 @@ a { color: var(--accent); text-decoration: none; }
 
 .btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
 
+.segmented-control {
+  display: flex;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.segmented-control.is-compact { padding: 3px; }
+
+.segmented-control-option {
+  padding: 7px 12px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.segmented-control-option:hover { background: rgba(255, 255, 255, 0.06); }
+
+.segmented-control.is-compact .segmented-control-option { padding: 5px 10px; font-size: 12px; }
+
+.segmented-control-option.is-active,
+.segmented-control-option.is-active:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
 .input {
   background: rgba(15, 23, 42, 0.6);
   border: 1px solid var(--glass-border);

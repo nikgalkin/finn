@@ -434,14 +434,6 @@ export default function GraphsPage() {
     };
   });
 
-  const formatFriendlyTime = (seconds: number) => {
-    if (seconds < 120) return `${Math.round(seconds)}s`;
-
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.round(seconds % 60);
-    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-  };
-
   const handleLegendClickSmart = useCallback((group: LegendGroup, event: any, allKeys: string[]) => {
     const clickedKey = event.dataKey;
     if (!clickedKey) return;
@@ -473,10 +465,6 @@ export default function GraphsPage() {
       };
     });
   }, []);
-
-  const formatCompact = (value: number) => {
-    return Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(value);
-  };
 
   const isAnythingHidden = useMemo(() => {
     return Object.entries(hiddenSeries).some(([group, values]) => (
@@ -565,8 +553,6 @@ export default function GraphsPage() {
         tagReturnCoverage={{ assigned: assignedExternalEntries, total: totalExternalEntries, proportional: proportionallyAllocatedEntries }}
         tagReturnStats={tagReturnStats}
         uxMetricsData={uxMetricsData}
-        formatCompact={formatCompact}
-        formatFriendlyTime={formatFriendlyTime}
         handleLegendClickSmart={handleLegendClickSmart}
         onOpenSnapshotDiff={handleOpenSnapshotDiff}
       />
