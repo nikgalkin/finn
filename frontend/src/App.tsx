@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Wallet, Settings as SettingsIcon, MessageSquare, BarChart3, Bot, Keyboard, Power, ArrowDownUp, Wrench } from 'lucide-react';
+import { Wallet, Keyboard, Power } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
+import { HeaderNav } from './pages/components/HeaderNav';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { getNavigationHotkey, isTextInputTarget } from './lib/hotkeys';
 import { AppFooter } from './pages/components/AppFooter';
@@ -188,7 +189,13 @@ function App() {
             <h1 className="app-title">Finn Tracker</h1>
           </Link>
           <div style={{ width: '1px', height: '24px', background: 'var(--glass-border)', margin: '0 4px' }} />
-          <button className="btn" title="Keyboard shortcuts (H)" aria-label="Keyboard shortcuts" style={{ padding: '8px' }} onClick={() => setShowHotkeysHelp(true)}>
+          <button
+            className="btn"
+            title="Keyboard shortcuts (H)"
+            aria-label="Keyboard shortcuts"
+            style={{ padding: '8px' }}
+            onClick={() => setShowHotkeysHelp(true)}
+          >
             <Keyboard size={18} />
           </button>
           <button
@@ -202,28 +209,10 @@ function App() {
             <Power size={18} />
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/assistant" className="btn" style={{ color: 'var(--text-secondary)' }}>
-            <Bot size={18} /> Assistant
-          </Link>
-          {settings.cashFlow?.enabled && (
-            <Link to="/flow" className="btn" style={{ color: 'var(--text-secondary)' }}>
-              <ArrowDownUp size={18} /> Cash Flow
-            </Link>
-          )}
-          <Link to="/graphs" className="btn" style={{ color: 'var(--text-secondary)' }}>
-            <BarChart3 size={18} /> Graphs
-          </Link>
-          <Link to="/tools" className="btn" style={{ color: 'var(--text-secondary)' }}>
-            <Wrench size={18} /> Tools
-          </Link>
-          <Link to="/feed" className="btn" style={{ color: 'var(--text-secondary)' }}>
-            <MessageSquare size={18} /> Feed
-          </Link>
-          <Link to="/settings" className="btn" style={{ color: 'var(--text-secondary)' }}>
-            <SettingsIcon size={18} /> Settings
-          </Link>
-        </div>
+        <HeaderNav
+          cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
+          onShowHotkeys={() => setShowHotkeysHelp(true)}
+        />
       </header>
       <main>
         <Suspense fallback={<PageLoader label="Loading page" />}>

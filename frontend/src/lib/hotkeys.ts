@@ -16,7 +16,7 @@ export type NavigationHotkey = {
 export const NAVIGATION_HOTKEYS: NavigationHotkey[] = [
   { code: 'KeyN', label: 'N', description: 'New snapshot', route: '/snapshot/new' },
   { code: 'KeyA', label: 'A', description: 'Open assistant', route: '/assistant' },
-  { code: 'KeyW', label: 'W', description: 'Open Cash Flow', route: '/flow' },
+  { code: 'KeyW', label: 'W', description: 'Open Flow', route: '/flow' },
   { code: 'KeyG', label: 'G', description: 'Open graphs', route: '/graphs' },
   { code: 'KeyF', label: 'F', description: 'Open feed', route: '/feed' },
   { code: 'KeyS', label: 'S', description: 'Open settings', route: '/settings' },

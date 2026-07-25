@@ -1,7 +1,8 @@
 # Tools
 
 **Tools** is a side pocket in Finn for occasional utilities that act on your data directly. Open it
-from the header, or press <kbd>T</kbd>. Each tool is a tile; clicking one opens it in a modal.
+from the **⋯** menu in the header, or press <kbd>T</kbd>. Each tool is a tile; clicking one opens it
+in a modal.
 
 Today it holds a single tool: the SQL editor.
 

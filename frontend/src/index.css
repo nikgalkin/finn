@@ -319,6 +319,10 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   padding: 24px 0;
   margin-bottom: 0;
+  /* Own layer above .sticky-page-header (999) so the overflow menu is not painted over by
+     a page's own header. Modals portal to the body well above this. */
+  position: relative;
+  z-index: 1000;
 }
 
 .app-title {
@@ -328,6 +332,100 @@ a { color: var(--accent); text-decoration: none; }
   background: linear-gradient(to right, #60a5fa, #a78bfa);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.app-nav { display: flex; align-items: center; gap: 8px; }
+
+.app-nav > .quick-hover-anchor,
+.app-nav-menu > .quick-hover-anchor { display: inline-flex; width: auto; }
+
+.app-nav-item { padding: 8px 12px; color: var(--text-secondary); }
+
+.app-nav-item.is-icon-only { padding: 8px; }
+
+.app-nav-item.is-active {
+  color: var(--accent);
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.app-nav-item.is-active:hover { background: rgba(59, 130, 246, 0.18); }
+
+.app-nav-menu { position: relative; display: inline-flex; }
+
+.app-nav-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 232px;
+  padding: 7px;
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.app-nav-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.app-nav-dropdown-item > span { flex: 1; min-width: 0; }
+
+.app-nav-dropdown-item:hover { background: rgba(255, 255, 255, 0.08); }
+
+.app-nav-dropdown-item.is-active { color: var(--accent); }
+
+.app-nav-dropdown-item.is-danger { color: var(--danger); }
+
+.app-nav-dropdown-item.is-danger:hover { background: rgba(239, 68, 68, 0.12); }
+
+.app-nav-dropdown-item:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.app-nav-dropdown-item:disabled:hover { background: none; }
+
+.app-nav-dropdown-key {
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.8);
+  color: var(--text-secondary);
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.app-nav-dropdown-separator {
+  height: 1px;
+  margin: 5px 2px;
+  background: var(--glass-border);
+}
+
+@media (max-width: 860px) {
+  .app-nav-item:not(.is-active) { padding: 8px; }
+
+  .app-nav-item:not(.is-active) > span { display: none; }
+}
+
+@media (max-width: 620px) {
+  .app-title { display: none; }
 }
 
 .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
