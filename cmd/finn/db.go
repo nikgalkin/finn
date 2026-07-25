@@ -43,14 +43,21 @@ func resolveDatabasePath(filename string) string {
 	return defaultPath
 }
 
-func initDB(cfg *Config, isDemo bool) *sql.DB {
-	dbFilename := cfg.Database.Filename
+// activeDatabasePath resolves the database file the app is currently using, so
+// that other components can attach their own handle to the same file.
+func activeDatabasePath(cfg *Config, isDemo bool) string {
 	if isDemo {
-		dbFilename = cfg.Database.DemoFilename
+		return resolveDatabasePath(cfg.Database.DemoFilename)
+	}
+	return resolveDatabasePath(cfg.Database.Filename)
+}
+
+func initDB(cfg *Config, isDemo bool) *sql.DB {
+	if isDemo {
 		log.Println("ℹ️  DB: Running in isolated DEMO environment.")
 	}
 
-	dbPath := resolveDatabasePath(dbFilename)
+	dbPath := activeDatabasePath(cfg, isDemo)
 
 	log.Printf("ℹ️  DB: Connecting to SQLite storage: %s\n", dbPath)
 	db, err := sql.Open("sqlite3", dbPath)

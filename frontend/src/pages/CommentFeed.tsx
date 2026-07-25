@@ -11,7 +11,9 @@ import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
+import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR, formatPercent, formatSignedMoney } from '../lib/format';
 import { PageLoader } from './components/PageLoader';
+import { SegmentedControl } from './components/SegmentedControl';
 import { StickyPageHeader } from './components/StickyPageHeader';
 
 type FeedMode = 'all' | 'comments';
@@ -91,17 +93,6 @@ const getSignedPercent = (current: number, previous: number) => {
   return ((current - previous) / previous) * 100;
 };
 
-const formatMoney = (value: number, currency: string) => {
-  const rounded = Math.round(value);
-  const sign = rounded > 0 ? '+' : '';
-  return `${sign}${rounded.toLocaleString('en-US')} ${currency}`;
-};
-
-const formatPercent = (value: number) => {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${value.toFixed(1)}%`;
-};
-
 const getToneForValue = (value: number): FeedItemTone => {
   if (value > 0) return 'positive';
   if (value < 0) return 'negative';
@@ -110,9 +101,9 @@ const getToneForValue = (value: number): FeedItemTone => {
 
 const getToneColor = (tone: FeedItemTone) => {
   if (tone === 'comment') return '#3b82f6';
-  if (tone === 'positive') return 'var(--diff-positive, hsl(142, 45%, 55%))';
-  if (tone === 'negative') return 'var(--diff-negative, hsl(0, 45%, 60%))';
-  return 'var(--text-secondary)';
+  if (tone === 'positive') return DELTA_POSITIVE_COLOR;
+  if (tone === 'negative') return DELTA_NEGATIVE_COLOR;
+  return DELTA_NEUTRAL_COLOR;
 };
 
 const getToneBorderColor = (tone: FeedItemTone) => {
@@ -334,8 +325,8 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       month: snapshot.month,
       kind: 'highlight',
       title: totalDelta > 0 ? 'Net worth jumped' : 'Net worth dropped',
-      text: `${formatMoney(totalDelta, baseCurrency)} overall change versus previous snapshot.`,
-      meta: `${formatPercent(getSignedPercent(currentTotal, previousTotal))} month over month`,
+      text: `${formatSignedMoney(totalDelta, baseCurrency)} overall change versus previous snapshot.`,
+      meta: `${formatPercent(getSignedPercent(currentTotal, previousTotal), 1)} month over month`,
       score: 500 + (Math.abs(totalDelta) / totalThreshold) * 80,
       tone: getToneForValue(totalDelta)
     } : null);
@@ -350,7 +341,7 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       month: snapshot.month,
       kind: 'highlight',
       title: flow.organicDelta > 0 ? 'Large organic increase' : 'Large organic decrease',
-      text: `${formatMoney(flow.organicDelta, baseCurrency)} from balance changes, excluding exchange-rate movement.`,
+      text: `${formatSignedMoney(flow.organicDelta, baseCurrency)} from balance changes, excluding exchange-rate movement.`,
       score: 560 + (Math.abs(flow.organicDelta) / organicThreshold) * 90,
       tone: getToneForValue(flow.organicDelta)
     } : null);
@@ -365,7 +356,7 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       month: snapshot.month,
       kind: 'highlight',
       title: 'FX impact stood out',
-      text: `${formatMoney(flow.fxImpactDelta, baseCurrency)} came from exchange-rate movement.`,
+      text: `${formatSignedMoney(flow.fxImpactDelta, baseCurrency)} came from exchange-rate movement.`,
       score: 540 + (Math.abs(flow.fxImpactDelta) / fxThreshold) * 85,
       tone: getToneForValue(flow.fxImpactDelta)
     } : null);
@@ -383,7 +374,7 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       month: snapshot.month,
       kind: 'highlight',
       title: 'New organization appeared',
-      text: `${newOrg[0]} now holds ${formatMoney(newOrg[1], baseCurrency).replace('+', '')}.`,
+      text: `${newOrg[0]} now holds ${formatSignedMoney(newOrg[1], baseCurrency).replace('+', '')}.`,
       score: 620 + (newOrg[1] / absoluteTotal) * 100,
       tone: 'neutral',
       targetOrgName: newOrg[0],
@@ -401,8 +392,8 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       month: snapshot.month,
       kind: 'highlight',
       title: `${orgMover.name} moved noticeably`,
-      text: `${formatMoney(orgMover.delta, baseCurrency)} versus previous snapshot.`,
-      meta: orgMover.previous > 0 ? `${formatPercent(orgMover.percent)} for this organization` : 'New or reactivated balance',
+      text: `${formatSignedMoney(orgMover.delta, baseCurrency)} versus previous snapshot.`,
+      meta: orgMover.previous > 0 ? `${formatPercent(orgMover.percent, 1)} for this organization` : 'New or reactivated balance',
       score: 520 + (Math.abs(orgMover.delta) / orgThreshold) * 70,
       tone: getToneForValue(orgMover.delta),
       targetOrgName: orgMover.name,
@@ -417,7 +408,7 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       month: snapshot.month,
       kind: 'highlight',
       title: 'New currency exposure',
-      text: `${newCurrency[0]} appeared with ${formatMoney(newCurrency[1], baseCurrency).replace('+', '')} equivalent.`,
+      text: `${newCurrency[0]} appeared with ${formatSignedMoney(newCurrency[1], baseCurrency).replace('+', '')} equivalent.`,
       score: 590 + (newCurrency[1] / absoluteTotal) * 100,
       tone: 'neutral',
       entities: [{ kind: 'currency', name: newCurrency[0] }]
@@ -435,7 +426,7 @@ const buildHighlightItems = (snapshots: ParsedSnapshot[], baseCurrency: string) 
       kind: 'highlight',
       title: `${tagShift.name} share shifted`,
       text: `${tagShift.previousShare.toFixed(1)}% -> ${tagShift.currentShare.toFixed(1)}% of portfolio.`,
-      meta: `${formatMoney(tagShift.valueDelta, baseCurrency)} value change`,
+      meta: `${formatSignedMoney(tagShift.valueDelta, baseCurrency)} value change`,
       score: 530 + Math.abs(tagShift.shareDelta) * 8,
       tone: getToneForValue(tagShift.valueDelta),
       entities: [{ kind: 'tag', name: tagShift.name }]
@@ -620,32 +611,14 @@ export default function CommentFeed() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', padding: '4px', gap: '4px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '8px' }}>
-          <button
-            className="btn"
-            style={{
-              padding: '7px 12px',
-              background: mode === 'all' ? 'var(--accent)' : 'transparent',
-              borderColor: mode === 'all' ? 'var(--accent)' : 'transparent',
-              color: mode === 'all' ? '#fff' : 'var(--text-secondary)'
-            }}
-            onClick={() => setMode('all')}
-          >
-            <TrendingUp size={15} /> All
-          </button>
-          <button
-            className="btn"
-            style={{
-              padding: '7px 12px',
-              background: mode === 'comments' ? 'var(--accent)' : 'transparent',
-              borderColor: mode === 'comments' ? 'var(--accent)' : 'transparent',
-              color: mode === 'comments' ? '#fff' : 'var(--text-secondary)'
-            }}
-            onClick={() => setMode('comments')}
-          >
-            <MessageSquare size={15} /> Only comments
-          </button>
-        </div>
+        <SegmentedControl
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'all', label: 'All', icon: <TrendingUp size={15} /> },
+            { value: 'comments', label: 'Only comments', icon: <MessageSquare size={15} /> }
+          ]}
+        />
       </StickyPageHeader>
 
       {visiblePeriods.length === 0 ? (

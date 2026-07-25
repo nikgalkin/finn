@@ -434,14 +434,6 @@ export default function GraphsPage() {
     };
   });
 
-  const formatFriendlyTime = (seconds: number) => {
-    if (seconds < 120) return `${Math.round(seconds)}s`;
-
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.round(seconds % 60);
-    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-  };
-
   const handleLegendClickSmart = useCallback((group: LegendGroup, event: any, allKeys: string[]) => {
     const clickedKey = event.dataKey;
     if (!clickedKey) return;
@@ -474,10 +466,6 @@ export default function GraphsPage() {
     });
   }, []);
 
-  const formatCompact = (value: number) => {
-    return Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(value);
-  };
-
   const isAnythingHidden = useMemo(() => {
     return Object.entries(hiddenSeries).some(([group, values]) => (
       Object.entries(values).some(([key, value]) => {
@@ -502,10 +490,15 @@ export default function GraphsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <StickyPageHeader marginBottom="0">
+      <StickyPageHeader marginBottom="0" compactTop>
         <div className="flex items-center gap-4">
           <Link to="/" title="Back to dashboard" className="btn"><ArrowLeft size={18} /></Link>
-          <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>
+          <div>
+            <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Portfolio Analytics</h2>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
+              {filteredSnapshots.length} {filteredSnapshots.length === 1 ? 'snapshot' : 'snapshots'} · valued in {baseCurrency}
+            </div>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -560,8 +553,6 @@ export default function GraphsPage() {
         tagReturnCoverage={{ assigned: assignedExternalEntries, total: totalExternalEntries, proportional: proportionallyAllocatedEntries }}
         tagReturnStats={tagReturnStats}
         uxMetricsData={uxMetricsData}
-        formatCompact={formatCompact}
-        formatFriendlyTime={formatFriendlyTime}
         handleLegendClickSmart={handleLegendClickSmart}
         onOpenSnapshotDiff={handleOpenSnapshotDiff}
       />

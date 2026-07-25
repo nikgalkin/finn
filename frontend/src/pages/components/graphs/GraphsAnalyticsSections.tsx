@@ -1,9 +1,24 @@
-import { Fragment, memo, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Activity, ArrowLeftRight, ArrowRight, BarChart3, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
+import {
+  formatCompact,
+  formatFriendlyTime,
+  formatMoney,
+  formatNativeAmount,
+  formatNumber,
+  formatPercent,
+  formatSigned,
+  formatSignedMoney,
+  getDeltaColor,
+  getMoneyDeltaColor,
+  getPercentDeltaColor
+} from '../../../lib/format';
 import { getCurrencyColor, getTagColor } from '../../../types';
 import { HelpTooltip } from '../HelpTooltip';
+import { ModalPortal } from '../ModalPortal';
 import { ScrollForMore } from '../ScrollForMore';
+import { SegmentedControl } from '../SegmentedControl';
 import { GraphTooltip, SimpleGraphTooltip } from './GraphTooltip';
 
 type ChartDatum = Record<string, any>;
@@ -63,8 +78,6 @@ type GraphsAnalyticsSectionsProps = {
   tagReturnCoverage: { assigned: number; total: number; proportional: number };
   tagReturnStats: TagReturnStat[];
   uxMetricsData: ChartDatum[];
-  formatCompact: (value: number) => string;
-  formatFriendlyTime: (seconds: number) => string;
   handleLegendClickSmart: (group: LegendGroup, event: any, allKeys: string[]) => void;
   onOpenSnapshotDiff: (month: string) => void;
 };
@@ -75,32 +88,9 @@ const GRID_2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr)
 const SECTION_TITLE_STYLE = { color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' };
 const VISIBLE_TAG_RETURN_ROWS = 3;
 
-const normalizeDisplayNumber = (value: number, precision = 0.005) => Math.abs(value) < precision ? 0 : value;
-const formatNumber = (value: number) => Math.round(normalizeDisplayNumber(value, 0.5)).toLocaleString('en-US');
-const formatMoney = (value: number, suffix: string) => `${formatNumber(value)} ${suffix}`;
-const formatNativeAmount = (value: number) => {
-  const absolute = Math.abs(value);
-  const maximumFractionDigits = absolute >= 1000 ? 0 : absolute >= 1 ? 2 : 6;
-  return normalizeDisplayNumber(value).toLocaleString('en-US', { maximumFractionDigits });
-};
-
-const getDeltaColor = (value: number) => {
-  if (value > 0) return 'var(--diff-positive, hsl(142, 45%, 55%))';
-  if (value < 0) return 'var(--diff-negative, hsl(0, 45%, 60%))';
-  return 'var(--text-secondary)';
-};
-
-const getMoneyDeltaColor = (value: number) => getDeltaColor(normalizeDisplayNumber(value, 0.5));
-const getPercentDeltaColor = (value: number) => getDeltaColor(normalizeDisplayNumber(value));
-
-const formatSigned = (value: number) => {
-  const normalized = normalizeDisplayNumber(value, 0.5);
-  return `${normalized > 0 ? '+' : ''}${formatNumber(normalized)}`;
-};
-const formatPercent = (value: number) => {
-  const normalized = normalizeDisplayNumber(value);
-  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(2)}%`;
-};
+const SignedMoney = ({ value, suffix }: { value: number; suffix: string }) => (
+  <span style={{ color: getMoneyDeltaColor(value) }}>{formatSignedMoney(value, suffix)}</span>
+);
 
 const normalizeStackData = (data: ChartDatum[], keys: string[]) => {
   return data.map(point => {
@@ -242,7 +232,7 @@ const NetWorthTooltip = ({ active, payload, label, baseCurrency }: any) => {
         {
           key: 'delta',
           label: <span style={{ color: '#eab308' }}>Change</span>,
-          value: <span style={{ color: getDeltaColor(delta) }}>{formatSigned(delta)} {baseCurrency}</span>
+          value: <SignedMoney value={delta} suffix={baseCurrency} />
         }
       ]}
       style={{ minWidth: '210px' }}
@@ -252,15 +242,29 @@ const NetWorthTooltip = ({ active, payload, label, baseCurrency }: any) => {
 
 type DecompositionSeries = { key: string; label: string; color: string };
 
+const DecompositionTooltip = ({ active, payload, label, baseCurrency, item }: any) => {
+  if (!active || !payload || !payload.length) return null;
+
+  return (
+    <GraphTooltip
+      title={label}
+      rows={[{
+        key: item.key,
+        label: item.label,
+        markerColor: item.color,
+        value: <SignedMoney value={Number(payload[0].value || 0)} suffix={baseCurrency} />
+      }]}
+    />
+  );
+};
+
 const DecompositionSmallMultiples = ({
   baseCurrency,
   data,
-  formatCompact,
   series
 }: {
   baseCurrency: string;
   data: ChartDatum[];
-  formatCompact: (value: number) => string;
   series: DecompositionSeries[];
 }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, minHeight: 0 }}>
@@ -274,7 +278,7 @@ const DecompositionSmallMultiples = ({
               <i style={{ width: '8px', height: '8px', borderRadius: '2px', background: item.color }} />
               {item.label}
             </span>
-            <strong style={{ color: getDeltaColor(total) }}>{formatSigned(total)} {baseCurrency}</strong>
+            <strong><SignedMoney value={total} suffix={baseCurrency} /></strong>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -282,7 +286,7 @@ const DecompositionSmallMultiples = ({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="month" hide={!isLast} stroke="var(--text-secondary)" style={{ fontSize: '11px' }} />
                 <YAxis width={54} stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '11px' }} />
-                <Tooltip content={<SimpleGraphTooltip formatter={(value) => [formatMoney(Number(value), baseCurrency), item.label]} />} />
+                <Tooltip content={<DecompositionTooltip baseCurrency={baseCurrency} item={item} />} />
                 <ReferenceLine y={0} stroke="rgba(148, 163, 184, 0.55)" />
                 <Bar dataKey={item.key} name={item.label} fill={item.color} radius={[3, 3, 0, 0]} maxBarSize={42}>
                   {data.map(point => (
@@ -413,8 +417,6 @@ export function GraphsAnalyticsSections({
   tagReturnCoverage,
   tagReturnStats,
   uxMetricsData,
-  formatCompact,
-  formatFriendlyTime,
   handleLegendClickSmart,
   onOpenSnapshotDiff
 }: GraphsAnalyticsSectionsProps) {
@@ -422,19 +424,10 @@ export function GraphsAnalyticsSections({
   const [selectedTagReturn, setSelectedTagReturn] = useState<TagReturnStat | null>(null);
   const [expandedTagMonth, setExpandedTagMonth] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!selectedTagReturn) return;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      setSelectedTagReturn(null);
-      setExpandedTagMonth(null);
-    };
-    document.addEventListener('keydown', handleEscape, true);
-    return () => document.removeEventListener('keydown', handleEscape, true);
-  }, [selectedTagReturn]);
+  const closeTagReturn = useCallback(() => {
+    setSelectedTagReturn(null);
+    setExpandedTagMonth(null);
+  }, []);
 
   const currencyAllocationData = useMemo(() => {
     return allocationMode === 'percent' ? normalizeStackData(currencyDistributionData, allUsedCurrencies) : currencyDistributionData;
@@ -601,18 +594,14 @@ export function GraphsAnalyticsSections({
       </section>
 
       {selectedTagReturn && (
-        <div
-          className="capital-return-tag-modal-backdrop"
-          data-escape-guard="true"
-          data-hotkeys-guard="true"
-          onMouseDown={event => {
-            if (event.target === event.currentTarget) {
-              setSelectedTagReturn(null);
-              setExpandedTagMonth(null);
-            }
-          }}
-        >
-          <div className="capital-return-tag-modal" role="dialog" aria-modal="true" aria-labelledby="capital-return-tag-modal-title">
+        <ModalPortal className="capital-return-tag-modal-backdrop" zIndex={null} onClose={closeTagReturn} closeOnEscape>
+          <div
+            className="capital-return-tag-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="capital-return-tag-modal-title"
+            onClick={event => event.stopPropagation()}
+          >
             <div className="capital-return-tag-modal-header">
               <div>
                 <span>Monthly breakdown</span>
@@ -621,10 +610,7 @@ export function GraphsAnalyticsSections({
                   {selectedTagReturn.tag}
                 </h3>
               </div>
-              <button type="button" className="capital-return-tag-modal-close" onClick={() => {
-                setSelectedTagReturn(null);
-                setExpandedTagMonth(null);
-              }} aria-label="Close monthly breakdown">
+              <button type="button" className="capital-return-tag-modal-close" onClick={closeTagReturn} aria-label="Close monthly breakdown">
                 <X size={17} />
               </button>
             </div>
@@ -698,7 +684,7 @@ export function GraphsAnalyticsSections({
               Opening and closing balances are valued in {baseCurrency} at each month's closing rates. Earnings exclude recorded external flows attributed to this tag; return is time-weighted and not annualized.
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       <section>
@@ -747,7 +733,6 @@ export function GraphsAnalyticsSections({
             <DecompositionSmallMultiples
               baseCurrency={baseCurrency}
               data={decompositionData}
-              formatCompact={formatCompact}
               series={decompositionSeries}
             />
           </ChartCard>
@@ -757,25 +742,15 @@ export function GraphsAnalyticsSections({
       <section>
         <div className="flex justify-between items-center mb-4">
           <h3 style={{ ...SECTION_TITLE_STYLE, margin: 0 }}>ALLOCATION</h3>
-          <div style={{ display: 'flex', gap: '4px', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '3px', background: 'rgba(255,255,255,0.03)' }}>
-            {(['percent', 'value'] as const).map(mode => (
-              <button
-                key={mode}
-                className="btn"
-                onClick={() => setAllocationMode(mode)}
-                style={{
-                  padding: '5px 10px',
-                  fontSize: '12px',
-                  border: 'none',
-                  background: allocationMode === mode ? 'var(--accent)' : 'transparent',
-                  color: allocationMode === mode ? 'white' : 'var(--text-secondary)'
-                }}
-              >
-                {mode === 'percent' ? <Percent size={13} /> : <BarChart3 size={13} />}
-                {mode === 'percent' ? 'Share' : 'Value'}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            compact
+            value={allocationMode}
+            onChange={setAllocationMode}
+            options={[
+              { value: 'percent', label: 'Share', icon: <Percent size={13} /> },
+              { value: 'value', label: 'Value', icon: <BarChart3 size={13} /> }
+            ]}
+          />
         </div>
 
         <div style={GRID_2}>

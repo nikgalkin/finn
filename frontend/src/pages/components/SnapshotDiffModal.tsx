@@ -6,6 +6,7 @@ import { ArrowDownUp, ChevronDown, Coins, ExternalLink, Folder, MessageSquare, R
 import { getCurrencyColor, getTagColor } from '../../types';
 import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
+import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR } from '../../lib/format';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
 import { isTextInputTarget } from '../../lib/hotkeys';
 import { FlowNetSummary } from './FlowNetSummary';
@@ -69,6 +70,12 @@ const areTagsEqual = (left: string[], right: string[]) => {
   const leftSorted = [...left].sort();
   const rightSorted = [...right].sort();
   return leftSorted.every((tag, index) => tag === rightSorted[index]);
+};
+
+const getStatusDeltaColor = (status: DiffStatus) => {
+  if (status === 'up' || status === 'new') return DELTA_POSITIVE_COLOR;
+  if (status === 'down' || status === 'deleted') return DELTA_NEGATIVE_COLOR;
+  return DELTA_NEUTRAL_COLOR;
 };
 
 const formatRate = (value: number | null) => {
@@ -532,8 +539,6 @@ export function SnapshotDiffModal({
                 <strong>Exchange Rate Changes</strong>
                 <span className="snapshot-diff-rate-summary">
                   {compactRateChanges.slice(0, 4).map(rate => {
-                    const positive = rate.status === 'up' || rate.status === 'new';
-                    const negative = rate.status === 'down' || rate.status === 'deleted';
                     const sign = rate.delta !== null && rate.delta > 0 ? '+' : '';
                     const value = rate.status === 'new'
                       ? 'NEW'
@@ -543,7 +548,7 @@ export function SnapshotDiffModal({
                     return (
                       <span
                         key={rate.key}
-                        style={{ color: positive ? 'var(--diff-positive)' : negative ? 'var(--diff-negative)' : 'var(--text-secondary)' }}
+                        style={{ color: getStatusDeltaColor(rate.status) }}
                       >
                         <b>{rate.key}</b> {value}
                       </span>
@@ -557,11 +562,7 @@ export function SnapshotDiffModal({
               </summary>
               <div className="snapshot-diff-rate-list">
                 {rateDiffData.map(rate => {
-                  const deltaColor = rate.status === 'up' || rate.status === 'new'
-                    ? 'var(--diff-positive, hsl(142, 45%, 55%))'
-                    : rate.status === 'down' || rate.status === 'deleted'
-                      ? 'var(--diff-negative, hsl(0, 45%, 60%))'
-                      : 'var(--text-secondary)';
+                  const deltaColor = getStatusDeltaColor(rate.status);
                   const deltaSign = rate.delta !== null && rate.delta > 0 ? '+' : '';
                   return (
                     <div key={rate.key} className="snapshot-diff-rate-row">
@@ -603,15 +604,8 @@ export function SnapshotDiffModal({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingLeft: '8px', borderLeft: '1px solid rgba(255,255,255,0.08)' }}>
                 {org.balances.map((balance, balanceIndex) => {
-                  let deltaColor = 'var(--text-secondary)';
-                  let deltaSign = '';
-                  if (balance.status === 'up' || balance.status === 'new') {
-                    deltaColor = 'var(--diff-positive, hsl(142, 45%, 55%))';
-                    deltaSign = '+';
-                  }
-                  else if (balance.status === 'down' || balance.status === 'deleted') {
-                    deltaColor = 'var(--diff-negative, hsl(0, 45%, 60%))';
-                  }
+                  const deltaColor = getStatusDeltaColor(balance.status);
+                  const deltaSign = balance.status === 'up' || balance.status === 'new' ? '+' : '';
 
                   const visiblePreviousTags = balance.tagsChanged
                     ? balance.previousTags.filter(tag => tag !== 'untagged')
@@ -633,9 +627,7 @@ export function SnapshotDiffModal({
                             position: 'absolute',
                             left: '-15px',
                             top: '50%',
-                            color: balance.status === 'new'
-                              ? 'var(--diff-positive, hsl(142, 45%, 55%))'
-                              : 'var(--diff-negative, hsl(0, 45%, 60%))',
+                            color: getStatusDeltaColor(balance.status),
                             fontSize: '8px',
                             fontWeight: 800,
                             letterSpacing: '0.04em',

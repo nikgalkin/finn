@@ -10,6 +10,7 @@ import { QuickHoverTooltip } from './QuickHoverTooltip';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { CommentModal } from './SnapshotCommentModal';
 import { SearchableSelect } from './graphs/SearchableSelect';
+import { formatMonth } from '../../lib/format';
 
 export type FlowPeriodDraft = {
   clientID: string;
@@ -106,12 +107,6 @@ const isUntouchedBlankDraft = (draft: FlowPeriodDraft, currency: string) => (
   && draft.toCurrency === currency
   && draft.toAmount === ''
 );
-
-const formatMonth = (month: string) => {
-  const [year, monthNumber] = month.split('-').map(Number);
-  if (!year || !monthNumber) return month;
-  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1, 1));
-};
 
 export function FlowPeriodModal({
   month,

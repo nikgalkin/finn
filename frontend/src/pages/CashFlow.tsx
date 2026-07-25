@@ -18,6 +18,7 @@ import { FlowNetSummary } from './components/FlowNetSummary';
 import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 import { orientExchangeRate } from '../lib/finance';
+import { formatMonth } from '../lib/format';
 
 type FlowMovementFilter = 'all' | FlowDirection | 'transfer';
 
@@ -57,12 +58,6 @@ const formatTransferRate = (entry: FlowEntry) => {
   const formatRate = (rate: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(rate);
   const displayRate = orientExchangeRate(entry.currency, entry.toCurrency, directRate);
   return `1 ${displayRate.fromCurrency} = ${formatRate(displayRate.rate)} ${displayRate.toCurrency}`;
-};
-
-const formatMonth = (month: string) => {
-  const [year, monthNumber] = month.split('-').map(Number);
-  if (!year || !monthNumber) return month;
-  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(new Date(year, monthNumber - 1, 1));
 };
 
 const nextMonth = (month: string) => {
