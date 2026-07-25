@@ -102,6 +102,10 @@ const formatPercent = (value: number) => {
   return `${normalized > 0 ? '+' : ''}${normalized.toFixed(2)}%`;
 };
 
+const SignedMoney = ({ value, suffix }: { value: number; suffix: string }) => (
+  <span style={{ color: getMoneyDeltaColor(value) }}>{formatSigned(value)} {suffix}</span>
+);
+
 const normalizeStackData = (data: ChartDatum[], keys: string[]) => {
   return data.map(point => {
     const total = keys.reduce((sum, key) => sum + Number(point[key] || 0), 0);
@@ -242,7 +246,7 @@ const NetWorthTooltip = ({ active, payload, label, baseCurrency }: any) => {
         {
           key: 'delta',
           label: <span style={{ color: '#eab308' }}>Change</span>,
-          value: <span style={{ color: getDeltaColor(delta) }}>{formatSigned(delta)} {baseCurrency}</span>
+          value: <SignedMoney value={delta} suffix={baseCurrency} />
         }
       ]}
       style={{ minWidth: '210px' }}
@@ -251,6 +255,22 @@ const NetWorthTooltip = ({ active, payload, label, baseCurrency }: any) => {
 };
 
 type DecompositionSeries = { key: string; label: string; color: string };
+
+const DecompositionTooltip = ({ active, payload, label, baseCurrency, item }: any) => {
+  if (!active || !payload || !payload.length) return null;
+
+  return (
+    <GraphTooltip
+      title={label}
+      rows={[{
+        key: item.key,
+        label: item.label,
+        markerColor: item.color,
+        value: <SignedMoney value={Number(payload[0].value || 0)} suffix={baseCurrency} />
+      }]}
+    />
+  );
+};
 
 const DecompositionSmallMultiples = ({
   baseCurrency,
@@ -274,7 +294,7 @@ const DecompositionSmallMultiples = ({
               <i style={{ width: '8px', height: '8px', borderRadius: '2px', background: item.color }} />
               {item.label}
             </span>
-            <strong style={{ color: getDeltaColor(total) }}>{formatSigned(total)} {baseCurrency}</strong>
+            <strong><SignedMoney value={total} suffix={baseCurrency} /></strong>
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -282,7 +302,7 @@ const DecompositionSmallMultiples = ({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="month" hide={!isLast} stroke="var(--text-secondary)" style={{ fontSize: '11px' }} />
                 <YAxis width={54} stroke="var(--text-secondary)" tickFormatter={formatCompact} style={{ fontSize: '11px' }} />
-                <Tooltip content={<SimpleGraphTooltip formatter={(value) => [formatMoney(Number(value), baseCurrency), item.label]} />} />
+                <Tooltip content={<DecompositionTooltip baseCurrency={baseCurrency} item={item} />} />
                 <ReferenceLine y={0} stroke="rgba(148, 163, 184, 0.55)" />
                 <Bar dataKey={item.key} name={item.label} fill={item.color} radius={[3, 3, 0, 0]} maxBarSize={42}>
                   {data.map(point => (
