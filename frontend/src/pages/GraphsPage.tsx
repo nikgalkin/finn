@@ -5,7 +5,7 @@ import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
-import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount } from '../lib/finance';
+import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount, type TaggedReturnKind } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
 import { useFlowEntries } from '../hooks/useFlowEntries';
 import { GraphsAnalyticsSections, type HiddenLegendSeries, type LegendGroup } from './components/graphs/GraphsAnalyticsSections';
@@ -238,9 +238,12 @@ export default function GraphsPage() {
       .sort((left, right) => Math.abs(right.totalBase) - Math.abs(left.totalBase));
   }, [baseCurrency, latestSnapshot]);
 
+  const previousSnapshotByMonth = useMemo(() => new Map(
+    snapshots.map((snapshot, index) => [snapshot.month, index > 0 ? snapshots[index - 1] : null])
+  ), [snapshots]);
+
   const netWorthData = filteredSnapshots.map(snapshot => {
-    const globalIndex = snapshots.findIndex(s => s.month === snapshot.month);
-    const previousSnapshot = globalIndex > 0 ? snapshots[globalIndex - 1] : null;
+    const previousSnapshot = previousSnapshotByMonth.get(snapshot.month) || null;
     const total = getSnapshotTotalBase(snapshot);
     const previousTotal = previousSnapshot ? getSnapshotTotalBase(previousSnapshot) : total;
 
@@ -251,8 +254,8 @@ export default function GraphsPage() {
     };
   });
 
-  const decompositionData = filteredSnapshots.map((snapshot, index) => {
-    const previousSnapshot = index > 0 ? filteredSnapshots[index - 1] : null;
+  const decompositionData = filteredSnapshots.map(snapshot => {
+    const previousSnapshot = previousSnapshotByMonth.get(snapshot.month) || null;
     const { organicDelta, fxImpactDelta } = previousSnapshot
       ? calculateFlowDecomposition(snapshot, previousSnapshot, baseCurrency)
       : { organicDelta: 0, fxImpactDelta: 0 };
@@ -340,7 +343,10 @@ export default function GraphsPage() {
   }).sort((left, right) => left.month.localeCompare(right.month) || left.id - right.id);
 
   const currentTotal = latestSnapshot ? getSnapshotTotalBase(latestSnapshot) : 0;
-  const startTotal = firstSnapshot ? getSnapshotTotalBase(firstSnapshot) : 0;
+  const periodBaselineSnapshot = firstSnapshot
+    ? previousSnapshotByMonth.get(firstSnapshot.month) || firstSnapshot
+    : null;
+  const startTotal = periodBaselineSnapshot ? getSnapshotTotalBase(periodBaselineSnapshot) : 0;
   const periodDelta = latestSnapshot && firstSnapshot ? currentTotal - startTotal : 0;
   const periodOrganicDelta = decompositionData.reduce((total, point) => total + Number(point['Organic flow'] || 0), 0);
   const periodExternalFlow = decompositionData.reduce((total, point) => total + Number(point['External flow'] || 0), 0);
@@ -354,6 +360,7 @@ export default function GraphsPage() {
     result: number;
     multiplier: number;
     ratedMonths: number;
+    kind: TaggedReturnKind;
     monthly: Array<{ month: string; openingCapital: number; closingCapital: number; assignedFlow: number; result: number; ratePercent: number | null }>;
   }>();
   let assignedExternalEntries = 0;
@@ -361,17 +368,18 @@ export default function GraphsPage() {
   let proportionallyAllocatedEntries = 0;
   let unattributedFlow = 0;
   const unknownFlowAccounts = new Set<string>();
-  filteredSnapshots.forEach((snapshot, index) => {
-    if (!cashFlowEnabled || index === 0) return;
+  filteredSnapshots.forEach(snapshot => {
+    const previousSnapshot = previousSnapshotByMonth.get(snapshot.month);
+    if (!cashFlowEnabled || !previousSnapshot) return;
     const monthEntries = flowEntries.filter(entry => entry.month === snapshot.month);
-    const breakdown = calculateTaggedCapitalReturns(snapshot, filteredSnapshots[index - 1], monthEntries, baseCurrency);
+    const breakdown = calculateTaggedCapitalReturns(snapshot, previousSnapshot, monthEntries, baseCurrency, settings.nonYieldingTags || []);
     assignedExternalEntries += breakdown.assignedExternalEntries;
     totalExternalEntries += breakdown.totalExternalEntries;
     proportionallyAllocatedEntries += breakdown.proportionallyAllocatedEntries;
     unattributedFlow += breakdown.unattributedFlow;
     breakdown.unknownAccounts.forEach(account => unknownFlowAccounts.add(account));
     breakdown.returns.forEach(item => {
-      const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, ratedMonths: 0, monthly: [] };
+      const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, ratedMonths: 0, kind: item.kind, monthly: [] };
       total.result += item.result;
       total.monthly.push({
         month: snapshot.month,
@@ -391,12 +399,16 @@ export default function GraphsPage() {
   const tagReturnStats = Array.from(taggedReturnTotals.entries())
     .map(([tag, total]) => ({
       tag,
+      kind: total.kind,
       result: total.result,
-      ratePercent: total.ratedMonths > 0 ? (total.multiplier - 1) * 100 : null,
+      ratePercent: total.kind === 'spending' || total.ratedMonths === 0 ? null : (total.multiplier - 1) * 100,
       monthly: total.monthly
     }))
     .filter(item => Math.abs(item.result) >= 0.01 || item.ratePercent !== null)
     .sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
+  const nonYieldingResult = tagReturnStats
+    .filter(item => item.kind === 'spending')
+    .reduce((total, item) => total + item.result, 0);
   const summaryStats = [
     {
       label: 'Net worth',
@@ -409,7 +421,7 @@ export default function GraphsPage() {
       value: Math.round(periodDelta),
       suffix: baseCurrency,
       percent: getSignedPercent(currentTotal, startTotal),
-      help: `Difference between the latest and first snapshots in the selected range. Percent is this change divided by the first snapshot total.`
+      help: `Change across every month in the selected range, measured from the snapshot before the range starts. Percent is this change divided by that starting total.`
     },
     ...(!cashFlowEnabled ? [{
       label: 'Organic flow',
@@ -535,7 +547,8 @@ export default function GraphsPage() {
           organicChange: periodExternalFlow + periodEstimatedReturn,
           externalFlow: periodExternalFlow,
           result: periodEstimatedReturn,
-          ratePercent: (periodReturnMultiplier - 1) * 100
+          ratePercent: (periodReturnMultiplier - 1) * 100,
+          nonYieldingResult
         } : undefined}
         activeCurrencies={activeCurrencies}
         allOrganizations={allOrganizations}

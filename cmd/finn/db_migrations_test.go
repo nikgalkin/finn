@@ -38,16 +38,16 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM snapshots").Scan(&snapshotCount); err != nil {
 		t.Fatal(err)
 	}
-	if snapshotCount != 10 {
-		t.Fatalf("snapshot count = %d, want 10", snapshotCount)
+	if snapshotCount != 14 {
+		t.Fatalf("snapshot count = %d, want 14", snapshotCount)
 	}
 
 	var flowCount int
 	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries").Scan(&flowCount); err != nil {
 		t.Fatal(err)
 	}
-	if flowCount != 29 {
-		t.Fatalf("flow entry count = %d, want 29", flowCount)
+	if flowCount != 49 {
+		t.Fatalf("flow entry count = %d, want 49", flowCount)
 	}
 
 	var salaryCount, rentCount, transferCount, carCount, bonusCount int
@@ -66,8 +66,24 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries WHERE month = '2026-05' AND direction = 'in' AND currency = 'USD' AND amount = 5000 AND category = 'bonus'").Scan(&bonusCount); err != nil {
 		t.Fatal(err)
 	}
-	if salaryCount != 9 || rentCount != 9 || transferCount != 9 {
-		t.Fatalf("recurring demo rows = salary:%d rent:%d transfers:%d, want 9 each", salaryCount, rentCount, transferCount)
+	if salaryCount != 13 || rentCount != 13 || transferCount != 13 {
+		t.Fatalf("recurring demo rows = salary:%d rent:%d transfers:%d, want 13 each", salaryCount, rentCount, transferCount)
+	}
+
+	var nonYieldingTags string
+	if err := db.QueryRow("SELECT json_extract(value, '$.nonYieldingTags') FROM settings WHERE key = 'master_data'").Scan(&nonYieldingTags); err != nil {
+		t.Fatal(err)
+	}
+	if nonYieldingTags != `["checking","cash"]` {
+		t.Fatalf("demo non-yielding tags = %s, want checking and cash", nonYieldingTags)
+	}
+
+	var untaggedFlowCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries WHERE tag = '' OR (entry_type = 'transfer' AND to_tag = '')").Scan(&untaggedFlowCount); err != nil {
+		t.Fatal(err)
+	}
+	if untaggedFlowCount != 0 {
+		t.Fatalf("demo movements without a tag = %d, want every movement tagged", untaggedFlowCount)
 	}
 	if carCount != 1 || bonusCount != 1 {
 		t.Fatalf("demo events = car:%d bonus:%d, want 1 each", carCount, bonusCount)
@@ -100,9 +116,9 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 		}
 		if snapshotIndex > 0 {
 			monthlyReturn := deposit/previousDeposit - 1
-			const expectedMonthlyReturn = 0.10 / 12
+			const expectedMonthlyReturn = 0.12 / 12
 			if math.Abs(monthlyReturn-expectedMonthlyReturn) > 0.0000001 {
-				t.Fatalf("snapshot %d deposit return = %.8f, want 10%% annual rate accrued monthly", snapshotIndex, monthlyReturn)
+				t.Fatalf("snapshot %d deposit return = %.8f, want 12%% annual rate accrued monthly", snapshotIndex, monthlyReturn)
 			}
 		}
 		previousDeposit = deposit

@@ -1,4 +1,4 @@
-import type { Balance, SnapshotData } from '../types';
+import type { BalanceDraft, SnapshotDraftData } from '../types';
 
 export type SnapshotDraftChangeSummary = {
   organizationsAdded: number;
@@ -13,7 +13,7 @@ export type SnapshotDraftChangeSummary = {
 };
 
 type SnapshotDraftComparable = {
-  data: SnapshotData;
+  data: SnapshotDraftData;
   currentMonth: string;
 };
 
@@ -31,7 +31,7 @@ const sameTags = (left?: string[], right?: string[]) => {
     && normalizedLeft.every((tag, index) => tag === normalizedRight[index]);
 };
 
-const sameBalanceContent = (left: Balance, right: Balance) => (
+const sameBalanceContent = (left: BalanceDraft, right: BalanceDraft) => (
   left.currency === right.currency
   && sameNumericValue(left.amount, right.amount)
   && sameTags(left.tags, right.tags)

@@ -14,7 +14,7 @@ export function ModalPortal({
   children,
   onClose,
   closeOnEscape = false,
-  className = 'fixed flex items-center justify-center bg-black/60 backdrop-blur-sm p-4',
+  className = 'app-modal-backdrop',
   zIndex = 100000
 }: ModalPortalProps) {
   useCloseOnEscape(onClose, { enabled: closeOnEscape });

@@ -20,20 +20,24 @@ const expandMonthlyAnnualRate = (expression: string) => {
   return `((${base})${operator}((${base})*${annualRate}/100/12))`;
 };
 
-export const evaluateNumberExpression = (expression: string | number): number => {
-  if (typeof expression === 'number') return expression;
+export const parseNumberExpression = (expression: string | number): number | null => {
+  if (typeof expression === 'number') return Number.isFinite(expression) ? expression : null;
 
   try {
     const normalized = expression.replace(/,/g, '.');
     const expanded = expandMonthlyAnnualRate(expandNumberShorthand(normalized));
-    if (/[a-z%]/i.test(expanded)) return 0;
+    if (/[a-z%]/i.test(expanded)) return null;
 
     const sanitized = expanded.replace(/[^-()\d/*+.]/g, '');
-    if (!sanitized) return 0;
+    if (!sanitized) return null;
 
     const result = new Function(`return ${sanitized}`)();
-    return Number.isFinite(result) ? result : 0;
+    return Number.isFinite(result) ? result : null;
   } catch {
-    return 0;
+    return null;
   }
 };
+
+export const evaluateNumberExpression = (expression: string | number): number => (
+  parseNumberExpression(expression) ?? 0
+);

@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { HelpCircle } from 'lucide-react';
 
 type HelpTooltipProps = {
   text: ReactNode;
@@ -53,7 +52,7 @@ export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320
       onFocus={openTooltip}
       onBlur={() => setOpen(false)}
       onClick={event => event.stopPropagation()}
-      style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }}
+      style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, verticalAlign: 'middle' }}
     >
       <button
         ref={buttonRef}
@@ -75,10 +74,15 @@ export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          cursor: 'help'
+          cursor: 'help',
+          fontFamily: 'inherit',
+          fontSize: '11px',
+          fontWeight: 700,
+          lineHeight: 1,
+          paddingBottom: '1px'
         }}
       >
-        <HelpCircle size={13} />
+        <span aria-hidden="true">?</span>
       </button>
       {open && createPortal(
         <div

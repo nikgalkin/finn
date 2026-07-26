@@ -121,7 +121,7 @@ WHERE EXISTS (
 ```
 
 The difference is not subtle: in the demo data `$.organizations[0].name = 'Binance'` matches no rows
-at all, while the scan finds it in all ten snapshots.
+at all, while the scan finds it in all fourteen snapshots.
 
 The box is ticked automatically when the path contains an array index, and disabled when it has none
 to scan. Values follow the same rules as elsewhere — a numeric id stays unquoted so it compares

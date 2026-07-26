@@ -1,4 +1,4 @@
-import type { SnapshotData } from '../types';
+import type { SnapshotDraftData } from '../types';
 import type { SnapshotDraftChangeSummary } from './snapshotDraftDiff';
 
 export const SNAPSHOT_DRAFT_PREFIX = 'finn_draft_';
@@ -9,7 +9,7 @@ const SNAPSHOT_DRAFT_TTL_MS = SNAPSHOT_DRAFT_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 export type SnapshotDraft = {
   version: 1;
-  data: SnapshotData;
+  data: SnapshotDraftData;
   currentMonth: string;
   durationSeconds: number;
   timestamp: number;
@@ -77,7 +77,7 @@ const normalizeDraft = (value: unknown): SnapshotDraft | null => {
   const durationSeconds = Number(value.durationSeconds);
   return {
     version: 1,
-    data: value.data as SnapshotData,
+    data: value.data as SnapshotDraftData,
     currentMonth: value.currentMonth,
     durationSeconds: Number.isFinite(durationSeconds) && durationSeconds >= 0 ? durationSeconds : 0,
     timestamp,

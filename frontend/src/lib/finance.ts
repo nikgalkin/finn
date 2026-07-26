@@ -1,4 +1,5 @@
 import type { Balance, FlowEntry, ParsedSnapshot, Organization } from '../types';
+import { toNumber } from './number.ts';
 
 export type SnapshotTotals = {
   totalBase: number;
@@ -16,8 +17,11 @@ export type EstimatedCapitalReturn = {
   ratePercent: number | null;
 };
 
+export type TaggedReturnKind = 'yield' | 'spending' | 'unknown';
+
 export type TaggedCapitalReturn = {
   tag: string;
+  kind: TaggedReturnKind;
   openingCapital: number;
   closingCapital: number;
   assignedFlow: number;
@@ -43,11 +47,6 @@ export type CommentItem = {
 };
 
 const DEFAULT_REFERENCE_CURRENCY = 'RUB';
-
-const toNumber = (value: number | string | undefined): number => {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
 
 export const inferRateReferenceCurrency = (
   rates: Record<string, number | string>,
@@ -225,7 +224,8 @@ export const calculateTaggedCapitalReturns = (
   current: ParsedSnapshot,
   previous: ParsedSnapshot,
   entries: FlowEntry[],
-  baseCurrency: string
+  baseCurrency: string,
+  nonYieldingTags: string[] = []
 ): TaggedCapitalReturnBreakdown => {
   type AccountBalance = { amount: number; amountsByTag: Map<string, number> };
   const collectBalances = (snapshot: ParsedSnapshot) => {
@@ -377,13 +377,18 @@ export const calculateTaggedCapitalReturns = (
     addToTag(tag, 'result', -amount);
   });
 
+  const nonYielding = new Set(nonYieldingTags.map(tag => tag.trim()).filter(Boolean));
   const returns = Array.from(totals.entries()).map(([tag, total]) => {
     const averageCapital = total.openingCapital + total.assignedFlow / 2;
+    const kind: TaggedReturnKind = tag === 'untagged'
+      ? 'unknown'
+      : nonYielding.has(tag.trim()) ? 'spending' : 'yield';
     return {
       tag,
+      kind,
       ...total,
       closingCapital: total.openingCapital + total.assignedFlow + total.result,
-      ratePercent: averageCapital > 0 ? (total.result / averageCapital) * 100 : null
+      ratePercent: kind === 'spending' || averageCapital <= 0 ? null : (total.result / averageCapital) * 100
     };
   }).sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
 

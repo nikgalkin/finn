@@ -31,7 +31,8 @@ Finn is for people whose finances span accounts in several countries and currenc
 When enabled, Cash Flow also provides:
 
 * **Transfers and currency exchanges:** Record separate sent and received amounts between your accounts without treating them as income or spending
-* **Estimated capital return:** Reconcile balance changes, external flows, and FX impact into an approximate earnings amount and rate, including breakdowns by balance tag when movements are assigned to accounts
+* **Estimated capital return:** Reconcile balance changes, external flows, and FX impact into an approximate earnings amount and rate, including breakdowns by balance tag when movements carry a tag or are assigned to accounts
+* **Earnings or unrecorded spending:** Mark tags such as `cash` or `checking` as non-yielding, and analytics reads their unexplained change as estimated spending instead of capital earnings
 * **CSV import:** Import existing movements through a validated preview with duplicate detection
 
 ## 📚 Documentation

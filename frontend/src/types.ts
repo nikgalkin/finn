@@ -1,6 +1,6 @@
 export type Balance = {
   currency: string;
-  amount: number | string;
+  amount: number;
   comment?: string;
   tags?: string[];
 };
@@ -18,6 +18,12 @@ export type SnapshotData = {
   rates: Record<string, number | string>;
   organizations: Organization[];
 };
+
+export type BalanceDraft = Omit<Balance, 'amount'> & { amount: number | string };
+
+export type OrganizationDraft = Omit<Organization, 'balances'> & { balances: BalanceDraft[] };
+
+export type SnapshotDraftData = Omit<SnapshotData, 'organizations'> & { organizations: OrganizationDraft[] };
 
 export type Snapshot = {
   id: number;
@@ -43,6 +49,7 @@ export type AppSettings = {
   baseCurrency?: string;
   secondaryCurrency?: string;
   tags?: string[]; // Balance analytical tagging infrastructure array
+  nonYieldingTags?: string[];
   cashFlow?: CashFlowSettings;
   localAI?: LocalAISettings;
 };

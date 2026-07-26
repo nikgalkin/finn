@@ -6,6 +6,16 @@ Enable Cash Flow in **Settings** when you want to record incoming, outgoing, and
 
 A movement can also carry a balance tag of its own. Leave it on **Auto** to derive the tag from the balances of the chosen account; pick a tag when that guess is wrong, when the account holds several tags at once, or when the money belongs to a tag you cannot express through an account. Movements that reach neither a tag nor a known account are reported as a separate reconciliation line in Portfolio Analytics rather than counted as somebody's earnings.
 
+## Non-yielding tags
+
+Portfolio Analytics reads what a balance changed by beyond its recorded movements as estimated earnings. Tags such as `cash` or `checking` cannot earn anything, so for them the same difference means the opposite: money that was spent and never written down.
+
+Mark those tags with **Doesn't yield** in **Settings → Balance Tags**. Analytics then lists them under *Estimated spending* instead of *Estimated capital earnings*, with no return percentage, and the top card shows how much of its number comes from them. If such a tag ends the period with a gain instead, it is labelled as income that never reached Cash Flow rather than negative spending.
+
+The classification lives in Settings and nothing else stores it, so it always describes the tag as it is today and applies to the whole history at once. Ticking a tag reclassifies every month you have already saved, and unticking it puts them back. `untagged` money is never classified either way and stays in its own row.
+
+Removing a tag from the list in Settings does not clear its classification: snapshots keep the tag string, so the flag has to outlive the tag it describes.
+
 ## CSV import format
 
 Cash Flow accepts UTF-8 CSV files separated with semicolons (`;`). Decimal values may use either a dot or a comma. Each row represents one movement. The preview marks rows that already exist or repeat within the file; exact duplicates are skipped by default and can be explicitly included with the import checkbox.

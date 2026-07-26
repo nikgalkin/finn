@@ -193,3 +193,58 @@ test('moves a transfer between the tags its two legs name', () => {
   assert.equal(byTag.stocks.result, 0);
   assert.equal(result.unattributedFlow, 0);
 });
+
+test('reads the unexplained change on a non-yielding tag as spending without a return rate', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 700, tags: ['checking'] }, { amount: 1100, tags: ['stocks'] }]),
+    snapshot('2026-01', [{ amount: 1000, tags: ['checking'] }, { amount: 1000, tags: ['stocks'] }]),
+    [],
+    'RUB',
+    ['checking']
+  );
+  const byTag = Object.fromEntries(result.returns.map(item => [item.tag, item]));
+
+  assert.equal(byTag.checking.kind, 'spending');
+  assert.equal(byTag.checking.result, -300);
+  assert.equal(byTag.checking.ratePercent, null);
+  assert.equal(byTag.stocks.kind, 'yield');
+  assert.equal(byTag.stocks.ratePercent, 10);
+});
+
+test('treats every tag as yielding until it is classified', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 1100, tags: ['checking'] }]),
+    snapshot('2026-01', [{ amount: 1000, tags: ['checking'] }]),
+    [],
+    'RUB'
+  );
+
+  assert.equal(result.returns[0].kind, 'yield');
+  assert.equal(result.returns[0].ratePercent, 10);
+});
+
+test('ignores whitespace when matching a tag against the classification', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 700, tags: [' checking '] }]),
+    snapshot('2026-01', [{ amount: 1000, tags: [' checking '] }]),
+    [],
+    'RUB',
+    ['checking']
+  );
+
+  assert.equal(result.returns[0].kind, 'spending');
+});
+
+test('never classifies untagged money, even when it is listed as non-yielding', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 700, tags: [] }]),
+    snapshot('2026-01', [{ amount: 1000, tags: [] }]),
+    [],
+    'RUB',
+    ['untagged']
+  );
+
+  assert.equal(result.returns[0].tag, 'untagged');
+  assert.equal(result.returns[0].kind, 'unknown');
+  assert.equal(result.returns[0].result, -300);
+});

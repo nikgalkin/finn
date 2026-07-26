@@ -148,6 +148,8 @@ export function FlowPeriodModal({
     return initial;
   });
   const initialDrafts = useRef(JSON.stringify(drafts));
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollToEnd = useRef(false);
   const [validationError, setValidationError] = useState('');
   const [commentEditor, setCommentEditor] = useState<{ clientID: string; text: string } | null>(null);
   const [copiedPrevious, setCopiedPrevious] = useState(false);
@@ -207,6 +209,21 @@ export function FlowPeriodModal({
     stopImmediatePropagation: false
   });
 
+  useEffect(() => {
+    if (!pendingScrollToEnd.current) return;
+    pendingScrollToEnd.current = false;
+
+    const container = listRef.current;
+    if (!container || container.scrollTop + container.clientHeight >= container.scrollHeight - 1) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [drafts.length]);
+
+  const addDraft = () => {
+    pendingScrollToEnd.current = true;
+    setDrafts(current => [...current, emptyDraft(defaultCurrency)]);
+    setValidationError('');
+  };
+
   const updateDraft = (clientID: string, patch: Partial<FlowPeriodDraft>) => {
     setDrafts(current => current.map(draft => draft.clientID === clientID ? { ...draft, ...patch } : draft));
     setValidationError('');
@@ -216,6 +233,7 @@ export function FlowPeriodModal({
 
   const copyPrevious = () => {
     if (!copyPreviousEntries?.length || copiedPrevious || saving) return;
+    pendingScrollToEnd.current = true;
     setDrafts(current => [
       ...(current.length === 1 && isUntouchedBlankDraft(current[0], defaultCurrency) ? [] : current),
       ...copyPreviousEntries.map(seedToDraft)
@@ -291,14 +309,28 @@ export function FlowPeriodModal({
         </div>
 
         <div className="cash-flow-period-toolbar">
-          <span>{drafts.length} movement{drafts.length === 1 ? '' : 's'}</span>
           <span className="cash-flow-label-with-help">
             Amount supports calculations and shortcuts
             <HelpTooltip text={<AmountFieldHelp />} ariaLabel="Amount field help" width={400} />
           </span>
+          <div className="cash-flow-period-toolbar-actions">
+            <span>{drafts.length} movement{drafts.length === 1 ? '' : 's'}</span>
+            {copyPreviousEntries && (
+              <button
+                type="button"
+                className="btn"
+                onClick={copyPrevious}
+                disabled={saving || copiedPrevious || copyPreviousEntries.length === 0}
+                title={copyPreviousEntries.length === 0 ? 'The previous month has no external movements.' : `Copy ${copyPreviousEntries.length} external movement${copyPreviousEntries.length === 1 ? '' : 's'} from the previous month`}
+              >
+                <Copy size={15} /> {copiedPrevious ? 'Previous copied' : 'Copy previous'}
+              </button>
+            )}
+            <button type="button" className="btn cash-flow-add-movement" onClick={addDraft} disabled={saving}><Plus size={15} /> Add movement</button>
+          </div>
         </div>
 
-        <div className="cash-flow-period-list">
+        <div className="cash-flow-period-list" ref={listRef}>
           {drafts.length === 0 ? (
             <div className="cash-flow-period-empty">This month will be empty after saving.</div>
           ) : drafts.map((draft, index) => (
@@ -406,21 +438,6 @@ export function FlowPeriodModal({
               <button type="button" className="btn btn-danger cash-flow-period-remove" onClick={() => setDrafts(current => current.filter(item => item.clientID !== draft.clientID))} title="Remove movement"><Trash2 size={16} /></button>
             </div>
           ))}
-        </div>
-
-        <div className="cash-flow-period-add flex gap-2" style={{ flexWrap: 'wrap' }}>
-          {copyPreviousEntries && (
-            <button
-              type="button"
-              className="btn"
-              onClick={copyPrevious}
-              disabled={saving || copiedPrevious || copyPreviousEntries.length === 0}
-              title={copyPreviousEntries.length === 0 ? 'The previous month has no external movements.' : `Copy ${copyPreviousEntries.length} external movement${copyPreviousEntries.length === 1 ? '' : 's'} from the previous month`}
-            >
-              <Copy size={16} /> {copiedPrevious ? 'Previous copied' : 'Copy previous'}
-            </button>
-          )}
-          <button type="button" className="btn" onClick={() => setDrafts(current => [...current, emptyDraft(defaultCurrency)])} disabled={saving}><Plus size={16} /> Add movement</button>
         </div>
 
         {(validationError || error) && <div className="cash-flow-period-error">{validationError || error}</div>}
