@@ -572,14 +572,30 @@ export function GraphsAnalyticsSections({
                 </button>
                 <div>
                   <span>Time-weighted return</span>
-                  <div className="capital-return-headline-row">
-                    <strong style={{ color: getPercentDeltaColor(capitalReturnSummary.ratePercent) }}>{formatPercent(capitalReturnSummary.ratePercent)}</strong>
-                    <div className="capital-return-headline-notes">
-                      <small>· over {capitalReturnSummary.monthly.length} month{capitalReturnSummary.monthly.length === 1 ? '' : 's'}</small>
-                      {capitalReturnSummary.annualizedRatePercent !== null && (
-                        <small className="capital-return-headline-annual"><b>{formatPercent(capitalReturnSummary.annualizedRatePercent)}</b> per year</small>
-                      )}
+                  <div className="capital-return-headline-metrics">
+                    <div className="capital-return-headline-metric">
+                      <strong
+                        className="capital-return-headline-rate"
+                        style={{ color: getPercentDeltaColor(capitalReturnSummary.ratePercent) }}
+                        title={`Time-weighted return over ${capitalReturnSummary.monthly.length} month${capitalReturnSummary.monthly.length === 1 ? '' : 's'}`}
+                        aria-label={`${formatPercent(capitalReturnSummary.ratePercent)} over ${capitalReturnSummary.monthly.length} month${capitalReturnSummary.monthly.length === 1 ? '' : 's'}`}
+                      >
+                        {formatPercent(capitalReturnSummary.ratePercent, Math.abs(capitalReturnSummary.ratePercent) >= 1000 ? 0 : 2)}
+                      </strong>
+                      <small>for {capitalReturnSummary.monthly.length} month{capitalReturnSummary.monthly.length === 1 ? '' : 's'}</small>
                     </div>
+                    {capitalReturnSummary.annualizedRatePercent !== null && (
+                      <div className="capital-return-headline-metric is-annual">
+                        <strong
+                          className="capital-return-headline-annual-rate"
+                          style={{ color: getPercentDeltaColor(capitalReturnSummary.annualizedRatePercent) }}
+                          title={`Annualized return based on ${capitalReturnSummary.monthly.length} month${capitalReturnSummary.monthly.length === 1 ? '' : 's'}`}
+                        >
+                          {formatPercent(capitalReturnSummary.annualizedRatePercent, Math.abs(capitalReturnSummary.annualizedRatePercent) >= 1000 ? 0 : 2)}
+                        </strong>
+                        <small>annualized</small>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
