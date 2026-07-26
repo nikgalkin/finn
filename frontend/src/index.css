@@ -246,6 +246,19 @@ a { color: var(--accent); text-decoration: none; }
   .dashboard-comment-dot-halo { display: none; }
 }
 
+@keyframes page-content-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+main > * { animation: page-content-enter 0.3s ease-out; }
+
+main > .page-loader { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  main > * { animation: none; }
+}
+
 .btn {
   background: var(--glass-bg);
   color: var(--text-primary);
@@ -323,7 +336,7 @@ a { color: var(--accent); text-decoration: none; }
 .settings-page .input::placeholder { font-weight: 400; }
 
 .page-loader {
-  min-height: min(36vh, 320px);
+  min-height: min(52vh, 460px);
   display: grid;
   place-items: center;
   color: #60a5fa;

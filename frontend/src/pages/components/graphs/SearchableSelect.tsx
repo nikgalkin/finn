@@ -143,7 +143,7 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
             style={{ padding: '6px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', textAlign: 'left', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}
             className="hover:bg-[rgba(255,255,255,0.05)]"
           >
-            <Plus size={13} /> Create “{customValue}”
+            <Plus size={13} /> Create '{customValue}'
           </div>
         )}
         {filteredOptions.map(option => (

@@ -563,7 +563,7 @@ export function GraphsAnalyticsSections({
                     <span className="capital-return-reconciliation-label">
                       Of which non-yielding tags
                       <HelpTooltip
-                        text="Tags marked as “Doesn't yield” in Settings cannot earn anything, so their share of this number is an estimate of spending that never reached Cash Flow, not capital earnings."
+                        text="Tags marked as 'Doesn't yield' in Settings cannot earn anything, so their share of this number is an estimate of spending that never reached Cash Flow, not capital earnings."
                         ariaLabel="Non-yielding tags inside estimated earnings"
                         width={320}
                       />
@@ -581,7 +581,7 @@ export function GraphsAnalyticsSections({
               <ChartTitle
                 icon={<Layers size={16} style={{ color: '#14b8a6' }} />}
                 help={hasSpendingTags
-                  ? "A movement can be attributed to a deposit, stock, or other tag only when its Own account is selected in Cash Flow. For yielding tags the amount is estimated earnings and the percentage is the time-weighted return; for tags marked as “Doesn't yield” the same difference is read as spending that never reached Cash Flow. The return ignores deposits and withdrawals, so its sign can differ from the amount as invested balances change."
+                  ? "A movement can be attributed to a deposit, stock, or other tag only when its Own account is selected in Cash Flow. For yielding tags the amount is estimated earnings and the percentage is the time-weighted return; for tags marked as 'Doesn't yield' the same difference is read as spending that never reached Cash Flow. The return ignores deposits and withdrawals, so its sign can differ from the amount as invested balances change."
                   : "A movement can be attributed to a deposit, stock, or other tag only when its Own account is selected in Cash Flow. Amount is estimated earnings; percentage is the time-weighted return for the selected period. The return ignores deposits and withdrawals, so its sign can differ from the amount as invested balances change."}
               >
                 {hasSpendingTags ? 'Earnings and spending by balance tag' : 'Estimated earnings by balance tag'}

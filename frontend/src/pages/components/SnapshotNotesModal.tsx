@@ -9,8 +9,8 @@ type SnapshotNotesModalProps = {
   onClose: () => void;
 };
 
-const panelStyle = { width: '500px', maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto' as const, padding: '24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
-const noteCardStyle = { padding: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' };
+const panelStyle = { width: '760px', maxWidth: '94vw', maxHeight: '86vh', overflowY: 'auto' as const, padding: '24px 28px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
+const noteCardStyle = { padding: '14px 16px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' };
 
 export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProps) {
   return (
@@ -28,14 +28,15 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {snapshot.data.comment && (
             <div style={noteCardStyle}>
               <div style={{ color: '#10b981', fontWeight: 600, fontSize: '0.9em', marginBottom: '6px', letterSpacing: '0.05em' }}>SNAPSHOT NOTE</div>
-              <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95em' }}>{snapshot.data.comment}</div>
+              <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95em', lineHeight: 1.5 }}>{snapshot.data.comment}</div>
             </div>
           )}
 
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px', alignItems: 'start' }}>
           {snapshot.data.organizations.map(org => {
             const balancesWithComments = org.balances.filter(balance => balance.comment);
             if (!org.comment && balancesWithComments.length === 0) return null;
@@ -44,7 +45,7 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
               <div key={org.id} style={noteCardStyle}>
                 <div style={{ color: 'var(--text-primary)', fontWeight: 'bold', fontSize: '1.05em', marginBottom: '6px' }}>{org.name}</div>
                 {org.comment && (
-                  <div style={{ fontStyle: 'italic', color: 'var(--text-secondary)', marginBottom: '8px', paddingLeft: '4px' }}>
+                  <div style={{ fontStyle: 'italic', color: 'var(--text-primary)', opacity: 0.85, lineHeight: 1.5, marginBottom: '8px', paddingLeft: '4px' }}>
                     {org.comment}
                   </div>
                 )}
@@ -63,7 +64,7 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
                         }}>
                           [{balance.currency}]
                         </span>
-                        <span style={{ color: 'var(--text-secondary)' }}>{balance.comment}</span>
+                        <span style={{ color: 'var(--text-primary)', opacity: 0.85, lineHeight: 1.5 }}>{balance.comment}</span>
                       </div>
                     ))}
                   </div>
@@ -71,6 +72,7 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
               </div>
             );
           })}
+          </div>
         </div>
       </div>
     </ModalPortal>
