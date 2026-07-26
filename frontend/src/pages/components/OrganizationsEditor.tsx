@@ -1,6 +1,6 @@
 import type { MutableRefObject } from 'react';
 import { Copy, List, MessageSquare, Plus, Trash2 } from 'lucide-react';
-import type { AppSettings, Balance, Organization } from '../../types';
+import type { AppSettings, BalanceDraft, OrganizationDraft } from '../../types';
 import { getCountryByAlpha3, getCountryDisplayName } from '../../lib/countries';
 import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
@@ -12,7 +12,7 @@ type OrganizationsEditorProps = {
   isNew: boolean;
   latestSnapshotAvailable: boolean;
   recentlyAddedOrgId: string | null;
-  organizations: Organization[];
+  organizations: OrganizationDraft[];
   orgRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
   settings: AppSettings;
   onActiveDropdownChange: (orgId: string | null) => void;
@@ -23,7 +23,7 @@ type OrganizationsEditorProps = {
   onOpenComment: (comment: ActiveSnapshotComment) => void;
   onRemoveBalance: (orgId: string, index: number) => void;
   onRemoveOrganization: (orgId: string) => void;
-  onUpdateBalance: (orgId: string, index: number, field: keyof Balance, value: any) => void;
+  onUpdateBalance: (orgId: string, index: number, field: keyof BalanceDraft, value: any) => void;
   onUpdateOrganizationField: (id: string, field: 'name' | 'comment', value: string) => void;
 };
 

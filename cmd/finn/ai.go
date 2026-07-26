@@ -116,12 +116,14 @@ type aiCashFlowEntry struct {
 	Direction    string  `json:"direction"`
 	Counterparty string  `json:"counterparty,omitempty"`
 	Account      string  `json:"account"`
+	Tag          string  `json:"tag,omitempty"`
 	Currency     string  `json:"currency"`
 	Amount       float64 `json:"amount"`
 	TaxRate      float64 `json:"tax_rate,omitempty"`
 	Category     string  `json:"category,omitempty"`
 	Comment      string  `json:"comment,omitempty"`
 	ToAccount    string  `json:"to_account,omitempty"`
+	ToTag        string  `json:"to_tag,omitempty"`
 	ToCurrency   string  `json:"to_currency,omitempty"`
 	ToAmount     float64 `json:"to_amount,omitempty"`
 }
@@ -626,8 +628,8 @@ func anonymizeAISnapshot(data *aiSnapshotData, anonymizer *aiOrganizationAnonymi
 
 func loadAICashFlow(db *sql.DB, firstMonth, lastMonth string) ([]aiCashFlowEntry, error) {
 	query := `
-		SELECT month, entry_type, direction, counterparty, account, currency, amount,
-		       tax_rate, category, comment, to_account, to_currency, to_amount
+		SELECT month, entry_type, direction, counterparty, account, tag, currency, amount,
+		       tax_rate, category, comment, to_account, to_tag, to_currency, to_amount
 		FROM flow_entries
 	`
 	args := make([]any, 0, 2)
@@ -656,8 +658,8 @@ func loadAICashFlow(db *sql.DB, firstMonth, lastMonth string) ([]aiCashFlowEntry
 		var entry aiCashFlowEntry
 		if err := rows.Scan(
 			&entry.Month, &entry.EntryType, &entry.Direction, &entry.Counterparty,
-			&entry.Account, &entry.Currency, &entry.Amount, &entry.TaxRate,
-			&entry.Category, &entry.Comment, &entry.ToAccount, &entry.ToCurrency,
+			&entry.Account, &entry.Tag, &entry.Currency, &entry.Amount, &entry.TaxRate,
+			&entry.Category, &entry.Comment, &entry.ToAccount, &entry.ToTag, &entry.ToCurrency,
 			&entry.ToAmount,
 		); err != nil {
 			return nil, err

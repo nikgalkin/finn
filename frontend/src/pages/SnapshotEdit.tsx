@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { API_URL } from '../types';
-import type { Balance, FlowEntry, SnapshotData } from '../types';
+import type { BalanceDraft, FlowEntry, SnapshotData, SnapshotDraftData } from '../types';
 import { DraftRestoreBanner } from './components/DraftRestoreBanner';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { OrganizationsEditor } from './components/OrganizationsEditor';
@@ -17,6 +17,7 @@ import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { copyFlowPeriodEntries } from '../lib/cashFlow';
+import { normalizeSnapshotAmounts } from '../lib/snapshotAmounts';
 import { removeSnapshotDraft } from '../lib/snapshotDraftStorage';
 import {
   UNSAVED_NAVIGATION_REQUEST_EVENT,
@@ -69,13 +70,20 @@ export default function SnapshotEdit() {
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const addOrganizationScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [initialDataHash, setInitialDataHash] = useState('');
-  const [draftBaseline, setDraftBaseline] = useState<{ data: SnapshotData; currentMonth: string } | null>(null);
+  const [draftBaseline, setDraftBaseline] = useState<{ data: SnapshotDraftData; currentMonth: string } | null>(null);
   const draftKey = isCopy ? `finn_draft_copy_${sourceMonth}` : `finn_draft_${month || 'new'}`;
 
   const isDirty = useMemo(() => {
     if (!initialDataHash) return false;
     return initialDataHash !== JSON.stringify({ data, currentMonth });
   }, [data, currentMonth, initialDataHash]);
+
+  const accountTags = useMemo(() => new Map(data.organizations
+    .filter(organization => organization.name)
+    .map(organization => [
+      organization.name,
+      Array.from(new Set(organization.balances.flatMap(balance => balance.tags || []).filter(Boolean)))
+    ])), [data.organizations]);
 
   const { draftToRestore, setDraftToRestore, discardDraft } = useSnapshotDraft({
     draftKey,
@@ -344,11 +352,21 @@ export default function SnapshotEdit() {
       return;
     }
 
+    const { organizations: normalizedOrganizations, uncalculatedAmounts } = normalizeSnapshotAmounts(data.organizations);
+
+    if (uncalculatedAmounts.length > 0) {
+      const details = uncalculatedAmounts
+        .map(item => `• ${item.organization || 'Unnamed organization'}${item.currency ? ` (${item.currency})` : ''}: "${item.value}"`)
+        .join('\n');
+      alert(`⚠️ Save Error!\n\nThese amounts are not valid numbers and would be saved as 0:\n\n${details}\n\nPlease fix them and save again.`);
+      return;
+    }
+
     const usedCurrencies = new Set<string>();
 
-    data.organizations.forEach(org => {
+    normalizedOrganizations.forEach(org => {
       org.balances.forEach(b => {
-        if (Number(b.amount) !== 0 && b.currency) {
+        if (b.amount !== 0 && b.currency) {
           usedCurrencies.add(b.currency);
         }
       });
@@ -373,9 +391,9 @@ export default function SnapshotEdit() {
 
     const isEditing = !isNew && !isCopy;
 
-    const snapshotData = {
+    const snapshotData: SnapshotData = {
       ...data,
-      organizations: data.organizations.map(org => {
+      organizations: normalizedOrganizations.map(org => {
         if (org.country) return org;
         const configured = settings.organizations.find(organization => (
           organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
@@ -660,7 +678,7 @@ export default function SnapshotEdit() {
     });
   };
 
-  const updateBalance = (orgId: string, index: number, field: keyof Balance, value: any) => {
+  const updateBalance = (orgId: string, index: number, field: keyof BalanceDraft, value: any) => {
     setData({
       ...data,
       organizations: data.organizations.map(o => {
@@ -782,6 +800,7 @@ export default function SnapshotEdit() {
           month={cashFlowEditor.month}
           entries={cashFlowEditor.entries}
           copyPreviousEntries={cashFlowEditor.previousEntries}
+          accountTags={accountTags}
           settings={settings}
           appendBlank={cashFlowEditor.entries.length === 0}
           lockMonth

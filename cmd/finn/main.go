@@ -100,6 +100,7 @@ func runApp(opts appOptions) error {
 		}
 		return RunBackupJob(cfg, db)
 	})
+	setupToolsAPI(r.Group("/api"), cfg, db, isDemoMode)
 
 	// The SQL console keeps its own restricted connection, so it registers apart
 	// from the main API and stays optional if it cannot be opened.

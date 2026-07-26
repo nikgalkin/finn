@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowRightLeft, ArrowUp, Copy, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
+import { getCurrencyColor, getTagColor } from '../../types';
 import type { AppSettings, FlowDirection, FlowEntry, FlowEntryType } from '../../types';
 import type { FlowPeriodSeed } from '../../lib/cashFlow';
 import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
 import { Spinner } from './PageLoader';
 import { QuickHoverTooltip } from './QuickHoverTooltip';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { CommentModal } from './SnapshotCommentModal';
 import { SearchableSelect } from './graphs/SearchableSelect';
@@ -19,12 +21,14 @@ export type FlowPeriodDraft = {
   direction: FlowDirection;
   counterparty: string;
   account: string;
+  tag: string;
   currency: string;
   amount: number | string;
   taxRate: number | string;
   category: string;
   comment: string;
   toAccount: string;
+  toTag: string;
   toCurrency: string;
   toAmount: number | string;
 };
@@ -34,6 +38,7 @@ type FlowPeriodModalProps = {
   entries: FlowEntry[];
   seedEntries?: FlowPeriodSeed[];
   categorySuggestions?: string[];
+  accountTags?: Map<string, string[]>;
   settings: AppSettings;
   appendBlank?: boolean;
   focusEntryID?: number;
@@ -46,8 +51,11 @@ type FlowPeriodModalProps = {
   onSave: (drafts: FlowPeriodDraft[]) => void;
 };
 
-const NO_CATEGORY_OPTION = '— No category —';
-const NO_ACCOUNT_OPTION = '— Not assigned —';
+const NO_CATEGORY_OPTION = 'No category';
+const NO_ACCOUNT_OPTION = 'None';
+const NO_TAG_OPTION = 'Auto';
+const tagOptionColor = (option: string) => option === NO_TAG_OPTION ? undefined : getTagColor(option);
+const TAG_FIELD_HELP = 'Both are optional. The account links the movement to its balances so analytics can estimate returns per tag. Auto takes the tag from those balances; pick one when that guess is wrong, when the account carries several tags, or when there is no account to name.';
 
 const draftID = () => globalThis.crypto?.randomUUID?.() || `flow-${Date.now()}-${Math.random()}`;
 
@@ -57,12 +65,14 @@ const emptyDraft = (currency: string): FlowPeriodDraft => ({
   direction: 'in',
   counterparty: '',
   account: '',
+  tag: '',
   currency,
   amount: '',
   taxRate: 0,
   category: '',
   comment: '',
   toAccount: '',
+  toTag: '',
   toCurrency: currency,
   toAmount: ''
 });
@@ -74,12 +84,14 @@ const entryToDraft = (entry: FlowEntry): FlowPeriodDraft => ({
   direction: entry.direction,
   counterparty: entry.counterparty,
   account: entry.account || '',
+  tag: entry.tag || '',
   currency: entry.currency,
   amount: String(entry.amount),
   taxRate: entry.taxRate || 0,
   category: entry.category,
   comment: entry.comment,
   toAccount: entry.toAccount || '',
+  toTag: entry.toTag || '',
   toCurrency: entry.toCurrency || entry.currency,
   toAmount: entry.toAmount ? String(entry.toAmount) : ''
 });
@@ -98,12 +110,14 @@ const isUntouchedBlankDraft = (draft: FlowPeriodDraft, currency: string) => (
   && draft.direction === 'in'
   && !draft.counterparty
   && !draft.account
+  && !draft.tag
   && draft.currency === currency
   && draft.amount === ''
   && Number(draft.taxRate) === 0
   && !draft.category
   && !draft.comment
   && !draft.toAccount
+  && !draft.toTag
   && draft.toCurrency === currency
   && draft.toAmount === ''
 );
@@ -113,6 +127,7 @@ export function FlowPeriodModal({
   entries,
   seedEntries = [],
   categorySuggestions = [],
+  accountTags = new Map(),
   settings,
   appendBlank = false,
   focusEntryID,
@@ -134,6 +149,8 @@ export function FlowPeriodModal({
     return initial;
   });
   const initialDrafts = useRef(JSON.stringify(drafts));
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const pendingScrollToEnd = useRef(false);
   const [validationError, setValidationError] = useState('');
   const [commentEditor, setCommentEditor] = useState<{ clientID: string; text: string } | null>(null);
   const [copiedPrevious, setCopiedPrevious] = useState(false);
@@ -156,18 +173,20 @@ export function FlowPeriodModal({
     ...settings.currencies,
     ...drafts.flatMap(draft => [draft.currency, draft.toCurrency])
   ].filter(Boolean))), [drafts, settings.currencies]);
+  const tagOptions = useMemo(() => Array.from(new Set([
+    ...(settings.tags || []),
+    ...drafts.flatMap(draft => [draft.tag, draft.toTag])
+  ].filter(Boolean))), [drafts, settings.tags]);
+  const tagOptionsFor = (account: string) => {
+    const preferred = accountTags.get(account) || [];
+    return Array.from(new Set([NO_TAG_OPTION, ...preferred, ...tagOptions]));
+  };
 
   const requestClose = () => {
     if (saving) return;
     if (dirty && !window.confirm('Discard unsaved Cash Flow changes?')) return;
     onClose();
   };
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, []);
 
   useEffect(() => {
     if (!focusEntryID) return;
@@ -177,6 +196,7 @@ export function FlowPeriodModal({
     return () => window.clearTimeout(timer);
   }, [focusEntryID]);
 
+  useBodyScrollLock();
   useCloseOnEscape(requestClose, {
     enabled: !commentEditor,
     capture: false,
@@ -184,6 +204,21 @@ export function FlowPeriodModal({
     stopPropagation: false,
     stopImmediatePropagation: false
   });
+
+  useEffect(() => {
+    if (!pendingScrollToEnd.current) return;
+    pendingScrollToEnd.current = false;
+
+    const container = listRef.current;
+    if (!container || container.scrollTop + container.clientHeight >= container.scrollHeight - 1) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [drafts.length]);
+
+  const addDraft = () => {
+    pendingScrollToEnd.current = true;
+    setDrafts(current => [...current, emptyDraft(defaultCurrency)]);
+    setValidationError('');
+  };
 
   const updateDraft = (clientID: string, patch: Partial<FlowPeriodDraft>) => {
     setDrafts(current => current.map(draft => draft.clientID === clientID ? { ...draft, ...patch } : draft));
@@ -194,6 +229,7 @@ export function FlowPeriodModal({
 
   const copyPrevious = () => {
     if (!copyPreviousEntries?.length || copiedPrevious || saving) return;
+    pendingScrollToEnd.current = true;
     setDrafts(current => [
       ...(current.length === 1 && isUntouchedBlankDraft(current[0], defaultCurrency) ? [] : current),
       ...copyPreviousEntries.map(seedToDraft)
@@ -269,14 +305,28 @@ export function FlowPeriodModal({
         </div>
 
         <div className="cash-flow-period-toolbar">
-          <span>{drafts.length} movement{drafts.length === 1 ? '' : 's'}</span>
           <span className="cash-flow-label-with-help">
             Amount supports calculations and shortcuts
             <HelpTooltip text={<AmountFieldHelp />} ariaLabel="Amount field help" width={400} />
           </span>
+          <div className="cash-flow-period-toolbar-actions">
+            <span>{drafts.length} movement{drafts.length === 1 ? '' : 's'}</span>
+            {copyPreviousEntries && (
+              <button
+                type="button"
+                className="btn"
+                onClick={copyPrevious}
+                disabled={saving || copiedPrevious || copyPreviousEntries.length === 0}
+                title={copyPreviousEntries.length === 0 ? 'The previous month has no external movements.' : `Copy ${copyPreviousEntries.length} external movement${copyPreviousEntries.length === 1 ? '' : 's'} from the previous month`}
+              >
+                <Copy size={15} /> {copiedPrevious ? 'Previous copied' : 'Copy previous'}
+              </button>
+            )}
+            <button type="button" className="btn cash-flow-add-movement" onClick={addDraft} disabled={saving}><Plus size={15} /> Add movement</button>
+          </div>
         </div>
 
-        <div className="cash-flow-period-list">
+        <div className="cash-flow-period-list" ref={listRef}>
           {drafts.length === 0 ? (
             <div className="cash-flow-period-empty">This month will be empty after saving.</div>
           ) : drafts.map((draft, index) => (
@@ -303,27 +353,33 @@ export function FlowPeriodModal({
               {draft.entryType === 'transfer' ? (
                 <>
                   <div className="cash-flow-field cash-flow-period-counterparty cash-flow-period-transfer-from">
-                    <span>From account</span>
-                    <SearchableSelect ariaLabel={`Movement ${index + 1} source account`} value={draft.account} onChange={account => updateDraft(draft.clientID, { account })} options={accountOptions} placeholder="Choose an account…" width="100%" dropdownWidth="240px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    <span className="cash-flow-label-with-help">From account · tag <HelpTooltip text={TAG_FIELD_HELP} ariaLabel="Source tag help" width={330} /></span>
+                    <div className="cash-flow-account-control">
+                      <SearchableSelect ariaLabel={`Movement ${index + 1} source account`} value={draft.account} onChange={account => updateDraft(draft.clientID, { account })} options={accountOptions} placeholder="Account" width="100%" dropdownWidth="240px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                      <SearchableSelect ariaLabel={`Movement ${index + 1} source tag`} value={draft.tag || NO_TAG_OPTION} onChange={tag => updateDraft(draft.clientID, { tag: tag === NO_TAG_OPTION ? '' : tag })} options={tagOptionsFor(draft.account)} primaryOptions={accountTags.get(draft.account)} placeholder={NO_TAG_OPTION} optionColor={tagOptionColor} width="100%" dropdownWidth="220px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-amount">
                     <span>Sent</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.amount} onChange={amount => updateDraft(draft.clientID, { amount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} sent amount`} />
-                      <select className="input" aria-label={`Movement ${index + 1} sent currency`} value={draft.currency} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
+                      <select className="input" aria-label={`Movement ${index + 1} sent currency`} value={draft.currency} style={{ color: getCurrencyColor(draft.currency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
                         {currencyOptions.map(currency => <option key={currency} value={currency}>{currency}</option>)}
                       </select>
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-destination">
-                    <span>To account</span>
-                    <SearchableSelect ariaLabel={`Movement ${index + 1} destination account`} value={draft.toAccount} onChange={toAccount => updateDraft(draft.clientID, { toAccount })} options={accountOptions} placeholder="Choose an account…" width="100%" dropdownWidth="240px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    <span className="cash-flow-label-with-help">To account · tag <HelpTooltip text={TAG_FIELD_HELP} ariaLabel="Destination tag help" width={330} /></span>
+                    <div className="cash-flow-account-control">
+                      <SearchableSelect ariaLabel={`Movement ${index + 1} destination account`} value={draft.toAccount} onChange={toAccount => updateDraft(draft.clientID, { toAccount })} options={accountOptions} placeholder="Account" width="100%" dropdownWidth="240px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                      <SearchableSelect ariaLabel={`Movement ${index + 1} destination tag`} value={draft.toTag || NO_TAG_OPTION} onChange={toTag => updateDraft(draft.clientID, { toTag: toTag === NO_TAG_OPTION ? '' : toTag })} options={tagOptionsFor(draft.toAccount)} primaryOptions={accountTags.get(draft.toAccount)} placeholder={NO_TAG_OPTION} optionColor={tagOptionColor} width="100%" dropdownWidth="220px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-received">
                     <span>Received</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.toAmount} onChange={toAmount => updateDraft(draft.clientID, { toAmount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} received amount`} />
-                      <select className="input" aria-label={`Movement ${index + 1} received currency`} value={draft.toCurrency} onChange={event => updateDraft(draft.clientID, { toCurrency: event.target.value })}>
+                      <select className="input" aria-label={`Movement ${index + 1} received currency`} value={draft.toCurrency} style={{ color: getCurrencyColor(draft.toCurrency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { toCurrency: event.target.value })}>
                         {currencyOptions.map(currency => <option key={currency} value={currency}>{currency}</option>)}
                       </select>
                     </div>
@@ -333,17 +389,20 @@ export function FlowPeriodModal({
                 <>
                   <div className="cash-flow-field cash-flow-period-counterparty">
                     <span>{draft.direction === 'in' ? 'From' : 'To'}</span>
-                    <SearchableSelect ariaLabel={`Movement ${index + 1} ${draft.direction === 'in' ? 'from' : 'to'}`} value={draft.counterparty} onChange={counterparty => updateDraft(draft.clientID, { counterparty, taxRate: draft.direction === 'in' ? defaultTaxRate(counterparty) : 0 })} options={counterpartyOptions} placeholder={draft.direction === 'in' ? 'Choose a source…' : 'Choose a recipient…'} width="100%" dropdownWidth="260px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    <SearchableSelect ariaLabel={`Movement ${index + 1} ${draft.direction === 'in' ? 'from' : 'to'}`} value={draft.counterparty} onChange={counterparty => updateDraft(draft.clientID, { counterparty, taxRate: draft.direction === 'in' ? defaultTaxRate(counterparty) : 0 })} options={counterpartyOptions} placeholder={draft.direction === 'in' ? 'Source' : 'Recipient'} width="100%" dropdownWidth="260px" height="36px" textAlign="left" portal portalZIndex={100010} />
                   </div>
                   <div className="cash-flow-field cash-flow-period-account">
-                    <span className="cash-flow-label-with-help">Own account <HelpTooltip text="Optional. Assigning the movement to an account lets analytics estimate returns for its deposit, stock, and other balance tags." ariaLabel="Own account help" width={330} /></span>
-                    <SearchableSelect ariaLabel={`Movement ${index + 1} own account`} value={draft.account || NO_ACCOUNT_OPTION} onChange={account => updateDraft(draft.clientID, { account: account === NO_ACCOUNT_OPTION ? '' : account })} options={[NO_ACCOUNT_OPTION, ...accountOptions]} placeholder="Not assigned" width="100%" dropdownWidth="240px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    <span className="cash-flow-label-with-help">Own account · tag <HelpTooltip text={TAG_FIELD_HELP} ariaLabel="Own account and tag help" width={330} /></span>
+                    <div className="cash-flow-account-control">
+                      <SearchableSelect ariaLabel={`Movement ${index + 1} own account`} value={draft.account || NO_ACCOUNT_OPTION} onChange={account => updateDraft(draft.clientID, { account: account === NO_ACCOUNT_OPTION ? '' : account })} options={[NO_ACCOUNT_OPTION, ...accountOptions]} placeholder={NO_ACCOUNT_OPTION} width="100%" dropdownWidth="240px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                      <SearchableSelect ariaLabel={`Movement ${index + 1} tag`} value={draft.tag || NO_TAG_OPTION} onChange={tag => updateDraft(draft.clientID, { tag: tag === NO_TAG_OPTION ? '' : tag })} options={tagOptionsFor(draft.account)} primaryOptions={accountTags.get(draft.account)} placeholder={NO_TAG_OPTION} optionColor={tagOptionColor} width="100%" dropdownWidth="220px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-amount">
                     <span>{draft.direction === 'in' && Number(draft.taxRate) > 0 ? 'Gross amount' : 'Amount'}</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.amount} onChange={amount => updateDraft(draft.clientID, { amount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} amount`} />
-                      <select className="input" aria-label={`Movement ${index + 1} currency`} value={draft.currency} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
+                      <select className="input" aria-label={`Movement ${index + 1} currency`} value={draft.currency} style={{ color: getCurrencyColor(draft.currency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
                         {currencyOptions.map(currency => <option key={currency} value={currency}>{currency}</option>)}
                       </select>
                     </div>
@@ -354,7 +413,7 @@ export function FlowPeriodModal({
                   </div>
                   <div className="cash-flow-field cash-flow-period-category">
                     <span>Category</span>
-                    <SearchableSelect ariaLabel={`Movement ${index + 1} category`} value={draft.category || NO_CATEGORY_OPTION} onChange={category => updateDraft(draft.clientID, { category: category === NO_CATEGORY_OPTION ? '' : category })} options={[NO_CATEGORY_OPTION, ...categoryOptions]} placeholder="Choose a category" allowCustom width="100%" dropdownWidth="220px" height="36px" textAlign="left" portal portalZIndex={100010} />
+                    <SearchableSelect ariaLabel={`Movement ${index + 1} category`} value={draft.category || NO_CATEGORY_OPTION} onChange={category => updateDraft(draft.clientID, { category: category === NO_CATEGORY_OPTION ? '' : category })} options={[NO_CATEGORY_OPTION, ...categoryOptions]} placeholder={NO_CATEGORY_OPTION} allowCustom width="100%" dropdownWidth="220px" height="36px" textAlign="left" portal portalZIndex={100010} />
                   </div>
                 </>
               )}
@@ -375,21 +434,6 @@ export function FlowPeriodModal({
               <button type="button" className="btn btn-danger cash-flow-period-remove" onClick={() => setDrafts(current => current.filter(item => item.clientID !== draft.clientID))} title="Remove movement"><Trash2 size={16} /></button>
             </div>
           ))}
-        </div>
-
-        <div className="cash-flow-period-add flex gap-2" style={{ flexWrap: 'wrap' }}>
-          {copyPreviousEntries && (
-            <button
-              type="button"
-              className="btn"
-              onClick={copyPrevious}
-              disabled={saving || copiedPrevious || copyPreviousEntries.length === 0}
-              title={copyPreviousEntries.length === 0 ? 'The previous month has no external movements.' : `Copy ${copyPreviousEntries.length} external movement${copyPreviousEntries.length === 1 ? '' : 's'} from the previous month`}
-            >
-              <Copy size={16} /> {copiedPrevious ? 'Previous copied' : 'Copy previous'}
-            </button>
-          )}
-          <button type="button" className="btn" onClick={() => setDrafts(current => [...current, emptyDraft(defaultCurrency)])} disabled={saving}><Plus size={16} /> Add movement</button>
         </div>
 
         {(validationError || error) && <div className="cash-flow-period-error">{validationError || error}</div>}

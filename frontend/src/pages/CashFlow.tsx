@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRightLeft, ArrowUp, Calendar, ChevronsUpDown, Copy, FileUp, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowRightLeft, ArrowUp, Calendar, ChevronsUpDown, Copy, FileUp, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSettings } from '../hooks/useSettings';
+import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
-import { API_URL } from '../types';
+import { API_URL, getTagColor } from '../types';
 import type { FlowDirection, FlowEntry } from '../types';
 import { calculateFlowTax, copyFlowPeriodEntries, summarizeFlowEntries } from '../lib/cashFlow';
 import type { FlowPeriodSeed } from '../lib/cashFlow';
@@ -21,6 +22,10 @@ import { orientExchangeRate } from '../lib/finance';
 import { formatMonth } from '../lib/format';
 
 type FlowMovementFilter = 'all' | FlowDirection | 'transfer';
+
+const FlowTag = ({ tag }: { tag: string }) => tag
+  ? <span><i style={{ background: getTagColor(tag) }} />{tag}</span>
+  : <span className="is-auto">auto</span>;
 
 const currentMonth = () => {
   const now = new Date();
@@ -84,8 +89,10 @@ const fetchFlowEntries = async () => {
     ...entry,
     entryType: entry.entryType || 'external',
     account: entry.account || '',
+    tag: entry.tag || '',
     taxRate: entry.taxRate || 0,
     toAccount: entry.toAccount || '',
+    toTag: entry.toTag || '',
     toCurrency: entry.toCurrency || '',
     toAmount: entry.toAmount || 0
   })));
@@ -93,6 +100,7 @@ const fetchFlowEntries = async () => {
 
 export default function CashFlow() {
   const { settings, loading: settingsLoading } = useSettings();
+  const { snapshots } = useSnapshots({ sort: 'desc' });
   const [searchParams] = useSearchParams();
   const [entries, setEntries] = useState<FlowEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,6 +155,18 @@ export default function CashFlow() {
 
   const months = useMemo(() => Array.from(new Set(entries.map(entry => entry.month))).sort((a, b) => a.localeCompare(b)), [entries]);
   const allCategorySuggestions = useMemo(() => Array.from(new Set(entries.map(entry => entry.category).filter(Boolean))).sort((a, b) => a.localeCompare(b)), [entries]);
+  const accountTags = useMemo(() => {
+    const byAccount = new Map<string, string[]>();
+    snapshots.forEach(snapshot => snapshot.data.organizations.forEach(organization => {
+      if (!organization.name) return;
+      const known = byAccount.get(organization.name) || [];
+      organization.balances.forEach(balance => (balance.tags || []).forEach(tag => {
+        if (tag && !known.includes(tag)) known.push(tag);
+      }));
+      byAccount.set(organization.name, known);
+    }));
+    return byAccount;
+  }, [snapshots]);
   const effectiveEndMonth = endMonth && startMonth && endMonth < startMonth ? startMonth : endMonth;
 
   useEffect(() => {
@@ -375,12 +395,14 @@ export default function CashFlow() {
           direction: entry.direction,
           counterparty: entry.counterparty,
           account: entry.account,
+          tag: entry.tag,
           currency: entry.currency,
           amount: entry.amount,
           taxRate: entry.taxRate || 0,
           category: entry.category,
           comment: text,
           toAccount: entry.toAccount,
+          toTag: entry.toTag,
           toCurrency: entry.toCurrency,
           toAmount: entry.toAmount
         })
@@ -411,12 +433,14 @@ export default function CashFlow() {
             direction: draft.direction,
             counterparty: draft.counterparty,
             account: draft.account,
+            tag: draft.tag,
             currency: draft.currency,
             amount: Number(draft.amount),
             taxRate: draft.entryType === 'external' && draft.direction === 'in' ? Number(draft.taxRate) : 0,
             category: draft.category,
             comment: draft.comment,
             toAccount: draft.toAccount,
+            toTag: draft.toTag,
             toCurrency: draft.toCurrency,
             toAmount: Number(draft.toAmount || 0)
           }))
@@ -474,6 +498,7 @@ export default function CashFlow() {
           entries={entries.filter(entry => entry.month === periodEditor.month)}
           seedEntries={periodEditor.seedEntries}
           categorySuggestions={allCategorySuggestions}
+          accountTags={accountTags}
           settings={settings}
           appendBlank={periodEditor.appendBlank}
           focusEntryID={periodEditor.focusEntryID}
@@ -737,7 +762,20 @@ export default function CashFlow() {
                                     <td className="text-right" style={{ whiteSpace: 'nowrap', color: isTransfer ? '#60a5fa' : entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
                                       <div>{isTransfer ? `−${formatAmount(entry.amount, entry.currency)} → +${formatAmount(entry.toAmount, entry.toCurrency)}` : `${entry.direction === 'in' ? '+' : '−'}${formatAmount(Math.abs(netAmount), entry.currency)}`}</div>
                                       {isTransfer && formatTransferRate(entry) && <div className="cash-flow-entry-details">Rate: {formatTransferRate(entry)}</div>}
-                                      {!isTransfer && entry.account && <div className="cash-flow-entry-details">Account: {entry.account}</div>}
+                                      {isTransfer && (entry.tag || entry.toTag) && (
+                                        <div className="cash-flow-entry-details cash-flow-entry-tags">
+                                          <FlowTag tag={entry.tag} />
+                                          <ArrowRight size={10} />
+                                          <FlowTag tag={entry.toTag} />
+                                        </div>
+                                      )}
+                                      {!isTransfer && (entry.account || entry.tag) && (
+                                        <div className="cash-flow-entry-details cash-flow-entry-tags">
+                                          {entry.account && <span className="is-account">{entry.account}</span>}
+                                          {entry.account && entry.tag && '·'}
+                                          {entry.tag && <FlowTag tag={entry.tag} />}
+                                        </div>
+                                      )}
                                       {!isTransfer && tax > 0 && (
                                         <div className="cash-flow-entry-details">
                                           Gross +{formatAmount(entry.amount, entry.currency)}

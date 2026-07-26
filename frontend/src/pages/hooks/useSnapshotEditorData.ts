@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { API_URL, type AppSettings, type Snapshot, type SnapshotData } from '../../types';
+import { API_URL, type AppSettings, type Snapshot, type SnapshotDraftData } from '../../types';
 import { useSettings } from '../../hooks/useSettings';
 
-const initialSnapshotData: SnapshotData = { comment: '', rates: { USD: 90, EUR: 100 }, organizations: [] };
+const initialSnapshotData: SnapshotDraftData = { comment: '', rates: { USD: 90, EUR: 100 }, organizations: [] };
 
 type UseSnapshotEditorDataProps = { isCopy: boolean; isNew: boolean; month?: string; sourceMonth?: string };
 
@@ -11,7 +11,7 @@ const getCurrentMonth = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 };
 
-export const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotData => ({
+export const stripCommentsFromSnapshot = (snapshotData: SnapshotDraftData): SnapshotDraftData => ({
   ...snapshotData,
   comment: '',
   organizations: snapshotData.organizations.map(org => ({
@@ -22,11 +22,11 @@ export const stripCommentsFromSnapshot = (snapshotData: SnapshotData): SnapshotD
 });
 
 const withNormalizedSnapshotData = (
-  snapshotData: SnapshotData,
+  snapshotData: SnapshotDraftData,
   settings: AppSettings,
   refreshOrganizationMetadata = false,
   excludeArchived = false
-): SnapshotData => ({
+): SnapshotDraftData => ({
   ...snapshotData,
   organizations: (snapshotData.organizations || [])
     .filter(org => {
@@ -59,9 +59,9 @@ export function useSnapshotEditorData({ isCopy, isNew, month, sourceMonth }: Use
   const { settings, loading: settingsLoading } = useSettings();
   const [currentMonth, setCurrentMonth] = useState(() => (isNew || isCopy ? getCurrentMonth() : ''));
   const [originalMonth, setOriginalMonth] = useState('');
-  const [data, setData] = useState<SnapshotData>(initialSnapshotData);
+  const [data, setData] = useState<SnapshotDraftData>(initialSnapshotData);
   const [durationSeconds, setDurationSeconds] = useState(0);
-  const [latestSnapshot, setLatestSnapshot] = useState<SnapshotData | null>(null);
+  const [latestSnapshot, setLatestSnapshot] = useState<SnapshotDraftData | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(true);
 
   useEffect(() => {

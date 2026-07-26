@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { SnapshotData } from '../../types';
+import type { SnapshotDraftData } from '../../types';
 import {
   readSnapshotDraft,
   removeSnapshotDraft,
@@ -11,12 +11,12 @@ import { summarizeSnapshotDraftChanges } from '../../lib/snapshotDraftDiff';
 interface UseSnapshotDraftProps {
   draftKey: string;
   isDirty: boolean;
-  data: SnapshotData;
+  data: SnapshotDraftData;
   currentMonth: string;
   durationSeconds: number;
   isNew: boolean;
   baseline: {
-    data: SnapshotData;
+    data: SnapshotDraftData;
     currentMonth: string;
   } | null;
 }

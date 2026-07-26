@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { X } from 'lucide-react';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 
@@ -46,6 +47,7 @@ export function CommentModal({
   saving = false,
   error = ''
 }: CommentModalProps) {
+  useBodyScrollLock();
   useCloseOnEscape(onClose, { enabled: !saving, stopImmediatePropagation: false });
 
   return createPortal(

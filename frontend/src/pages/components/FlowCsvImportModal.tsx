@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { AlertTriangle, FileUp, X } from 'lucide-react';
 import type { FlowCsvPreview } from '../../lib/flowCsv';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
@@ -17,6 +18,7 @@ type FlowCsvImportModalProps = {
 const formatAmount = (amount: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount);
 
 export function FlowCsvImportModal({ preview, importing, error, importDuplicates, onImportDuplicatesChange, onClose, onImport }: FlowCsvImportModalProps) {
+  useBodyScrollLock();
   useCloseOnEscape(onClose, {
     enabled: !importing,
     capture: false,

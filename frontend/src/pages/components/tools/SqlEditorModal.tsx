@@ -17,6 +17,9 @@ import {
   Lock,
   Play,
   RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldX,
   Table2,
   X
 } from 'lucide-react';
@@ -29,6 +32,11 @@ import {
   SqlConsoleError
 } from '../../../lib/sqlConsole';
 import type { SqlExecResponse, SqlStatementResult, SqlTable } from '../../../lib/sqlConsole';
+import {
+  createSqlCellLocator,
+  relocateSqlCell
+} from '../../../lib/sqlCellLocator';
+import type { SqlCellLocator } from '../../../lib/sqlCellLocator';
 import { formatCellValue, parseJsonCell } from '../../../lib/sqlJson';
 import { primaryModifierLabel } from '../../../lib/hotkeys';
 import type { JsonCell } from '../../../lib/sqlJson';
@@ -39,28 +47,71 @@ type SelectedCell = {
   statement: SqlStatementResult;
   rowIndex: number;
   cellIndex: number;
-  /** Column name at the time of selection, used to re-locate the cell after a run. */
-  column: string;
+  /** Source column plus the source row's complete primary key. */
+  locator: SqlCellLocator;
   /** Alt-click: build the condition on this column rather than on the key. */
   conditionOnColumn: boolean;
   /** The current result no longer contains this cell; values shown are older. */
   stale: boolean;
 };
 
+type BackupIndicator = {
+  kind: 'success' | 'warning' | 'danger';
+  label: string;
+  title: string;
+};
+
+const backupIndicatorForApply = (
+  response: SqlExecResponse,
+  skippedBackup: boolean
+): BackupIndicator | null => {
+  if (!response.statements.some(statement => statement.kind === 'write')) return null;
+  if (skippedBackup) {
+    return {
+      kind: 'danger',
+      label: 'Applied without restore point',
+      title: 'The last write was committed after restore-point creation was explicitly bypassed.'
+    };
+  }
+
+  const backup = response.backup;
+  if (!backup) return null;
+  if (backup.status === 'success') {
+    return {
+      kind: 'success',
+      label: 'Restore point created first',
+      title: 'A database restore point was created before the first write was committed.'
+    };
+  }
+  if (backup.status === 'skipped') {
+    return {
+      kind: 'success',
+      label: 'Restore point already current',
+      title: 'The existing restore point already matched the database before the write.'
+    };
+  }
+  if (backup.status === 'partial') {
+    const created = backup.targets?.some(target => (
+      target.status === 'created' || target.status === 'created_with_warning'
+    ));
+    return {
+      kind: 'warning',
+      label: created ? 'Restore point created · warnings' : 'Restore point available · warnings',
+      title: 'At least one backup target is usable, but another target needs attention.'
+    };
+  }
+  return null;
+};
+
 /**
- * Re-locates the open cell in a fresh result. Matching by statement index,
- * column name and row presence keeps the panel pointed at the same data rather
- * than at whatever now sits at those coordinates.
+ * Re-locates the open cell in a fresh result by table primary key. When the
+ * result does not carry enough identity, it is safer to keep the old values and
+ * mark them stale than to silently attach the builder to a reordered row.
  */
 const relocateCell = (response: SqlExecResponse, cell: SelectedCell): SelectedCell => {
-  const fresh = response.statements.find(item => item.index === cell.statement.index);
-  const matches = fresh
-    && fresh.kind === 'read'
-    && fresh.rows?.[cell.rowIndex] !== undefined
-    && fresh.columns?.[cell.cellIndex] === cell.column;
-
-  return matches
-    ? { ...cell, statement: fresh, stale: false }
+  const relocated = relocateSqlCell(response, cell.locator);
+  return relocated
+    ? { ...cell, ...relocated, stale: false }
     : { ...cell, stale: true };
 };
 
@@ -147,17 +198,23 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const schemaCompartment = useRef(new Compartment());
+  const runningRef = useRef(false);
   // Keeps the CodeMirror keymap pointed at the latest handlers without rebuilding the editor.
   const runRef = useRef<(mode: 'dry_run' | 'apply') => void>(() => {});
+  const [initialDraft] = useState(readStoredDraft);
 
   const [tables, setTables] = useState<SqlTable[]>([]);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<SqlExecResponse | null>(null);
+  const [resultSql, setResultSql] = useState<string | null>(null);
   const [error, setError] = useState<SqlConsoleError | Error | null>(null);
+  const [errorSql, setErrorSql] = useState<string | null>(null);
+  const [currentSql, setCurrentSql] = useState(initialDraft);
   const [history, setHistory] = useState<string[]>(() => readStoredHistory());
   const [showHistory, setShowHistory] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [backupIndicator, setBackupIndicator] = useState<BackupIndicator | null>(null);
   const modifier = useMemo(primaryModifierLabel, []);
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
 
@@ -169,6 +226,8 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
   // Read-only queries have nothing to report beyond their rows, so the dry-run
   // and applied banners stay out of the way unless something could change.
   const touchesData = result?.statements.some(statement => statement.kind === 'write') ?? false;
+  const resultIsCurrent = resultSql !== null && resultSql === currentSql;
+  const visibleError = errorSql !== null && errorSql === currentSql ? error : null;
 
   // Decode every JSON cell once per result rather than on each render.
   const jsonCells = useMemo(() => {
@@ -199,26 +258,47 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
     });
   }, []);
 
-  const run = useCallback(async (mode: 'dry_run' | 'apply', skipBackup = false) => {
+  const run = useCallback(async (
+    mode: 'dry_run' | 'apply',
+    skipBackup = false,
+    sqlOverride?: string
+  ) => {
+    // React state does not update synchronously, and the CodeMirror hotkey stays
+    // active while a request is running. The ref closes that gap so one key
+    // chord can never enqueue the same non-idempotent statement twice.
+    if (runningRef.current) return;
+
     const view = viewRef.current;
     if (!view) return;
-    const statement = view.state.doc.toString();
+    const statement = sqlOverride ?? view.state.doc.toString();
     if (!statement.trim()) return;
 
+    runningRef.current = true;
     setRunning(true);
     setError(null);
+    setErrorSql(null);
     try {
       const response = await executeSql(statement, mode, skipBackup);
       setResult(response);
+      setResultSql(statement);
+      if (mode === 'apply') {
+        const indicator = backupIndicatorForApply(response, skipBackup);
+        // A successful first-write restore point remains useful for the rest of
+        // this app run, whose later responses intentionally omit backup details.
+        if (indicator) setBackupIndicator(indicator);
+      }
       // The inspector stays open across runs; it only follows the data.
       setSelectedCell(current => (current ? relocateCell(response, current) : null));
       if (mode === 'apply') rememberQuery(statement);
     } catch (caught) {
       setError(caught as Error);
+      setErrorSql(statement);
       // Stale results next to a fresh error read as if they still applied.
       setResult(null);
+      setResultSql(null);
       setSelectedCell(current => (current ? { ...current, stale: true } : null));
     } finally {
+      runningRef.current = false;
       setRunning(false);
     }
   }, [rememberQuery]);
@@ -234,7 +314,7 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
     const view = new EditorView({
       parent: hostRef.current,
       state: EditorState.create({
-        doc: readStoredDraft(),
+        doc: initialDraft,
         extensions: [
           basicSetup,
           oneDark,
@@ -259,8 +339,15 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
           ])),
           EditorView.updateListener.of(update => {
             if (!update.docChanged) return;
+            const document = update.state.doc.toString();
+            setCurrentSql(document);
+            // Keep the old rows available for reference, but never leave an
+            // actionable dry-run or backup-bypass prompt attached to new SQL.
+            setResultSql(null);
+            setError(null);
+            setErrorSql(null);
             try {
-              localStorage.setItem(DRAFT_STORAGE_KEY, update.state.doc.toString());
+              localStorage.setItem(DRAFT_STORAGE_KEY, document);
             } catch {
               // drafts are a convenience only
             }
@@ -281,7 +368,7 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
       view.destroy();
       viewRef.current = null;
     };
-  }, []);
+  }, [initialDraft]);
 
   const loadSchema = useCallback(async () => {
     try {
@@ -340,18 +427,32 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
     setShowHistory(false);
   };
 
-  const consoleError = error instanceof SqlConsoleError ? error : null;
+  const consoleError = visibleError instanceof SqlConsoleError ? visibleError : null;
 
   return (
     <ModalPortal onClose={onClose} className="sql-console-overlay">
       <div className="sql-console glass-panel" onClick={event => event.stopPropagation()}>
         <header className="sql-console-header">
-          <div className="flex items-center gap-2">
+          <div className="sql-console-header-statuses">
             <Database size={18} color="var(--accent)" />
             <strong>SQL editor</strong>
             <span className="sql-console-scope">
               <Lock size={12} /> rows in existing tables only
             </span>
+            {backupIndicator && (
+              <span
+                className={`sql-console-backup-status is-${backupIndicator.kind}`}
+                title={backupIndicator.title}
+                role="status"
+              >
+                {backupIndicator.kind === 'success'
+                  ? <ShieldCheck size={12} />
+                  : backupIndicator.kind === 'warning'
+                    ? <ShieldAlert size={12} />
+                    : <ShieldX size={12} />}
+                {backupIndicator.label}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -425,7 +526,6 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
             <div className="sql-console-actions">
               <button className="btn" onClick={() => void run('dry_run')} disabled={running}>
                 <Eye size={16} /> Dry run
-                <kbd>{modifier}↵</kbd>
               </button>
               <button
                 className="btn btn-primary"
@@ -434,7 +534,6 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
                 title="Runs and commits the statements"
               >
                 <Play size={16} /> Apply
-                <kbd>{modifier}⇧↵</kbd>
               </button>
               {running && <span className="sql-console-hint">Running…</span>}
               {result && !running && (
@@ -472,7 +571,7 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
               </div>
             )}
 
-            {error && (
+            {visibleError && (
               <div className="sql-console-banner is-error">
                 <AlertTriangle size={16} />
                 <div>
@@ -483,10 +582,13 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
                         ? `Statement ${consoleError.statementIndex} failed`
                         : 'Query failed'}
                   </strong>
-                  <p>{error.message}</p>
+                  <p>{visibleError.message}</p>
                   {consoleError?.sql && <code>{consoleError.sql}</code>}
                   {consoleError?.backupFailed && (
-                    <button className="btn btn-danger" onClick={() => void run('apply', true)}>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => errorSql && void run('apply', true, errorSql)}
+                    >
                       Apply without a restore point
                     </button>
                   )}
@@ -494,20 +596,24 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
               </div>
             )}
 
-            {result?.mode === 'dry_run' && touchesData && !error && (
+            {result?.mode === 'dry_run' && touchesData && resultIsCurrent && !visibleError && (
               <div className="sql-console-banner is-warning">
                 <Eye size={16} />
                 <div>
                   <strong>Dry run — nothing was saved</strong>
                   <p>{summarizeWrites(result)} Press Apply to commit.</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => void run('apply')} disabled={running}>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => resultSql && void run('apply', false, resultSql)}
+                  disabled={running}
+                >
                   {pendingWrites > 0 ? `Apply ${pendingWrites} row${pendingWrites === 1 ? '' : 's'}` : 'Apply anyway'}
                 </button>
               </div>
             )}
 
-            {result?.mode === 'apply' && touchesData && !error && (
+            {result?.mode === 'apply' && touchesData && resultIsCurrent && !visibleError && (
               <div className="sql-console-banner is-success">
                 <Check size={16} />
                 <div>
@@ -553,7 +659,7 @@ export function SqlEditorModal({ onClose }: SqlEditorModalProps) {
                                   statement,
                                   rowIndex,
                                   cellIndex,
-                                  column: statement.columns?.[cellIndex] ?? '',
+                                  locator: createSqlCellLocator(statement, rowIndex, cellIndex, tables),
                                   conditionOnColumn: event.altKey,
                                   stale: false
                                 });

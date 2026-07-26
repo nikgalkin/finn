@@ -4,7 +4,63 @@
 from the **⋯** menu in the header, or press <kbd>T</kbd>. Each tool is a tile; clicking one opens it
 in a modal.
 
-Today it holds a single tool: the SQL editor.
+It currently holds four tools: **Data Health**, **Backup Inspector**, **Export Center**, and the
+**SQL editor**.
+
+## Data Health
+
+Data Health performs a read-only scan of the data Finn relies on. It does not normalize or repair
+anything automatically. Findings are grouped by area, with an occurrence count and up to five
+concrete examples, so a large historical issue does not turn into hundreds of repeated messages.
+
+The scan checks:
+
+* snapshot JSON structure, month format, and non-negative editing duration;
+* organizations, stable IDs, balances, numeric amounts, and required exchange rates;
+* currencies and tags that are present in historical data but no longer configured;
+* invalid or non-positive exchange rates;
+* Cash Flow row types, directions, amounts, tax rates, tags, currencies, and transfer destinations;
+* one organization ID being associated with different names across snapshots.
+
+Results have three levels: **Healthy**, **Warning**, and **Critical**. Warnings describe data Finn
+can still read but that may be surprising in analytics. Critical findings identify malformed or
+incomplete records that can break a screen or a calculation. Press **Run again** after making a fix
+to refresh the report.
+
+## Backup Inspector
+
+Backup Inspector shows the backup configuration Finn is actually using and the restore points found
+in every configured target. It displays whether backups are enabled, whether files are encrypted,
+the schedule, retention, file size and modification time, and the current database fingerprint.
+A restore point whose filename fingerprint matches the current database is marked **current**.
+
+Press **Verify** on a file to decrypt it when necessary, run SQLite's full integrity check, calculate
+its logical fingerprint, and compare that fingerprint with the filename. Verification never opens
+the backup as the live database and never changes it.
+
+**Create restore point** runs the same multi-target backup job used by the scheduler and by protected
+SQL writes. When `only_if_changed` is enabled, Finn reports that the existing restore point is
+already current instead of writing a duplicate. Creation is unavailable when backups are disabled,
+no targets are configured, or Finn is running in demo mode.
+
+The inspector deliberately does not include a **Restore** button. Restoring replaces the live
+database and remains an explicit command-line operation described in
+[Backups and recovery](backups.md).
+
+## Export Center
+
+Export Center downloads a selected month range without changing the database. Choose which sections
+to include: snapshots, settings, and/or Cash Flow.
+
+* **Portable JSON** is one typed document with format and Finn version metadata. Snapshot and
+  settings JSON is embedded as data rather than escaped strings, which makes it suitable for
+  migrations and scripts.
+* **CSV bundle** is a ZIP containing a manifest plus separate files for snapshots, organizations,
+  balances, exchange rates, and Cash Flow. Settings remain JSON inside the bundle because their
+  nested structure does not map cleanly to one spreadsheet table.
+
+The month range applies to snapshots and Cash Flow; settings are global and are included whole when
+selected. CSV files use standard quoting, so comments containing commas or line breaks remain valid.
 
 ## SQL editor
 
@@ -15,15 +71,18 @@ The SQL editor is for those moments — it is not a database administration cons
   insert its name, or use the shortcut under each table to start a `SELECT`.
 * **Autocompletion:** tables and columns complete as you type, including after a `table.` prefix.
 * **Dry run first:** the default action runs your statements inside a transaction, reports what
-  would change, then rolls back. Nothing is saved until you press **Apply**.
+  would change, then rolls back. Nothing is saved until you press **Apply**. Editing the SQL after
+  a dry run removes that apply prompt until the new text has been checked too.
 * **Statement builder:** click any result cell to compose an `UPDATE` for it, condition included —
   see below. JSON cells open a collapsible tree instead of showing a wall of text.
 * **Drafts and history:** whatever is in the editor survives closing the modal, and applied queries
   are kept in **History**.
 
 The inspector panel stays open while you run queries, so you can iterate on a statement without
-losing your place. It follows the same cell into each new result; if a run stops returning that
-cell, the panel keeps what it had and says the values are from an earlier result.
+losing your place. When the result includes the source table's primary key, it follows that exact
+row even if the result order changes. If the row disappears — or the result does not carry enough
+identity to follow it safely — the panel keeps what it had and says the values are from an earlier
+result instead of guessing by row position.
 
 Read-only queries show their rows and nothing else. The dry-run and applied banners appear only when
 a statement could actually change data.
@@ -121,7 +180,7 @@ WHERE EXISTS (
 ```
 
 The difference is not subtle: in the demo data `$.organizations[0].name = 'Binance'` matches no rows
-at all, while the scan finds it in all ten snapshots.
+at all, while the scan finds it in all fourteen snapshots.
 
 The box is ticked automatically when the path contains an array index, and disabled when it has none
 to scan. Values follow the same rules as elsewhere — a numeric id stays unquoted so it compares
@@ -209,8 +268,9 @@ produces a clearer message than SQLite's terse refusal.
   first two are rolled back too.
 * **A restore point is created before the first write** of each run, using your configured
   [backup targets](backups.md). If every target fails, nothing is applied and you are offered the
-  choice to continue without one. Backups must be enabled in `config.yml` for this to happen; in
-  `--demo` mode it is skipped.
+  choice to continue without one. Backups must be enabled in `config.yaml` for this to happen; in
+  `--demo` mode it is skipped. After an apply, the editor header keeps the restore-point status
+  visible, including partial-target warnings or an explicit backup bypass.
 * **Results are capped** at 500 rows per statement, and a statement is cancelled after 15 seconds.
 * **Local only.** The endpoints refuse any request that does not come from the loopback interface
   with a local `Origin`, so no page you happen to have open elsewhere in the browser can reach them.

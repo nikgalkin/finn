@@ -20,12 +20,14 @@ type FlowEntry struct {
 	Direction    string  `json:"direction"`
 	Counterparty string  `json:"counterparty"`
 	Account      string  `json:"account"`
+	Tag          string  `json:"tag"`
 	Currency     string  `json:"currency"`
 	Amount       float64 `json:"amount"`
 	TaxRate      float64 `json:"taxRate"`
 	Category     string  `json:"category"`
 	Comment      string  `json:"comment"`
 	ToAccount    string  `json:"toAccount"`
+	ToTag        string  `json:"toTag"`
 	ToCurrency   string  `json:"toCurrency"`
 	ToAmount     float64 `json:"toAmount"`
 }
@@ -36,12 +38,14 @@ type FlowEntryRequest struct {
 	Direction    string  `json:"direction"`
 	Counterparty string  `json:"counterparty"`
 	Account      string  `json:"account"`
+	Tag          string  `json:"tag"`
 	Currency     string  `json:"currency"`
 	Amount       float64 `json:"amount"`
 	TaxRate      float64 `json:"taxRate"`
 	Category     string  `json:"category"`
 	Comment      string  `json:"comment"`
 	ToAccount    string  `json:"toAccount"`
+	ToTag        string  `json:"toTag"`
 	ToCurrency   string  `json:"toCurrency"`
 	ToAmount     float64 `json:"toAmount"`
 }
@@ -52,12 +56,14 @@ type FlowPeriodEntryRequest struct {
 	Direction    string  `json:"direction"`
 	Counterparty string  `json:"counterparty"`
 	Account      string  `json:"account"`
+	Tag          string  `json:"tag"`
 	Currency     string  `json:"currency"`
 	Amount       float64 `json:"amount"`
 	TaxRate      float64 `json:"taxRate"`
 	Category     string  `json:"category"`
 	Comment      string  `json:"comment"`
 	ToAccount    string  `json:"toAccount"`
+	ToTag        string  `json:"toTag"`
 	ToCurrency   string  `json:"toCurrency"`
 	ToAmount     float64 `json:"toAmount"`
 }
@@ -82,10 +88,12 @@ func normalizeFlowEntryRequest(request FlowEntryRequest) (FlowEntryRequest, stri
 	request.Direction = strings.TrimSpace(strings.ToLower(request.Direction))
 	request.Counterparty = strings.TrimSpace(request.Counterparty)
 	request.Account = strings.TrimSpace(request.Account)
+	request.Tag = strings.TrimSpace(request.Tag)
 	request.Currency = strings.TrimSpace(strings.ToUpper(request.Currency))
 	request.Category = strings.TrimSpace(request.Category)
 	request.Comment = strings.TrimSpace(request.Comment)
 	request.ToAccount = strings.TrimSpace(request.ToAccount)
+	request.ToTag = strings.TrimSpace(request.ToTag)
 	request.ToCurrency = strings.TrimSpace(strings.ToUpper(request.ToCurrency))
 	if request.EntryType == "" {
 		request.EntryType = "external"
@@ -136,6 +144,7 @@ func normalizeFlowEntryRequest(request FlowEntryRequest) (FlowEntryRequest, stri
 		request.TaxRate = 0
 	}
 	request.ToAccount = ""
+	request.ToTag = ""
 	request.ToCurrency = ""
 	request.ToAmount = 0
 	return request, ""
@@ -173,7 +182,7 @@ func flowEntryKey(entry FlowEntryRequest) string {
 func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 	api.GET("/flows", func(c *gin.Context) {
 		rows, err := db.Query(`
-			SELECT id, month, entry_type, direction, counterparty, account, currency, amount, tax_rate, category, comment, to_account, to_currency, to_amount
+			SELECT id, month, entry_type, direction, counterparty, account, tag, currency, amount, tax_rate, category, comment, to_account, to_tag, to_currency, to_amount
 			FROM flow_entries
 			ORDER BY month DESC, id DESC
 		`)
@@ -186,7 +195,7 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 		entries := make([]FlowEntry, 0)
 		for rows.Next() {
 			var entry FlowEntry
-			if err := rows.Scan(&entry.ID, &entry.Month, &entry.EntryType, &entry.Direction, &entry.Counterparty, &entry.Account, &entry.Currency, &entry.Amount, &entry.TaxRate, &entry.Category, &entry.Comment, &entry.ToAccount, &entry.ToCurrency, &entry.ToAmount); err != nil {
+			if err := rows.Scan(&entry.ID, &entry.Month, &entry.EntryType, &entry.Direction, &entry.Counterparty, &entry.Account, &entry.Tag, &entry.Currency, &entry.Amount, &entry.TaxRate, &entry.Category, &entry.Comment, &entry.ToAccount, &entry.ToTag, &entry.ToCurrency, &entry.ToAmount); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
@@ -212,9 +221,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 		}
 
 		result, err := db.Exec(`
-			INSERT INTO flow_entries (month, entry_type, direction, counterparty, account, currency, amount, tax_rate, category, comment, to_account, to_currency, to_amount)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, request.Month, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToCurrency, request.ToAmount)
+			INSERT INTO flow_entries (month, entry_type, direction, counterparty, account, tag, currency, amount, tax_rate, category, comment, to_account, to_tag, to_currency, to_amount)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, request.Month, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Tag, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToTag, request.ToCurrency, request.ToAmount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -225,9 +234,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 			return
 		}
 		c.JSON(http.StatusCreated, FlowEntry{
-			ID: id, Month: request.Month, EntryType: request.EntryType, Direction: request.Direction, Counterparty: request.Counterparty, Account: request.Account,
+			ID: id, Month: request.Month, EntryType: request.EntryType, Direction: request.Direction, Counterparty: request.Counterparty, Account: request.Account, Tag: request.Tag,
 			Currency: request.Currency, Amount: request.Amount, TaxRate: request.TaxRate, Category: request.Category, Comment: request.Comment,
-			ToAccount: request.ToAccount, ToCurrency: request.ToCurrency, ToAmount: request.ToAmount,
+			ToAccount: request.ToAccount, ToTag: request.ToTag, ToCurrency: request.ToCurrency, ToAmount: request.ToAmount,
 		})
 	})
 
@@ -267,7 +276,7 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 		}
 
 		rows, err := tx.Query(`
-			SELECT month, entry_type, direction, counterparty, account, currency, amount, tax_rate, category, comment, to_account, to_currency, to_amount
+			SELECT month, entry_type, direction, counterparty, account, tag, currency, amount, tax_rate, category, comment, to_account, to_tag, to_currency, to_amount
 			FROM flow_entries
 		`)
 		if err != nil {
@@ -277,7 +286,7 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 		existingKeys := make(map[string]struct{})
 		for rows.Next() {
 			var entry FlowEntryRequest
-			if err := rows.Scan(&entry.Month, &entry.EntryType, &entry.Direction, &entry.Counterparty, &entry.Account, &entry.Currency, &entry.Amount, &entry.TaxRate, &entry.Category, &entry.Comment, &entry.ToAccount, &entry.ToCurrency, &entry.ToAmount); err != nil {
+			if err := rows.Scan(&entry.Month, &entry.EntryType, &entry.Direction, &entry.Counterparty, &entry.Account, &entry.Tag, &entry.Currency, &entry.Amount, &entry.TaxRate, &entry.Category, &entry.Comment, &entry.ToAccount, &entry.ToTag, &entry.ToCurrency, &entry.ToAmount); err != nil {
 				_ = rows.Close()
 				rollbackWithError(http.StatusInternalServerError, err.Error())
 				return
@@ -301,9 +310,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 				}
 			}
 			if _, err := tx.Exec(`
-				INSERT INTO flow_entries (month, entry_type, direction, counterparty, account, currency, amount, tax_rate, category, comment, to_account, to_currency, to_amount)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			`, entry.Month, entry.EntryType, entry.Direction, entry.Counterparty, entry.Account, entry.Currency, entry.Amount, entry.TaxRate, entry.Category, entry.Comment, entry.ToAccount, entry.ToCurrency, entry.ToAmount); err != nil {
+				INSERT INTO flow_entries (month, entry_type, direction, counterparty, account, tag, currency, amount, tax_rate, category, comment, to_account, to_tag, to_currency, to_amount)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`, entry.Month, entry.EntryType, entry.Direction, entry.Counterparty, entry.Account, entry.Tag, entry.Currency, entry.Amount, entry.TaxRate, entry.Category, entry.Comment, entry.ToAccount, entry.ToTag, entry.ToCurrency, entry.ToAmount); err != nil {
 				rollbackWithError(http.StatusInternalServerError, err.Error())
 				return
 			}
@@ -338,9 +347,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 
 		result, err := db.Exec(`
 			UPDATE flow_entries
-			SET month = ?, entry_type = ?, direction = ?, counterparty = ?, account = ?, currency = ?, amount = ?, tax_rate = ?, category = ?, comment = ?, to_account = ?, to_currency = ?, to_amount = ?
+			SET month = ?, entry_type = ?, direction = ?, counterparty = ?, account = ?, tag = ?, currency = ?, amount = ?, tax_rate = ?, category = ?, comment = ?, to_account = ?, to_tag = ?, to_currency = ?, to_amount = ?
 			WHERE id = ?
-		`, request.Month, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToCurrency, request.ToAmount, id)
+		`, request.Month, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Tag, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToTag, request.ToCurrency, request.ToAmount, id)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -355,9 +364,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 			return
 		}
 		c.JSON(http.StatusOK, FlowEntry{
-			ID: id, Month: request.Month, EntryType: request.EntryType, Direction: request.Direction, Counterparty: request.Counterparty, Account: request.Account,
+			ID: id, Month: request.Month, EntryType: request.EntryType, Direction: request.Direction, Counterparty: request.Counterparty, Account: request.Account, Tag: request.Tag,
 			Currency: request.Currency, Amount: request.Amount, TaxRate: request.TaxRate, Category: request.Category, Comment: request.Comment,
-			ToAccount: request.ToAccount, ToCurrency: request.ToCurrency, ToAmount: request.ToAmount,
+			ToAccount: request.ToAccount, ToTag: request.ToTag, ToCurrency: request.ToCurrency, ToAmount: request.ToAmount,
 		})
 	})
 
@@ -398,9 +407,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 			}
 
 			normalized, validationError := normalizeFlowEntryRequest(FlowEntryRequest{
-				Month: month, EntryType: entry.EntryType, Direction: entry.Direction, Counterparty: entry.Counterparty, Account: entry.Account,
+				Month: month, EntryType: entry.EntryType, Direction: entry.Direction, Counterparty: entry.Counterparty, Account: entry.Account, Tag: entry.Tag,
 				Currency: entry.Currency, Amount: entry.Amount, TaxRate: entry.TaxRate, Category: entry.Category, Comment: entry.Comment,
-				ToAccount: entry.ToAccount, ToCurrency: entry.ToCurrency, ToAmount: entry.ToAmount,
+				ToAccount: entry.ToAccount, ToTag: entry.ToTag, ToCurrency: entry.ToCurrency, ToAmount: entry.ToAmount,
 			})
 			if validationError != "" {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "entry " + strconv.Itoa(index+1) + ": " + validationError})
@@ -452,18 +461,18 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 				}
 				if _, err := tx.Exec(`
 					UPDATE flow_entries
-					SET entry_type = ?, direction = ?, counterparty = ?, account = ?, currency = ?, amount = ?, tax_rate = ?, category = ?, comment = ?, to_account = ?, to_currency = ?, to_amount = ?
+					SET entry_type = ?, direction = ?, counterparty = ?, account = ?, tag = ?, currency = ?, amount = ?, tax_rate = ?, category = ?, comment = ?, to_account = ?, to_tag = ?, to_currency = ?, to_amount = ?
 					WHERE id = ? AND month = ?
-				`, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToCurrency, request.ToAmount, id, month); err != nil {
+				`, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Tag, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToTag, request.ToCurrency, request.ToAmount, id, month); err != nil {
 					rollbackWithError(http.StatusInternalServerError, err.Error())
 					return
 				}
 				delete(existingIDs, id)
 			} else {
 				result, err := tx.Exec(`
-					INSERT INTO flow_entries (month, entry_type, direction, counterparty, account, currency, amount, tax_rate, category, comment, to_account, to_currency, to_amount)
-					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				`, month, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToCurrency, request.ToAmount)
+					INSERT INTO flow_entries (month, entry_type, direction, counterparty, account, tag, currency, amount, tax_rate, category, comment, to_account, to_tag, to_currency, to_amount)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				`, month, request.EntryType, request.Direction, request.Counterparty, request.Account, request.Tag, request.Currency, request.Amount, request.TaxRate, request.Category, request.Comment, request.ToAccount, request.ToTag, request.ToCurrency, request.ToAmount)
 				if err != nil {
 					rollbackWithError(http.StatusInternalServerError, err.Error())
 					return
@@ -475,9 +484,9 @@ func setupFlowAPI(api *gin.RouterGroup, db *sql.DB) {
 				}
 			}
 			savedEntries = append(savedEntries, FlowEntry{
-				ID: id, Month: month, EntryType: request.EntryType, Direction: request.Direction, Counterparty: request.Counterparty, Account: request.Account,
+				ID: id, Month: month, EntryType: request.EntryType, Direction: request.Direction, Counterparty: request.Counterparty, Account: request.Account, Tag: request.Tag,
 				Currency: request.Currency, Amount: request.Amount, TaxRate: request.TaxRate, Category: request.Category, Comment: request.Comment,
-				ToAccount: request.ToAccount, ToCurrency: request.ToCurrency, ToAmount: request.ToAmount,
+				ToAccount: request.ToAccount, ToTag: request.ToTag, ToCurrency: request.ToCurrency, ToAmount: request.ToAmount,
 			})
 		}
 

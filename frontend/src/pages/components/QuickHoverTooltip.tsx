@@ -46,6 +46,10 @@ export function QuickHoverTooltip({ text, children }: QuickHoverTooltipProps) {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
   }, []);
 
+  useEffect(() => {
+    if (!text) close();
+  }, [text]);
+
   return (
     <span
       ref={anchorRef}
@@ -56,7 +60,7 @@ export function QuickHoverTooltip({ text, children }: QuickHoverTooltipProps) {
       onBlurCapture={close}
     >
       {children}
-      {position && createPortal(
+      {position && text && createPortal(
         <span
           className="quick-hover-tooltip"
           role="tooltip"

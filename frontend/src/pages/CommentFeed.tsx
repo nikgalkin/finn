@@ -11,6 +11,7 @@ import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
+import { toNumber } from '../lib/number';
 import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR, formatPercent, formatSignedMoney } from '../lib/format';
 import { PageLoader } from './components/PageLoader';
 import { SegmentedControl } from './components/SegmentedControl';
@@ -74,11 +75,6 @@ const getOrgColor = (orgName: string) => {
   }
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 65%, 75%)`;
-};
-
-const toNumber = (value: number | string | undefined): number => {
-  const parsed = Number(value || 0);
-  return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const median = (values: number[]) => {

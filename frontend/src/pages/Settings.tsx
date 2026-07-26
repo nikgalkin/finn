@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, Coins, Save, Plus, RefreshCw, RotateCcw, Server, Trash2 } from 'lucide-react';
+import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, Coins, Save, Plus, RefreshCw, RotateCcw, Server, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL, getCurrencyColor } from '../types';
 import type { CashFlowSettings, LocalAISettings, LocalAIStatus, Snapshot } from '../types';
@@ -15,6 +15,7 @@ import { ArchiveOrganizationModal } from './components/ArchiveOrganizationModal'
 import { CountrySelect } from './components/CountrySelect';
 import { HelpTooltip } from './components/HelpTooltip';
 import { PageLoader, Spinner } from './components/PageLoader';
+import { QuickHoverTooltip } from './components/QuickHoverTooltip';
 import { SettingsValidationModal } from './components/SettingsValidationModal';
 import type { SettingsValidationIssue } from './components/SettingsValidationModal';
 import { ScrollForMore } from './components/ScrollForMore';
@@ -44,8 +45,6 @@ const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as 
 const compactButtonStyle = { padding: '6px 12px', fontSize: '13px' };
 const iconButtonStyle = { padding: '8px' };
 const inputRowStyle = { height: '36px' };
-const autoFetchStyle = { background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0 10px', height: '36px', userSelect: 'none' as const };
-const enabledCheckboxStyle = { width: '17px', height: '17px', accentColor: 'var(--accent)' };
 const DEFAULT_CASH_FLOW: CashFlowSettings = { enabled: false, sources: [], taxRates: {}, categories: [] };
 const DEFAULT_LOCAL_AI: LocalAISettings = { enabled: false, provider: 'lmstudio', baseUrl: 'http://127.0.0.1:1234/v1', model: '' };
 const normalizeListValue = (value: string) => value.trim().toLocaleLowerCase();
@@ -76,6 +75,31 @@ const duplicateIssues = (duplicates: DuplicateValues, section: string, message: 
   duplicates.items.map(item => ({ section, value: item.display, message }))
 );
 
+type SettingsFlagToggleProps = {
+  active: boolean;
+  disabled?: boolean;
+  icon: ReactNode;
+  label: string;
+  tooltip: string;
+  onToggle: () => void;
+};
+
+const SettingsFlagToggle = ({ active, disabled, icon, label, tooltip, onToggle }: SettingsFlagToggleProps) => (
+  <QuickHoverTooltip text={tooltip}>
+    <button
+      type="button"
+      className="settings-flag-toggle"
+      aria-label={label}
+      aria-pressed={active}
+      data-active={active ? 'true' : undefined}
+      disabled={disabled}
+      onClick={onToggle}
+    >
+      {icon}
+    </button>
+  </QuickHoverTooltip>
+);
+
 type SettingsPanelProps = {
   children: ReactNode; description: string; enabled: boolean; icon: ReactNode; intro: string; onEnabledChange: (enabled: boolean) => void; title: string;
 };
@@ -90,10 +114,24 @@ const SettingsPanel = ({ children, description, enabled, icon, intro, onEnabledC
     <div className="cash-flow-settings-body">
       <div className="cash-flow-settings-status">
         <span>{intro}</span>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={enabled} onChange={event => onEnabledChange(event.target.checked)} style={enabledCheckboxStyle} />
-          Enabled
-        </label>
+        <div className="settings-enabled-switch" role="group" aria-label={`${title} status`}>
+          <button
+            type="button"
+            className={!enabled ? 'is-active is-off' : ''}
+            aria-pressed={!enabled}
+            onClick={() => onEnabledChange(false)}
+          >
+            Off
+          </button>
+          <button
+            type="button"
+            className={enabled ? 'is-active is-on' : ''}
+            aria-pressed={enabled}
+            onClick={() => onEnabledChange(true)}
+          >
+            On
+          </button>
+        </div>
       </div>
       {children}
     </div>
@@ -295,6 +333,9 @@ export default function Settings() {
           .map(normalizeCurrencyCode)
           .filter(currency => currency && currency !== baseCurrency)
       )),
+      nonYieldingTags: Array.from(new Set(
+        (settings.nonYieldingTags || []).map(tag => tag.trim()).filter(Boolean)
+      )),
       organizations: settings.organizations.map(organization => ({
         ...organization,
         country: organization.country?.trim().toUpperCase() || undefined
@@ -345,7 +386,10 @@ export default function Settings() {
       });
       return;
     }
-    setSettings({ ...settings, [list]: newList });
+    const nonYieldingTags = [...(settings.nonYieldingTags || [])];
+    const nonYieldingIndex = nonYieldingTags.findIndex(tag => tag.trim() === previousValue.trim());
+    if (nonYieldingIndex >= 0) nonYieldingTags[nonYieldingIndex] = nextValue.trim();
+    setSettings({ ...settings, tags: newList, nonYieldingTags });
   };
 
   const addToList = (list: SettingsListKey) => {
@@ -428,6 +472,19 @@ export default function Settings() {
   const restoreOrganization = (index: number) => {
     const { archivedAt: _archivedAt, ...organization } = settings.organizations[index];
     setSettings({ ...settings, organizations: replaceAt(settings.organizations, index, organization) });
+  };
+
+  const toggleNonYielding = (tag: string) => {
+    const normalizedTag = tag.trim();
+    if (!normalizedTag) return;
+    const nonYielding = settings.nonYieldingTags || [];
+    const marked = nonYielding.some(item => item.trim() === normalizedTag);
+    setSettings({
+      ...settings,
+      nonYieldingTags: marked
+        ? nonYielding.filter(item => item.trim() !== normalizedTag)
+        : [...nonYielding, normalizedTag]
+    });
   };
 
   const toggleAutoFetch = (curr: string) => {
@@ -517,9 +574,16 @@ export default function Settings() {
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{title}</h3>
           {list === 'currencies' && (
             <HelpTooltip
-              text="Fiat currencies usually use 3-letter ISO codes. Crypto tickers such as USDT may be longer; Finn accepts 2–10 Latin letters or digits and stores them in uppercase."
+              text="Fiat currencies usually use 3-letter ISO codes. Crypto tickers such as USDT may be longer; Finn accepts 2–10 Latin letters or digits and stores them in uppercase. The refresh icon marks a currency as auto-pulled when you fetch rates in a snapshot."
               ariaLabel="Currency code format"
               width={310}
+            />
+          )}
+          {list === 'tags' && (
+            <HelpTooltip
+              text="The icon next to a tag says whether it can earn anything. Switch it to the wallet when the tag only holds money you spend from, such as cash or a checking account: analytics then reads the unexplained change on that tag as an estimate of unrecorded spending instead of capital earnings. The classification applies to your whole history, so switching it also changes how past months are read."
+              ariaLabel="Non-yielding balance tags"
+              width={340}
             />
           )}
         </div>
@@ -530,6 +594,8 @@ export default function Settings() {
       <div id={`settings-${list}-scroll`} ref={element => { scrollBodyRefs.current[list] = element; }} style={listBodyStyle}>
         {(settings[list] || []).map((item, i) => {
           const isCurrency = list === 'currencies';
+          const isTag = list === 'tags';
+          const isNonYielding = isTag && (settings.nonYieldingTags || []).some(tag => tag.trim() === item.trim());
           const isBaseCurrency = isCurrency && item === (settings.baseCurrency || 'RUB');
           const isAuto = isCurrency && !isBaseCurrency && (settings.autoFetchCurrencies || []).includes(item);
           const duplicateNames = isCurrency ? duplicateCurrencies.names : duplicateTags.names;
@@ -537,13 +603,37 @@ export default function Settings() {
           const isInvalidCurrency = isCurrency && !isValidCurrencyCode(item);
           const showInvalidCurrency = isInvalidCurrency && validatedCurrencyIndexes.has(i);
 
+          const tagLabel = item.trim() || 'This tag';
+
           return (
-            <div key={i} className={`flex gap-2${isCurrency ? ' items-center' : ''}`}>
+            <div key={i} className={`flex gap-2 settings-list-row${isCurrency || isTag ? ' items-center' : ''}`}>
+              {isTag && (
+                <SettingsFlagToggle
+                  active={isNonYielding}
+                  disabled={!item.trim()}
+                  icon={isNonYielding ? <Wallet size={16} /> : <TrendingUp size={16} />}
+                  label={`${tagLabel} does not yield`}
+                  tooltip={!item.trim()
+                    ? 'Name the tag before classifying it.'
+                    : isNonYielding
+                      ? `${tagLabel} is marked as non-yielding. Analytics reads what it loses beyond the recorded movements as unrecorded spending. Click to treat it as a yielding tag again.`
+                      : `${tagLabel} is treated as yielding: its unexplained change counts as capital earnings. Click when the tag only holds money you spend from, such as cash or a checking account.`}
+                  onToggle={() => toggleNonYielding(item)}
+                />
+              )}
               {isCurrency && (
-                <label className={`flex items-center gap-2${isBaseCurrency ? '' : ' cursor-pointer'}`} title={isBaseCurrency ? 'Base currency rate is always 1' : 'Auto pull rate'} style={{ ...autoFetchStyle, opacity: isBaseCurrency ? 0.55 : 1 }}>
-                  <input type="checkbox" checked={isAuto} disabled={isBaseCurrency} onChange={() => toggleAutoFetch(item)} style={{ cursor: isBaseCurrency ? 'not-allowed' : 'pointer', width: '16px', height: '16px', accentColor: 'var(--accent)', margin: 0 }} />
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Auto rate</span>
-                </label>
+                <SettingsFlagToggle
+                  active={isAuto}
+                  disabled={isBaseCurrency}
+                  icon={<RefreshCw size={16} />}
+                  label={`Pull the ${item || 'currency'} rate automatically`}
+                  tooltip={isBaseCurrency
+                    ? `${item} is the base currency, so its rate is always 1.`
+                    : isAuto
+                      ? `${item || 'This currency'} is refreshed when you pull rates in a snapshot. Click to keep it manual.`
+                      : `${item || 'This currency'} keeps whatever rate you type. Click to pull it with the other rates.`}
+                  onToggle={() => toggleAutoFetch(item)}
+                />
               )}
               <input
                 className="input"

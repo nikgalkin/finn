@@ -18,15 +18,21 @@ type SearchableSelectProps = {
   portal?: boolean;
   portalZIndex?: number;
   allowCustom?: boolean;
+  primaryOptions?: string[];
+  optionColor?: (option: string) => string | undefined;
 };
 
 const triggerStyle = { padding: '4px 8px', background: 'var(--bg-color)', border: '1px solid var(--glass-border)', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' as const, height: '28px' };
 const dropdownStyle = { position: 'absolute' as const, top: '36px', left: '50%', transform: 'translateX(-50%)', zIndex: 100, width: '140px', maxHeight: '200px', overflowY: 'auto' as const, padding: '4px', background: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(148, 163, 184, 0.35)', boxShadow: '0 18px 36px -12px rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)', display: 'flex', flexDirection: 'column' as const, gap: '2px' };
 const searchIconStyle = { position: 'absolute' as const, left: '8px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 };
 const searchInputStyle = { width: '100%', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '4px', padding: '2px 6px 2px 22px', fontSize: '12px', color: 'var(--text-primary)', outline: 'none' };
+const OptionDot = ({ color }: { color?: string }) => color
+  ? <i style={{ flexShrink: 0, width: '8px', height: '8px', borderRadius: '50%', background: color }} />
+  : null;
+
 const optionsStyle = { overflowY: 'auto' as const, flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '2px' };
 
-export function SearchableSelect({ id, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false, portalZIndex = 10000, allowCustom = false }: SearchableSelectProps) {
+export function SearchableSelect({ id, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false, portalZIndex = 10000, allowCustom = false, primaryOptions, optionColor }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0 });
@@ -80,6 +86,9 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
   const filteredOptions = options.filter(opt =>
     opt.toLowerCase().includes(search.toLowerCase())
   );
+  const primarySet = new Set(primaryOptions || []);
+  const lastPrimary = filteredOptions.filter(option => primarySet.has(option)).pop();
+  const dividerOption = lastPrimary === filteredOptions[filteredOptions.length - 1] ? undefined : lastPrimary;
   const customValue = search.trim();
   const exactOption = options.find(option => option.toLowerCase() === customValue.toLowerCase());
   const canCreate = allowCustom && customValue !== '' && !exactOption;
@@ -134,7 +143,7 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
             style={{ padding: '6px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', textAlign: 'left', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}
             className="hover:bg-[rgba(255,255,255,0.05)]"
           >
-            <Plus size={13} /> Create “{customValue}”
+            <Plus size={13} /> Create '{customValue}'
           </div>
         )}
         {filteredOptions.map(option => (
@@ -142,6 +151,10 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
             key={option}
             onClick={() => selectOption(option)}
             style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              justifyContent: textAlign === 'center' ? 'center' : 'flex-start',
               padding: '4px 8px',
               borderRadius: '4px',
               cursor: 'pointer',
@@ -150,10 +163,12 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
               background: option === value ? 'var(--accent)' : 'transparent',
               color: option === value ? '#000' : 'var(--text-primary)',
               fontWeight: option === value ? 600 : 'normal',
-              transition: 'background 0.15s'
+              transition: 'background 0.15s',
+              ...(option === dividerOption ? { marginBottom: '5px', paddingBottom: '7px', borderBottom: '1px solid var(--glass-border)' } : {})
             }}
             className="hover:bg-[rgba(255,255,255,0.05)]"
           >
+            <OptionDot color={optionColor?.(option)} />
             {option}
           </div>
         ))}
@@ -191,8 +206,9 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
         tabIndex={disabled ? -1 : 0}
         style={{ ...triggerStyle, height, cursor: disabled ? 'not-allowed' : 'pointer' }}
       >
-        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', flex: 1, textAlign }}>
-          {value || placeholder}
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: textAlign === 'center' ? 'center' : 'flex-start', minWidth: 0, flex: 1 }}>
+          <OptionDot color={optionColor?.(value)} />
+          <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{value || placeholder}</span>
         </span>
         <ChevronDown size={14} style={{ opacity: 0.5, marginLeft: '4px' }} />
       </div>

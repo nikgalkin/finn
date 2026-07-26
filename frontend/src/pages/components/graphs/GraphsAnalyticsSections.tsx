@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import { Activity, ArrowLeftRight, ArrowRight, BarChart3, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
+import { Activity, ArrowLeftRight, ArrowRight, BarChart3, Check, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import {
   formatCompact,
@@ -14,6 +14,7 @@ import {
   getMoneyDeltaColor,
   getPercentDeltaColor
 } from '../../../lib/format';
+import type { TaggedReturnKind } from '../../../lib/finance';
 import { getCurrencyColor, getTagColor } from '../../../types';
 import { HelpTooltip } from '../HelpTooltip';
 import { ModalPortal } from '../ModalPortal';
@@ -31,15 +32,30 @@ type SummaryStat = {
   help: string;
 };
 
+type CapitalReturnMonth = {
+  month: string;
+  openingCapital: number;
+  externalFlow: number;
+  result: number;
+  ratePercent: number | null;
+  recordedMovements: number;
+};
+
 type CapitalReturnSummary = {
   organicChange: number;
   externalFlow: number;
   result: number;
   ratePercent: number;
+  annualizedRatePercent: number | null;
+  fxImpact: number;
+  nonYieldingResult: number;
+  monthsWithoutRecordedFlow: number;
+  monthly: CapitalReturnMonth[];
 };
 
 type TagReturnStat = {
   tag: string;
+  kind: TaggedReturnKind;
   result: number;
   ratePercent: number | null;
   monthly: Array<{ month: string; openingCapital: number; closingCapital: number; assignedFlow: number; result: number; ratePercent: number | null }>;
@@ -75,7 +91,7 @@ type GraphsAnalyticsSectionsProps = {
   organizationCurrencyMonth?: string;
   summaryStats: SummaryStat[];
   tagDistributionData: ChartDatum[];
-  tagReturnCoverage: { assigned: number; total: number; proportional: number };
+  tagReturnCoverage: { assigned: number; total: number; proportional: number; unattributedFlow: number; unknownAccounts: string[] };
   tagReturnStats: TagReturnStat[];
   uxMetricsData: ChartDatum[];
   handleLegendClickSmart: (group: LegendGroup, event: any, allKeys: string[]) => void;
@@ -86,7 +102,9 @@ const LEGEND_STYLE = { cursor: 'pointer', fontSize: '12px', userSelect: 'none' a
 const CARD_STYLE = { height: '350px', display: 'flex', flexDirection: 'column' as const };
 const GRID_2 = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' };
 const SECTION_TITLE_STYLE = { color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' };
-const VISIBLE_TAG_RETURN_ROWS = 3;
+const TAG_RETURN_ROW_HEIGHT = 40;
+const TAG_RETURN_GROUP_TITLE_HEIGHT = 22;
+const TAG_RETURN_LIST_MAX_HEIGHT = 208;
 
 const SignedMoney = ({ value, suffix }: { value: number; suffix: string }) => (
   <span style={{ color: getMoneyDeltaColor(value) }}>{formatSignedMoney(value, suffix)}</span>
@@ -422,12 +440,45 @@ export function GraphsAnalyticsSections({
 }: GraphsAnalyticsSectionsProps) {
   const [allocationMode, setAllocationMode] = useState<'percent' | 'value'>('value');
   const [selectedTagReturn, setSelectedTagReturn] = useState<TagReturnStat | null>(null);
+  const [showCapitalReturnMonths, setShowCapitalReturnMonths] = useState(false);
   const [expandedTagMonth, setExpandedTagMonth] = useState<string | null>(null);
 
   const closeTagReturn = useCallback(() => {
     setSelectedTagReturn(null);
     setExpandedTagMonth(null);
   }, []);
+
+  const tagReturnGroups = useMemo(() => ([
+    { kind: 'yield' as const, title: 'Estimated capital earnings' },
+    { kind: 'spending' as const, title: 'Estimated spending' },
+    { kind: 'unknown' as const, title: 'Not classified' }
+  ]).map(group => ({ ...group, items: tagReturnStats.filter(item => item.kind === group.kind) }))
+    .filter(group => group.items.length > 0), [tagReturnStats]);
+
+  const hasSpendingTags = tagReturnGroups.some(group => group.kind === 'spending');
+  const showTagGroupTitles = tagReturnGroups.length > 1;
+
+  const tagListLayout = useMemo(() => {
+    const slots = tagReturnGroups.flatMap(group => [
+      ...(showTagGroupTitles ? [{ height: TAG_RETURN_GROUP_TITLE_HEIGHT, isRow: false }] : []),
+      ...group.items.map(() => ({ height: TAG_RETURN_ROW_HEIGHT, isRow: true }))
+    ]);
+
+    const fitted: typeof slots = [];
+    let height = 0;
+    for (const slot of slots) {
+      if (height + slot.height > TAG_RETURN_LIST_MAX_HEIGHT) break;
+      fitted.push(slot);
+      height += slot.height;
+    }
+    while (fitted.length > 0 && !fitted[fitted.length - 1].isRow) {
+      height -= fitted.pop()!.height;
+    }
+
+    return { height: height || TAG_RETURN_ROW_HEIGHT, visible: fitted.filter(slot => slot.isRow).length };
+  }, [showTagGroupTitles, tagReturnGroups]);
+
+  const selectedTagReturnFlow = (selectedTagReturn?.monthly || []).reduce((total, month) => total + month.assignedFlow, 0);
 
   const currencyAllocationData = useMemo(() => {
     return allocationMode === 'percent' ? normalizeStackData(currencyDistributionData, allUsedCurrencies) : currencyDistributionData;
@@ -503,61 +554,144 @@ export function GraphsAnalyticsSections({
             <div className="glass-panel capital-return-card" style={{ padding: '16px 18px' }}>
               <ChartTitle
                 icon={<TrendingUp size={16} style={{ color: '#10b981' }} />}
-                help="This is an estimate from monthly snapshots, not a broker statement. Balance changes are measured without FX impact; recorded external money is removed, leaving estimated investment earnings."
+                help="This is an estimate from monthly snapshots, not a broker statement. Balance changes are measured without FX impact; recorded external money is removed, leaving estimated investment earnings. Internal transfers do not change external Cash Flow, so any difference between their sent and received legs stays in this reconciliation and in the tag attribution."
               >
                 Estimated capital earnings
               </ChartTitle>
               <div className="capital-return-headline">
-                <div>
+                <button
+                  type="button"
+                  className="capital-return-headline-action"
+                  onClick={() => setShowCapitalReturnMonths(true)}
+                  disabled={capitalReturnSummary.monthly.length === 0}
+                  aria-label="View the monthly breakdown of estimated earnings"
+                >
                   <span>Estimated earnings</span>
                   <strong style={{ color: getMoneyDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong>
-                </div>
+                  <small className="capital-return-headline-link">See it month by month <ChevronRight size={12} /></small>
+                </button>
                 <div>
                   <span>Time-weighted return</span>
-                  <strong style={{ color: getPercentDeltaColor(capitalReturnSummary.ratePercent) }}>{formatPercent(capitalReturnSummary.ratePercent)}</strong>
-                  <small>Selected period · not annualized</small>
+                  <div className="capital-return-headline-metrics">
+                    <div className="capital-return-headline-metric">
+                      <strong
+                        className="capital-return-headline-rate"
+                        style={{ color: getPercentDeltaColor(capitalReturnSummary.ratePercent) }}
+                        title={`Time-weighted return over ${capitalReturnSummary.monthly.length} month${capitalReturnSummary.monthly.length === 1 ? '' : 's'}`}
+                        aria-label={`${formatPercent(capitalReturnSummary.ratePercent)} over ${capitalReturnSummary.monthly.length} month${capitalReturnSummary.monthly.length === 1 ? '' : 's'}`}
+                      >
+                        {formatPercent(capitalReturnSummary.ratePercent, Math.abs(capitalReturnSummary.ratePercent) >= 1000 ? 0 : 2)}
+                      </strong>
+                      <small>for {capitalReturnSummary.monthly.length} month{capitalReturnSummary.monthly.length === 1 ? '' : 's'}</small>
+                    </div>
+                    {capitalReturnSummary.annualizedRatePercent !== null && (
+                      <div className="capital-return-headline-metric is-annual">
+                        <strong
+                          className="capital-return-headline-annual-rate"
+                          style={{ color: getPercentDeltaColor(capitalReturnSummary.annualizedRatePercent) }}
+                          title={`Annualized return based on ${capitalReturnSummary.monthly.length} month${capitalReturnSummary.monthly.length === 1 ? '' : 's'}`}
+                        >
+                          {formatPercent(capitalReturnSummary.annualizedRatePercent, Math.abs(capitalReturnSummary.annualizedRatePercent) >= 1000 ? 0 : 2)}
+                        </strong>
+                        <small>annualized</small>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="capital-return-reconciliation">
                 <div><span>Balance change excluding FX</span><strong>{formatSigned(capitalReturnSummary.organicChange)} {baseCurrency}</strong></div>
-                <div><span>Less recorded net contributions</span><strong>{formatSigned(-capitalReturnSummary.externalFlow)} {baseCurrency}</strong></div>
+                <div className="is-before-result"><span>Less recorded net contributions</span><strong>{formatSigned(-capitalReturnSummary.externalFlow)} {baseCurrency}</strong></div>
+                <div className="is-result">
+                  <span>Estimated earnings</span>
+                  <strong style={{ color: getMoneyDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong>
+                </div>
+                {Math.abs(capitalReturnSummary.nonYieldingResult) >= 1 && (
+                  <div className="is-sub">
+                    <span className="capital-return-reconciliation-label">
+                      of which non-yielding tags
+                      <HelpTooltip
+                        text="Tags marked as 'Doesn't yield' in Settings cannot earn anything, so their share of this number is an estimate of spending that never reached Cash Flow, not capital earnings."
+                        ariaLabel="Non-yielding tags inside estimated earnings"
+                        width={320}
+                      />
+                    </span>
+                    <strong style={{ color: getMoneyDeltaColor(capitalReturnSummary.nonYieldingResult) }}>{formatSigned(capitalReturnSummary.nonYieldingResult)} {baseCurrency}</strong>
+                  </div>
+                )}
+                <div className="is-aside">
+                  <span className="capital-return-reconciliation-label">
+                    FX impact, kept out of earnings
+                    <HelpTooltip
+                      text="Revaluation of the balances you already held when exchange rates moved. It stays out of the reconciliation above because it is not money the portfolio earned or received."
+                      ariaLabel="FX impact outside estimated earnings"
+                      width={310}
+                    />
+                  </span>
+                  <strong style={{ color: getMoneyDeltaColor(capitalReturnSummary.fxImpact) }}>{formatSigned(capitalReturnSummary.fxImpact)} {baseCurrency}</strong>
+                </div>
               </div>
-              <div className="capital-return-transfer-note">
-                Internal transfers do not change external Cash Flow. Any difference between their sent and received legs remains in the balance reconciliation and tag attribution.
-              </div>
+              {capitalReturnSummary.monthsWithoutRecordedFlow > 0 && (
+                <div className="capital-return-flow-warning">
+                  {capitalReturnSummary.monthsWithoutRecordedFlow} of {capitalReturnSummary.monthly.length} months have no recorded movements, so their whole balance change counts as earnings here.
+                </div>
+              )}
             </div>
 
             <div className="glass-panel capital-return-card" style={{ padding: '16px 18px' }}>
               <ChartTitle
                 icon={<Layers size={16} style={{ color: '#14b8a6' }} />}
-                help="A movement can be attributed to a deposit, stock, or other tag only when its Own account is selected in Cash Flow. Amount is estimated earnings; percentage is the time-weighted return for the selected period."
+                help={hasSpendingTags
+                  ? "A movement can be attributed to a deposit, stock, or other tag only when its Own account is selected in Cash Flow. For yielding tags the amount is estimated earnings and the percentage is the time-weighted return; for tags marked as 'Doesn't yield' the same difference is read as spending that never reached Cash Flow. The return ignores deposits and withdrawals, so its sign can differ from the amount as invested balances change."
+                  : "A movement can be attributed to a deposit, stock, or other tag only when its Own account is selected in Cash Flow. Amount is estimated earnings; percentage is the time-weighted return for the selected period. The return ignores deposits and withdrawals, so its sign can differ from the amount as invested balances change."}
               >
-                Estimated earnings by balance tag
+                {hasSpendingTags ? 'Earnings and spending by balance tag' : 'Estimated earnings by balance tag'}
               </ChartTitle>
               <div className="capital-return-tag-panel-body">
-                <div id="capital-return-tag-scroll" className="capital-return-tag-scroll">
+                <div id="capital-return-tag-scroll" className="capital-return-tag-scroll" style={{ flexBasis: `${tagListLayout.height}px` }}>
                   <div className="capital-return-tag-list">
-                    {tagReturnStats.map(item => (
-                      <button
-                        key={item.tag}
-                        type="button"
-                        className="capital-return-tag-row"
-                        onClick={() => {
-                          setSelectedTagReturn(item);
-                          setExpandedTagMonth(null);
-                        }}
-                        aria-label={`View monthly breakdown for ${item.tag}`}
-                      >
-                          <span className="capital-return-tag-name">
-                            <i style={{ background: item.tag === 'untagged' ? '#64748b' : getTagColor(item.tag) }} />
-                            {item.tag}
-                          </span>
-                          <strong style={{ color: getMoneyDeltaColor(item.result) }}>{formatSigned(item.result)} {baseCurrency}</strong>
-                          <strong className="capital-return-tag-rate" style={{ color: item.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(item.ratePercent) }}>
-                            {item.ratePercent === null ? '—' : formatPercent(item.ratePercent)}
-                          </strong>
-                          <ChevronRight className="capital-return-tag-chevron" size={14} />
-                      </button>
+                    {tagReturnGroups.map(group => (
+                      <Fragment key={group.kind}>
+                        {showTagGroupTitles && <div className="capital-return-tag-group-title">{group.title}</div>}
+                        {group.items.map(item => {
+                          const isSpending = item.kind === 'spending';
+                          const unrecordedIncome = isSpending && item.result > 0;
+                          return (
+                            <button
+                              key={item.tag}
+                              type="button"
+                              className="capital-return-tag-row"
+                              onClick={() => {
+                                setSelectedTagReturn(item);
+                                setExpandedTagMonth(null);
+                              }}
+                              aria-label={`View monthly breakdown for ${item.tag}`}
+                            >
+                              <span className="capital-return-tag-name">
+                                <i style={{ background: item.tag === 'untagged' ? '#64748b' : getTagColor(item.tag) }} />
+                                {item.tag}
+                              </span>
+                              <strong style={{ color: getMoneyDeltaColor(item.result) }}>
+                                {isSpending && !unrecordedIncome
+                                  ? `${formatNumber(-item.result)} ${baseCurrency}`
+                                  : `${formatSigned(item.result)} ${baseCurrency}`}
+                              </strong>
+                              {isSpending ? (
+                                <span className="capital-return-tag-note" title={unrecordedIncome
+                                  ? 'This tag grew beyond its recorded movements, so this is income that never reached Cash Flow, not negative spending.'
+                                  : 'Estimated money spent from this tag without a Cash Flow record.'}>
+                                  {unrecordedIncome ? 'income' : 'spent'}
+                                </span>
+                              ) : (
+                                <strong className="capital-return-tag-rate" style={{ color: item.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(item.ratePercent) }}>
+                                  {item.ratePercent === null ? '—' : formatPercent(item.ratePercent)}
+                                </strong>
+                              )}
+                              <ChevronRight className="capital-return-tag-chevron" size={14} />
+                            </button>
+                          );
+                        })}
+                      </Fragment>
                     ))}
                     {tagReturnStats.length === 0 && <div style={{ color: 'var(--text-secondary)', fontSize: '13px', padding: '8px 0' }}>Choose at least two snapshots to estimate earnings by tag.</div>}
                   </div>
@@ -567,31 +701,111 @@ export function GraphsAnalyticsSections({
                   noun={{ singular: 'tag', plural: 'tags' }}
                   scrollContainerId="capital-return-tag-scroll"
                   total={tagReturnStats.length}
-                  visible={VISIBLE_TAG_RETURN_ROWS}
+                  visible={tagListLayout.visible}
                 />
+                <div className="capital-return-tag-footer">
+                {Math.abs(tagReturnCoverage.unattributedFlow) >= 1 && (
+                  <div className="capital-return-unattributed">
+                    <span>Movements without a tag</span>
+                    <strong style={{ color: getMoneyDeltaColor(tagReturnCoverage.unattributedFlow) }}>{formatSigned(tagReturnCoverage.unattributedFlow)} {baseCurrency}</strong>
+                    <HelpTooltip
+                      text="Recorded money that could not be attached to any tag, because the movement has neither a tag nor a known own account. It is not in the rows above, so their earnings are off by this amount."
+                      ariaLabel="Unattributed movements help"
+                      width={330}
+                    />
+                  </div>
+                )}
+                {tagReturnCoverage.unknownAccounts.length > 0 && (
+                  <div className="capital-return-coverage-warning">
+                    Cash Flow uses {tagReturnCoverage.unknownAccounts.length === 1 ? 'an account' : 'accounts'} no snapshot in this period knows: {tagReturnCoverage.unknownAccounts.join(', ')}. Fix the name or set a tag on those movements.
+                  </div>
+                )}
                 {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned < tagReturnCoverage.total && (
                   <div className="capital-return-coverage-warning">
-                    Only {tagReturnCoverage.assigned} of {tagReturnCoverage.total} external movements have an own account. Assign the rest in Cash Flow to make this breakdown reliable.
+                    Only {tagReturnCoverage.assigned} of {tagReturnCoverage.total} external movements reach a tag. Give the rest an own account or a tag in Cash Flow to make this breakdown reliable.
                   </div>
                 )}
                 {tagReturnCoverage.proportional > 0 && (
                   <div className="capital-return-coverage-warning">
-                    {tagReturnCoverage.proportional} {tagReturnCoverage.proportional === 1 ? 'movement was' : 'movements were'} assigned to an account with multiple tags and split in proportion to its tagged balances.
+                    {tagReturnCoverage.proportional} {tagReturnCoverage.proportional === 1 ? 'movement was' : 'movements were'} assigned to an account with multiple tags and split in proportion to its tagged balances. Set a tag on the movement to place it exactly.
                   </div>
                 )}
-                {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned === tagReturnCoverage.total && tagReturnCoverage.proportional === 0 && (
-                  <div className="capital-return-coverage-complete">All external movements in this period are assigned to accounts.</div>
-                )}
-                {tagReturnStats.length > 0 && (
-                  <div className="capital-return-transfer-note">
-                    Earnings are estimated; time-weighted return ignores deposits and withdrawals, so their signs may differ as invested balances change.
+                {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned === tagReturnCoverage.total && tagReturnCoverage.proportional === 0 && tagReturnCoverage.unknownAccounts.length === 0 && (
+                  <div className="capital-return-coverage-complete">
+                    <Check size={13} />
+                    Every external movement in this period reaches a tag.
                   </div>
                 )}
+                </div>
               </div>
             </div>
           </div>
         )}
       </section>
+
+      {showCapitalReturnMonths && capitalReturnSummary && (
+        <ModalPortal className="capital-return-tag-modal-backdrop" zIndex={null} onClose={() => setShowCapitalReturnMonths(false)} closeOnEscape>
+          <div
+            className="capital-return-tag-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="capital-return-months-title"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="capital-return-tag-modal-header">
+              <div>
+                <span>Monthly breakdown</span>
+                <h3 id="capital-return-months-title">Estimated capital earnings</h3>
+              </div>
+              <button type="button" className="capital-return-tag-modal-close" onClick={() => setShowCapitalReturnMonths(false)} aria-label="Close monthly breakdown">
+                <X size={17} />
+              </button>
+            </div>
+            <div className="capital-return-tag-modal-summary">
+              <div>
+                <span>Estimated earnings</span>
+                <strong style={{ color: getMoneyDeltaColor(capitalReturnSummary.result) }}>{formatSigned(capitalReturnSummary.result)} {baseCurrency}</strong>
+              </div>
+              <div>
+                <span>Time-weighted return</span>
+                <strong style={{ color: getPercentDeltaColor(capitalReturnSummary.ratePercent) }}>{formatPercent(capitalReturnSummary.ratePercent)}</strong>
+              </div>
+            </div>
+            <div id="capital-return-months-scroll" className="capital-return-tag-modal-months is-portfolio">
+              <div className="capital-return-tag-modal-month-heading">
+                <span>Month</span><span>Opening → closing</span><span>Movements</span><span>Earnings</span><span>Return</span>
+              </div>
+              {[...capitalReturnSummary.monthly].sort((left, right) => right.month.localeCompare(left.month)).map(month => (
+                <div key={month.month} className="capital-return-tag-modal-month-row is-static">
+                  <span>{month.month}</span>
+                  <strong className="capital-return-tag-modal-balance">
+                    <span>{formatNumber(month.openingCapital)}</span>
+                    <ArrowRight size={11} />
+                    <span>{formatNumber(month.openingCapital + month.externalFlow + month.result)} {baseCurrency}</span>
+                  </strong>
+                  <strong style={{ color: month.recordedMovements === 0 ? 'var(--warning)' : getMoneyDeltaColor(month.externalFlow) }}>
+                    {month.recordedMovements === 0 ? 'none recorded' : `${formatSigned(month.externalFlow)} ${baseCurrency}`}
+                  </strong>
+                  <strong style={{ color: getMoneyDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
+                  <strong style={{ color: month.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(month.ratePercent) }}>
+                    {month.ratePercent === null ? '—' : formatPercent(month.ratePercent)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+            <ScrollForMore
+              compact
+              noun={{ singular: 'month', plural: 'months' }}
+              scrollContainerId="capital-return-months-scroll"
+              total={capitalReturnSummary.monthly.length}
+              rowHeight={42}
+            />
+            <div className="capital-return-tag-modal-note">
+              Opening and closing balances are valued in {baseCurrency} at each month's closing rates, so FX movement stays out of them. Earnings are what the balance changed by beyond the movements recorded in Cash Flow; a month with no recorded movements counts its whole change as earnings.
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       {selectedTagReturn && (
         <ModalPortal className="capital-return-tag-modal-backdrop" zIndex={null} onClose={closeTagReturn} closeOnEscape>
@@ -616,18 +830,29 @@ export function GraphsAnalyticsSections({
             </div>
             <div className="capital-return-tag-modal-summary">
               <div>
-                <span>Estimated earnings</span>
-                <strong style={{ color: getMoneyDeltaColor(selectedTagReturn.result) }}>{formatSigned(selectedTagReturn.result)} {baseCurrency}</strong>
-              </div>
-              <div>
-                <span>Time-weighted return</span>
-                <strong style={{ color: selectedTagReturn.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(selectedTagReturn.ratePercent) }}>
-                  {selectedTagReturn.ratePercent === null ? '—' : formatPercent(selectedTagReturn.ratePercent)}
+                <span>{selectedTagReturn.kind === 'spending' ? (selectedTagReturn.result > 0 ? 'Unrecorded income' : 'Estimated spending') : 'Estimated earnings'}</span>
+                <strong style={{ color: getMoneyDeltaColor(selectedTagReturn.result) }}>
+                  {selectedTagReturn.kind === 'spending' && selectedTagReturn.result <= 0
+                    ? `${formatNumber(-selectedTagReturn.result)} ${baseCurrency}`
+                    : `${formatSigned(selectedTagReturn.result)} ${baseCurrency}`}
                 </strong>
               </div>
+              {selectedTagReturn.kind === 'spending' ? (
+                <div>
+                  <span>Recorded movements</span>
+                  <strong style={{ color: getMoneyDeltaColor(selectedTagReturnFlow) }}>{formatSigned(selectedTagReturnFlow)} {baseCurrency}</strong>
+                </div>
+              ) : (
+                <div>
+                  <span>Time-weighted return</span>
+                  <strong style={{ color: selectedTagReturn.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(selectedTagReturn.ratePercent) }}>
+                    {selectedTagReturn.ratePercent === null ? '—' : formatPercent(selectedTagReturn.ratePercent)}
+                  </strong>
+                </div>
+              )}
             </div>
-            <div className="capital-return-tag-modal-months">
-              <div className="capital-return-tag-modal-month-heading"><span>Month</span><span>Opening → closing</span><span>Earnings</span><span>Return</span><span /></div>
+            <div id="capital-return-tag-months-scroll" className="capital-return-tag-modal-months">
+              <div className="capital-return-tag-modal-month-heading"><span>Month</span><span>Opening → closing</span><span>{selectedTagReturn.kind === 'spending' ? 'Spending' : 'Earnings'}</span><span>Return</span><span /></div>
               {[...selectedTagReturn.monthly].sort((left, right) => right.month.localeCompare(left.month)).map(month => {
                 const isExpanded = expandedTagMonth === month.month;
                 return (
@@ -644,7 +869,11 @@ export function GraphsAnalyticsSections({
                         <ArrowRight size={11} />
                         <span>{formatNumber(month.closingCapital)} {baseCurrency}</span>
                       </strong>
-                      <strong style={{ color: getMoneyDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
+                      <strong style={{ color: getMoneyDeltaColor(month.result) }}>
+                        {selectedTagReturn.kind === 'spending' && month.result <= 0
+                          ? `${formatNumber(-month.result)} ${baseCurrency}`
+                          : `${formatSigned(month.result)} ${baseCurrency}`}
+                      </strong>
                       <strong style={{ color: month.ratePercent === null ? 'var(--text-secondary)' : getPercentDeltaColor(month.ratePercent) }}>
                         {month.ratePercent === null ? '—' : formatPercent(month.ratePercent)}
                       </strong>
@@ -664,7 +893,7 @@ export function GraphsAnalyticsSections({
                           </div>
                           <i>+</i>
                           <div>
-                            <span>Estimated earnings</span>
+                            <span>{selectedTagReturn.kind === 'spending' ? 'Estimated spending' : 'Estimated earnings'}</span>
                             <strong style={{ color: getMoneyDeltaColor(month.result) }}>{formatSigned(month.result)} {baseCurrency}</strong>
                           </div>
                           <i>=</i>
@@ -680,8 +909,17 @@ export function GraphsAnalyticsSections({
                 );
               })}
             </div>
+            <ScrollForMore
+              compact
+              noun={{ singular: 'month', plural: 'months' }}
+              scrollContainerId="capital-return-tag-months-scroll"
+              total={selectedTagReturn.monthly.length}
+              rowHeight={42}
+            />
             <div className="capital-return-tag-modal-note">
-              Opening and closing balances are valued in {baseCurrency} at each month's closing rates. Earnings exclude recorded external flows attributed to this tag; return is time-weighted and not annualized.
+              {selectedTagReturn.kind === 'spending'
+                ? `Opening and closing balances are valued in ${baseCurrency} at each month's closing rates. This tag is marked as non-yielding in Settings, so whatever its balance lost beyond the recorded movements is shown as estimated spending.`
+                : `Opening and closing balances are valued in ${baseCurrency} at each month's closing rates. Earnings exclude recorded external flows attributed to this tag; return is time-weighted and not annualized.`}
             </div>
           </div>
         </ModalPortal>
