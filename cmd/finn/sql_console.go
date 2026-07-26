@@ -189,22 +189,64 @@ func stripSQLNoise(statement string) string {
 	return builder.String()
 }
 
+// withStatementKeyword finds the top-level statement after a WITH clause.
+// Keywords inside the parenthesized CTE bodies are deliberately ignored: a
+// read-only CTE may legitimately call replace(), which is also a write keyword.
+func withStatementKeyword(statement string) string {
+	cleaned := strings.ToLower(stripSQLNoise(statement))
+	depth := 0
+	sawWith := false
+
+	for index := 0; index < len(cleaned); index++ {
+		switch cleaned[index] {
+		case '(':
+			depth++
+			continue
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		current := cleaned[index]
+		isLetter := current >= 'a' && current <= 'z'
+		if !isLetter && current != '_' {
+			continue
+		}
+
+		end := index + 1
+		for end < len(cleaned) {
+			next := cleaned[end]
+			isLetter = next >= 'a' && next <= 'z'
+			isDigit := next >= '0' && next <= '9'
+			if !isLetter && !isDigit && next != '_' {
+				break
+			}
+			end++
+		}
+
+		if depth == 0 {
+			word := cleaned[index:end]
+			if !sawWith {
+				sawWith = word == "with"
+			} else if word == "select" || word == "values" || sqlConsoleWriteKeywords[word] {
+				return word
+			}
+		}
+		index = end - 1
+	}
+	return ""
+}
+
 // statementIsWrite reports whether a statement mutates rows. A leading WITH may
-// still front an INSERT/UPDATE/DELETE, so the CTE body is scanned as well.
+// still front an INSERT/UPDATE/DELETE, so its top-level statement is inspected.
 func statementIsWrite(statement string) bool {
 	keyword := leadingSQLKeyword(statement)
 	if sqlConsoleWriteKeywords[keyword] {
 		return true
 	}
-	if keyword != "with" {
-		return false
-	}
-	for _, field := range strings.Fields(strings.ToLower(stripSQLNoise(statement))) {
-		if sqlConsoleWriteKeywords[strings.Trim(field, "(),;")] {
-			return true
-		}
-	}
-	return false
+	return keyword == "with" && sqlConsoleWriteKeywords[withStatementKeyword(statement)]
 }
 
 // sqlConsoleColumnSource traces a result column back to the table column it came

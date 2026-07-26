@@ -15,15 +15,18 @@ The SQL editor is for those moments — it is not a database administration cons
   insert its name, or use the shortcut under each table to start a `SELECT`.
 * **Autocompletion:** tables and columns complete as you type, including after a `table.` prefix.
 * **Dry run first:** the default action runs your statements inside a transaction, reports what
-  would change, then rolls back. Nothing is saved until you press **Apply**.
+  would change, then rolls back. Nothing is saved until you press **Apply**. Editing the SQL after
+  a dry run removes that apply prompt until the new text has been checked too.
 * **Statement builder:** click any result cell to compose an `UPDATE` for it, condition included —
   see below. JSON cells open a collapsible tree instead of showing a wall of text.
 * **Drafts and history:** whatever is in the editor survives closing the modal, and applied queries
   are kept in **History**.
 
 The inspector panel stays open while you run queries, so you can iterate on a statement without
-losing your place. It follows the same cell into each new result; if a run stops returning that
-cell, the panel keeps what it had and says the values are from an earlier result.
+losing your place. When the result includes the source table's primary key, it follows that exact
+row even if the result order changes. If the row disappears — or the result does not carry enough
+identity to follow it safely — the panel keeps what it had and says the values are from an earlier
+result instead of guessing by row position.
 
 Read-only queries show their rows and nothing else. The dry-run and applied banners appear only when
 a statement could actually change data.
@@ -210,7 +213,8 @@ produces a clearer message than SQLite's terse refusal.
 * **A restore point is created before the first write** of each run, using your configured
   [backup targets](backups.md). If every target fails, nothing is applied and you are offered the
   choice to continue without one. Backups must be enabled in `config.yml` for this to happen; in
-  `--demo` mode it is skipped.
+  `--demo` mode it is skipped. After an apply, the editor header keeps the restore-point status
+  visible, including partial-target warnings or an explicit backup bypass.
 * **Results are capped** at 500 rows per statement, and a statement is cancelled after 15 seconds.
 * **Local only.** The endpoints refuse any request that does not come from the loopback interface
   with a local `Origin`, so no page you happen to have open elsewhere in the browser can reach them.

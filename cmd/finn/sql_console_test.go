@@ -178,6 +178,47 @@ func TestSQLConsoleDryRunLeavesDataUnchanged(t *testing.T) {
 	}
 }
 
+func TestSQLConsoleClassifiesCompactCTEWriteBeforeBackup(t *testing.T) {
+	console := newTestSQLConsole(t)
+	statement := `WITH x AS(SELECT 1)UPDATE snapshots SET duration_seconds = duration_seconds + 1 WHERE month = '2026-01'`
+
+	payload, _ := json.Marshal(map[string]any{"sql": statement, "mode": "dry_run"})
+	response := execSQLConsole(t, console, string(payload))
+	if response.Code != http.StatusOK {
+		t.Fatalf("dry run status = %d, body: %s", response.Code, response.Body.String())
+	}
+
+	var decoded sqlConsoleResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Statements) != 1 || decoded.Statements[0].Kind != "write" {
+		t.Fatalf("statement was not reported as a write: %+v", decoded.Statements)
+	}
+	if decoded.TotalWrites != 1 {
+		t.Fatalf("dry run reported %d affected rows, want 1", decoded.TotalWrites)
+	}
+
+	// With backups enabled but no target configured, an apply must stop at the
+	// restore-point gate. A write misclassified as a read would commit instead.
+	console.cfg.Backup.Enabled = true
+	payload, _ = json.Marshal(map[string]any{"sql": statement, "mode": "apply"})
+	response = execSQLConsole(t, console, string(payload))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("apply status = %d, want backup failure; body: %s", response.Code, response.Body.String())
+	}
+
+	var duration int
+	if err := console.appDB.QueryRow(
+		"SELECT duration_seconds FROM snapshots WHERE month = '2026-01'",
+	).Scan(&duration); err != nil {
+		t.Fatal(err)
+	}
+	if duration != 0 {
+		t.Fatalf("duration = %d, want no committed change", duration)
+	}
+}
+
 func TestSQLConsoleApplyCommits(t *testing.T) {
 	console := newTestSQLConsole(t)
 
@@ -397,6 +438,9 @@ func TestStatementIsWrite(t *testing.T) {
 		{`DELETE FROM snapshots`, true},
 		{`REPLACE INTO snapshots (id) VALUES (1)`, true},
 		{`WITH stale AS (SELECT id FROM snapshots) DELETE FROM snapshots WHERE id IN (SELECT id FROM stale)`, true},
+		{`WITH x AS(SELECT 1)UPDATE snapshots SET data = '{}'`, true},
+		{`WITH update_count AS (SELECT 1) SELECT * FROM update_count`, false},
+		{`WITH x AS (SELECT replace('a', 'a', 'b') AS value) SELECT value FROM x`, false},
 		// the word "delete" here is data, not a statement
 		{`WITH x AS (SELECT 'delete' AS word) SELECT * FROM x`, false},
 	}

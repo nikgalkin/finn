@@ -1606,8 +1606,6 @@ main > .page-loader { animation: none; }
   gap: 1px;
 }
 
-.capital-return-headline-metric:not(.is-annual) { align-items: center; text-align: center; }
-
 .capital-return-headline-metric.is-annual {
   align-items: flex-end;
   padding-left: 8px;
@@ -1633,8 +1631,6 @@ main > .page-loader { animation: none; }
 .capital-return-headline-annual-rate {
   cursor: help;
 }
-
-.capital-return-headline-rate { text-align: center; }
 
 .capital-return-headline .capital-return-headline-annual-rate { font-size: 15px; }
 
@@ -3031,6 +3027,14 @@ main > .page-loader { animation: none; }
 
 .sql-console-header .btn { padding: 6px 11px; font-size: 12px; }
 
+.sql-console-header-statuses {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .sql-console-scope {
   display: inline-flex;
   align-items: center;
@@ -3042,6 +3046,36 @@ main > .page-loader { animation: none; }
   color: var(--warning);
   font-size: 11px;
   font-weight: 600;
+}
+
+.sql-console-backup-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sql-console-backup-status.is-success {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+}
+
+.sql-console-backup-status.is-warning {
+  border-color: rgba(245, 158, 11, 0.38);
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.sql-console-backup-status.is-danger {
+  border-color: rgba(239, 68, 68, 0.38);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
 }
 
 .sql-console-body { display: flex; min-height: 0; flex: 1; }
@@ -3156,14 +3190,6 @@ main > .page-loader { animation: none; }
 .sql-console-editor .cm-gutters { background: transparent; border-right: 1px solid var(--glass-border); }
 
 .sql-console-actions { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; flex-wrap: wrap; }
-
-.sql-console-actions kbd {
-  padding: 1px 5px;
-  border: 1px solid var(--glass-border);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 10px;
-}
 
 .sql-console-hint { margin: 0; color: var(--text-secondary); font-size: 12px; }
 
