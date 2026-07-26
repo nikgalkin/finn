@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Wallet, Keyboard, Power } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
+import LoaderDebug from './pages/LoaderDebug';
 import { HeaderNav } from './pages/components/HeaderNav';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { getNavigationHotkey, isTextInputTarget } from './lib/hotkeys';
@@ -228,6 +229,7 @@ function App() {
             <Route path="/flow" element={<CashFlow />} />
             <Route path="/assistant" element={<AIChat />} />
             <Route path="/tools" element={<Tools />} />
+            <Route path="/loader-debug" element={<LoaderDebug />} />
           </Routes>
         </Suspense>
       </main>
