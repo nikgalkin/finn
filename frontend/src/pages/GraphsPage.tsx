@@ -254,7 +254,7 @@ export default function GraphsPage() {
     };
   });
 
-  const decompositionData = filteredSnapshots.map(snapshot => {
+  const decompositionData: Record<string, any>[] = filteredSnapshots.map(snapshot => {
     const previousSnapshot = previousSnapshotByMonth.get(snapshot.month) || null;
     const { organicDelta, fxImpactDelta } = previousSnapshot
       ? calculateFlowDecomposition(snapshot, previousSnapshot, baseCurrency)
@@ -271,7 +271,9 @@ export default function GraphsPage() {
         'External flow': estimated.externalFlow,
         'Capital earnings': estimated.result,
         'FX Impact': fxImpactDelta,
-        returnRatePercent: estimated.ratePercent
+        returnRatePercent: estimated.ratePercent,
+        openingCapital: previousCapital,
+        recordedMovements: monthEntries.length
       };
     }
 
@@ -356,6 +358,22 @@ export default function GraphsPage() {
     return typeof rate === 'number' && Number.isFinite(rate) ? multiplier * (1 + rate / 100) : multiplier;
   }, 1);
   const periodFxImpactDelta = decompositionData.reduce((total, point) => total + Number(point['FX Impact'] || 0), 0);
+  const capitalReturnMonths = decompositionData
+    .filter(point => point.openingCapital !== undefined)
+    .map(point => ({
+      month: String(point.month),
+      openingCapital: Number(point.openingCapital || 0),
+      externalFlow: Number(point['External flow'] || 0),
+      result: Number(point['Capital earnings'] || 0),
+      ratePercent: typeof point.returnRatePercent === 'number' ? point.returnRatePercent : null,
+      recordedMovements: Number(point.recordedMovements || 0)
+    }));
+  const ratedMonths = capitalReturnMonths.filter(month => month.ratePercent !== null).length;
+  const periodRatePercent = (periodReturnMultiplier - 1) * 100;
+  const annualizedRatePercent = ratedMonths >= 2 && ratedMonths !== 12 && periodReturnMultiplier > 0
+    ? (Math.pow(periodReturnMultiplier, 12 / ratedMonths) - 1) * 100
+    : null;
+  const monthsWithoutRecordedFlow = capitalReturnMonths.filter(month => month.recordedMovements === 0).length;
   const taggedReturnTotals = new Map<string, {
     result: number;
     multiplier: number;
@@ -547,8 +565,12 @@ export default function GraphsPage() {
           organicChange: periodExternalFlow + periodEstimatedReturn,
           externalFlow: periodExternalFlow,
           result: periodEstimatedReturn,
-          ratePercent: (periodReturnMultiplier - 1) * 100,
-          nonYieldingResult
+          ratePercent: periodRatePercent,
+          annualizedRatePercent,
+          fxImpact: periodFxImpactDelta,
+          nonYieldingResult,
+          monthsWithoutRecordedFlow,
+          monthly: capitalReturnMonths
         } : undefined}
         activeCurrencies={activeCurrencies}
         allOrganizations={allOrganizations}

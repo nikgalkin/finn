@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { Check, Copy, FileJson, X } from 'lucide-react';
 import type { LocalAIContextPreview } from '../../types';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
@@ -18,6 +19,7 @@ export function AIContextPreviewModal({ preview, loading, error, includesRequest
 
   useEffect(() => setCopied(false), [preview]);
 
+  useBodyScrollLock();
   useCloseOnEscape(onClose);
 
   const copyPrompt = async () => {

@@ -8,6 +8,7 @@ import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
 import { Spinner } from './PageLoader';
 import { QuickHoverTooltip } from './QuickHoverTooltip';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { CommentModal } from './SnapshotCommentModal';
 import { SearchableSelect } from './graphs/SearchableSelect';
@@ -201,6 +202,7 @@ export function FlowPeriodModal({
     return () => window.clearTimeout(timer);
   }, [focusEntryID]);
 
+  useBodyScrollLock();
   useCloseOnEscape(requestClose, {
     enabled: !commentEditor,
     capture: false,

@@ -8,7 +8,8 @@ type ScrollForMoreProps = {
   orientation?: 'horizontal' | 'vertical';
   scrollContainerId: string;
   total: number;
-  visible: number;
+  visible?: number;
+  rowHeight?: number;
 };
 
 export function ScrollForMore({
@@ -18,10 +19,26 @@ export function ScrollForMore({
   orientation = 'horizontal',
   scrollContainerId,
   total,
-  visible
+  visible,
+  rowHeight
 }: ScrollForMoreProps) {
-  const remaining = Math.max(0, total - visible);
+  const [measuredVisible, setMeasuredVisible] = useState<number | null>(null);
+  const remaining = Math.max(0, total - (visible ?? measuredVisible ?? total));
   const [atEnd, setAtEnd] = useState(false);
+
+  useEffect(() => {
+    if (!rowHeight) return;
+
+    const element = document.getElementById(scrollContainerId);
+    if (!element) return;
+
+    const measure = () => setMeasuredVisible(Math.max(1, Math.floor(element.clientHeight / rowHeight)));
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [rowHeight, scrollContainerId, total]);
 
   useEffect(() => {
     if (remaining === 0) {

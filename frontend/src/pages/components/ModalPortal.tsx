@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 
 type ModalPortalProps = {
@@ -17,6 +18,7 @@ export function ModalPortal({
   className = 'app-modal-backdrop',
   zIndex = 100000
 }: ModalPortalProps) {
+  useBodyScrollLock();
   useCloseOnEscape(onClose, { enabled: closeOnEscape });
 
   return createPortal(
