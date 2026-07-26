@@ -21,6 +21,7 @@ Finn is for people whose finances span accounts in several countries and currenc
 * **Local and private:** Store all data locally in SQLite, with no cloud sync or telemetry
 * **Multi-target backups:** Create encrypted or raw backups in multiple local or cloud-synced folders, each with its own retention policy
 * **Local AI assistant:** Analyze selected snapshots and precomputed metrics with a local model, or copy the prepared prompt to another AI tool
+* **Data utilities:** Scan data health, inspect and verify restore points, and export selected periods as portable JSON or a CSV bundle
 * **SQL editor:** Fix data directly when the UI is the long way round — click any result cell to build an `UPDATE` for it, including ranges and JSON fields, then dry run it to see what would change before anything is saved
 
 ### Optional Cash Flow
@@ -43,6 +44,6 @@ When enabled, Cash Flow also provides:
 * [Optional Cash Flow](docs/cash-flow.md) — enable the journal and import movements from CSV
 * [Backups and recovery](docs/backups.md) — configure targets, encryption, retention, and restore a backup
 * [Local AI Assistant](docs/local-ai.md) — connect a local model or prepare a prompt for another AI tool
-* [Tools](docs/tools.md) — the SQL editor and its statement builder for occasional direct data fixes, and what it is allowed to do
+* [Tools](docs/tools.md) — run data-health checks, inspect backups, export data, or make protected direct fixes with the SQL editor
 * [Development](docs/development.md) — prerequisites, project structure, tech stack, and local startup
 * [Release pipeline](docs/releases.md) — CI checks, automatic versioning, tags, artifacts, and release publication
