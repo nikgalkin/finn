@@ -18,17 +18,20 @@ export function useFlowEntries(enabled: boolean) {
   const [entries, setEntries] = useState<FlowEntry[]>([]);
   const [error, setError] = useState<Error | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
       setEntries([]);
       setError(null);
       setLoading(false);
+      setLoaded(true);
       return;
     }
 
     let cancelled = false;
     setLoading(true);
+    setLoaded(false);
     fetch(`${API_URL}/flows`)
       .then(async response => {
         if (!response.ok) throw new Error('Could not load Cash Flow.');
@@ -44,11 +47,14 @@ export function useFlowEntries(enabled: boolean) {
         console.error(nextError);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setLoaded(true);
+        }
       });
 
     return () => { cancelled = true; };
   }, [enabled]);
 
-  return { entries, error, loading };
+  return { entries, error, loading, loaded };
 }

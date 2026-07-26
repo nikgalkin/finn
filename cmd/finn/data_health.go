@@ -14,13 +14,14 @@ import (
 )
 
 type dataHealthIssue struct {
-	Code        string   `json:"code"`
-	Severity    string   `json:"severity"`
-	Category    string   `json:"category"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Count       int      `json:"count"`
-	Examples    []string `json:"examples,omitempty"`
+	Code          string   `json:"code"`
+	Severity      string   `json:"severity"`
+	Category      string   `json:"category"`
+	Title         string   `json:"title"`
+	Description   string   `json:"description"`
+	Count         int      `json:"count"`
+	Examples      []string `json:"examples,omitempty"`
+	InspectionSQL string   `json:"inspectionSql,omitempty"`
 }
 
 type dataHealthSummary struct {
@@ -52,11 +53,12 @@ func (collector *dataHealthCollector) add(
 	issue, exists := collector.byCode[code]
 	if !exists {
 		issue = &dataHealthIssue{
-			Code:        code,
-			Severity:    severity,
-			Category:    category,
-			Title:       title,
-			Description: description,
+			Code:          code,
+			Severity:      severity,
+			Category:      category,
+			Title:         title,
+			Description:   description,
+			InspectionSQL: dataHealthInspectionSQL(code),
 		}
 		collector.byCode[code] = issue
 		collector.order = append(collector.order, code)
@@ -263,6 +265,7 @@ func scanSnapshotHealth(
 			)
 			rates = map[string]any{}
 		}
+		nonPositiveRates := make(map[string]float64)
 		for currency, rawRate := range rates {
 			rate, ok := healthNumber(rawRate)
 			if !ok {
@@ -272,11 +275,7 @@ func scanSnapshotHealth(
 					fmt.Sprintf("%s: %s", location, currency),
 				)
 			} else if rate <= 0 {
-				collector.add(
-					"snapshot_rate_non_positive", "critical", "Currencies", "Exchange rate is zero or negative",
-					"Non-positive rates break currency conversion.",
-					fmt.Sprintf("%s: %s = %v", location, currency, rate),
-				)
+				nonPositiveRates[currency] = rate
 			}
 			if len(settings.currencies) > 0 && !settings.currencies[currency] {
 				collector.add(
@@ -297,6 +296,7 @@ func scanSnapshotHealth(
 		}
 
 		seenIDs := make(map[string]bool)
+		usedCurrencies := make(map[string]bool)
 		for index, rawOrganization := range organizations {
 			organization, ok := rawOrganization.(map[string]any)
 			orgLocation := fmt.Sprintf("%s, organization %d", location, index+1)
@@ -363,6 +363,7 @@ func scanSnapshotHealth(
 						"Every balance must identify its currency.", balanceLocation,
 					)
 				} else {
+					usedCurrencies[currency] = true
 					if _, exists := rates[currency]; !exists {
 						collector.add(
 							"snapshot_balance_rate_missing", "critical", "Currencies", "Balance has no exchange rate",
@@ -409,6 +410,17 @@ func scanSnapshotHealth(
 					}
 				}
 			}
+		}
+		for currency := range usedCurrencies {
+			rate, exists := nonPositiveRates[currency]
+			if !exists {
+				continue
+			}
+			collector.add(
+				"snapshot_rate_non_positive", "critical", "Currencies", "Exchange rate is zero or negative",
+				"Non-positive rates break conversion when the currency is used by an organization.",
+				fmt.Sprintf("%s: %s = %v", location, currency, rate),
+			)
 		}
 	}
 	if err := rows.Err(); err != nil {

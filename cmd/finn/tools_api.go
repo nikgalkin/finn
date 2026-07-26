@@ -310,12 +310,14 @@ func (api *toolsAPI) handleBackupVerify(c *gin.Context) {
 }
 
 type exportMetadata struct {
-	MinMonth      string   `json:"minMonth,omitempty"`
-	MaxMonth      string   `json:"maxMonth,omitempty"`
-	Months        []string `json:"months"`
-	SnapshotCount int      `json:"snapshotCount"`
-	FlowCount     int      `json:"flowCount"`
-	SettingsCount int      `json:"settingsCount"`
+	MinMonth           string   `json:"minMonth,omitempty"`
+	MaxMonth           string   `json:"maxMonth,omitempty"`
+	FirstSnapshotMonth string   `json:"firstSnapshotMonth,omitempty"`
+	LastSnapshotMonth  string   `json:"lastSnapshotMonth,omitempty"`
+	Months             []string `json:"months"`
+	SnapshotCount      int      `json:"snapshotCount"`
+	FlowCount          int      `json:"flowCount"`
+	SettingsCount      int      `json:"settingsCount"`
 }
 
 func loadExportMetadata(db *sql.DB) (exportMetadata, error) {
@@ -343,6 +345,16 @@ func loadExportMetadata(db *sql.DB) (exportMetadata, error) {
 	if len(metadata.Months) > 0 {
 		metadata.MinMonth = metadata.Months[0]
 		metadata.MaxMonth = metadata.Months[len(metadata.Months)-1]
+	}
+	var minMonth, maxMonth sql.NullString
+	if err := db.QueryRow("SELECT min(month), max(month) FROM snapshots").Scan(&minMonth, &maxMonth); err != nil {
+		return metadata, err
+	}
+	if minMonth.Valid {
+		metadata.FirstSnapshotMonth = minMonth.String
+	}
+	if maxMonth.Valid {
+		metadata.LastSnapshotMonth = maxMonth.String
 	}
 	if err := db.QueryRow("SELECT count(*) FROM snapshots").Scan(&metadata.SnapshotCount); err != nil {
 		return metadata, err

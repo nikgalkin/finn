@@ -127,7 +127,10 @@ func TestDataHealthAggregatesActionableProblems(t *testing.T) {
 	_, err := db.Exec(`
 		UPDATE snapshots
 		SET data = '{"rates":{"RUB":0},"organizations":[
-			{"id":"","name":"","balances":[{"currency":"USD","amount":"not-a-number","tags":["unknown"]}]}
+			{"id":"","name":"","balances":[
+				{"currency":"USD","amount":"not-a-number","tags":["unknown"]},
+				{"currency":"RUB","amount":1}
+			]}
 		]}'
 		WHERE month = '2026-01'
 	`)
@@ -145,6 +148,16 @@ func TestDataHealthAggregatesActionableProblems(t *testing.T) {
 	codes := make(map[string]bool)
 	for _, issue := range report.Issues {
 		codes[issue.Code] = true
+		if issue.InspectionSQL == "" {
+			t.Errorf("issue %q has no inspection SQL", issue.Code)
+			continue
+		}
+		rows, queryErr := db.Query(issue.InspectionSQL)
+		if queryErr != nil {
+			t.Errorf("inspection SQL for %q failed: %v", issue.Code, queryErr)
+			continue
+		}
+		rows.Close()
 	}
 	for _, code := range []string{
 		"snapshot_rate_non_positive",
@@ -155,6 +168,138 @@ func TestDataHealthAggregatesActionableProblems(t *testing.T) {
 		if !codes[code] {
 			t.Errorf("missing issue %q: %+v", code, report.Issues)
 		}
+	}
+}
+
+func TestDataHealthIgnoresUnusedNonPositiveRates(t *testing.T) {
+	db := newToolsTestDatabase(t)
+	_, err := db.Exec(`
+		UPDATE snapshots
+		SET data = '{"rates":{"RUB":1,"USD":0},"organizations":[
+			{"id":"org-1","name":"Bank","balances":[{"currency":"RUB","amount":100}]}
+		]}'
+		WHERE month = '2026-01'
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := runDataHealthCheck(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, issue := range report.Issues {
+		if issue.Code == "snapshot_rate_non_positive" {
+			t.Fatalf("unused USD rate was reported: %+v", issue)
+		}
+	}
+
+	_, err = db.Exec(`
+		UPDATE snapshots
+		SET data = '{"rates":{"RUB":1,"USD":0},"organizations":[
+			{"id":"org-1","name":"Bank","balances":[{"currency":"USD","amount":100}]}
+		]}'
+		WHERE month = '2026-01'
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err = runDataHealthCheck(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, issue := range report.Issues {
+		if issue.Code == "snapshot_rate_non_positive" {
+			if issue.Count != 1 {
+				t.Fatalf("non-positive rate count = %d, want 1", issue.Count)
+			}
+			return
+		}
+	}
+	t.Fatal("used USD rate was not reported")
+}
+
+func TestEveryDataHealthIssueHasRunnableReadOnlySQL(t *testing.T) {
+	db := newToolsTestDatabase(t)
+	codes := []string{
+		"settings_missing",
+		"settings_unreadable",
+		"settings_invalid_json",
+		"settings_currencies_invalid",
+		"settings_tags_invalid",
+		"snapshot_month_invalid",
+		"snapshot_duration_negative",
+		"snapshot_invalid_json",
+		"snapshot_rates_invalid",
+		"snapshot_rate_not_numeric",
+		"snapshot_rate_non_positive",
+		"snapshot_currency_not_configured",
+		"snapshot_organizations_invalid",
+		"snapshot_organization_invalid",
+		"snapshot_organization_id_missing",
+		"snapshot_organization_name_missing",
+		"snapshot_organization_id_duplicate",
+		"organization_name_inconsistent",
+		"snapshot_balances_invalid",
+		"snapshot_balance_invalid",
+		"snapshot_balance_currency_missing",
+		"snapshot_balance_rate_missing",
+		"snapshot_balance_amount_invalid",
+		"snapshot_balance_currency_not_configured",
+		"snapshot_balance_tags_invalid",
+		"snapshot_tag_not_configured",
+		"flow_month_invalid",
+		"flow_direction_invalid",
+		"flow_amount_non_positive",
+		"flow_tax_invalid",
+		"flow_currency_not_configured",
+		"flow_tag_not_configured",
+		"flow_transfer_incomplete",
+		"flow_destination_currency_not_configured",
+		"flow_destination_tag_not_configured",
+		"flow_entry_type_invalid",
+	}
+
+	for _, code := range codes {
+		query := dataHealthInspectionSQL(code)
+		if !strings.HasPrefix(strings.ToUpper(query), "SELECT") {
+			t.Errorf("inspection SQL for %q is not a SELECT: %q", code, query)
+			continue
+		}
+		rows, err := db.Query(query)
+		if err != nil {
+			t.Errorf("inspection SQL for %q failed: %v", code, err)
+			continue
+		}
+		rows.Close()
+	}
+}
+
+func TestExportMetadataUsesFirstAndLastSnapshotForAllTime(t *testing.T) {
+	db := newToolsTestDatabase(t)
+	if _, err := db.Exec("UPDATE flow_entries SET month = '2025-12'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO snapshots (month, data, duration_seconds)
+		VALUES ('2026-03', '{"rates":{"RUB":1},"organizations":[]}', 0)
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	metadata, err := loadExportMetadata(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metadata.FirstSnapshotMonth != "2026-01" || metadata.LastSnapshotMonth != "2026-03" {
+		t.Fatalf(
+			"snapshot range = %q..%q, want 2026-01..2026-03",
+			metadata.FirstSnapshotMonth,
+			metadata.LastSnapshotMonth,
+		)
+	}
+	if metadata.MinMonth != "2025-12" || metadata.MaxMonth != "2026-03" {
+		t.Fatalf("available range should still include Cash Flow: %+v", metadata)
 	}
 }
 

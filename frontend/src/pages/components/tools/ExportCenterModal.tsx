@@ -42,8 +42,8 @@ export function ExportCenterModal({ onClose }: ExportCenterModalProps) {
       setMetadata(loaded);
       setRequest(current => ({
         ...current,
-        fromMonth: current.fromMonth || loaded.minMonth || '',
-        toMonth: current.toMonth || loaded.maxMonth || ''
+        fromMonth: current.fromMonth || loaded.firstSnapshotMonth || loaded.minMonth || '',
+        toMonth: current.toMonth || loaded.lastSnapshotMonth || loaded.maxMonth || ''
       }));
     } catch (caught) {
       setError((caught as Error).message);
@@ -186,8 +186,8 @@ export function ExportCenterModal({ onClose }: ExportCenterModalProps) {
                 className="btn"
                 onClick={() => setRequest(current => ({
                   ...current,
-                  fromMonth: metadata.minMonth || '',
-                  toMonth: metadata.maxMonth || ''
+                  fromMonth: metadata.firstSnapshotMonth || metadata.minMonth || '',
+                  toMonth: metadata.lastSnapshotMonth || metadata.maxMonth || ''
                 }))}
               >
                 All time

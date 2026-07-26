@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ModalPortal } from '../ModalPortal';
+import { Spinner } from '../PageLoader';
 
 type ToolModalProps = {
   title: string;
@@ -11,6 +12,11 @@ type ToolModalProps = {
   actions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  onClose: () => void;
+};
+
+type ToolModalLoaderProps = {
+  label: string;
   onClose: () => void;
 };
 
@@ -53,6 +59,20 @@ export function ToolModal({
         <div className="tool-modal-body">{children}</div>
         {footer && <footer className="tool-modal-footer">{footer}</footer>}
       </section>
+    </ModalPortal>
+  );
+}
+
+export function ToolModalLoader({
+  label,
+  onClose
+}: ToolModalLoaderProps) {
+  return (
+    <ModalPortal onClose={onClose} closeOnEscape className="tool-modal-overlay tool-modal-loading-overlay">
+      <div className="tool-modal-loader" onClick={event => event.stopPropagation()}>
+        <Spinner label={label} size={28} />
+        <span>{label}…</span>
+      </div>
     </ModalPortal>
   );
 }

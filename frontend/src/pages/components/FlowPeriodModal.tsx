@@ -189,12 +189,6 @@ export function FlowPeriodModal({
   };
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, []);
-
-  useEffect(() => {
     if (!focusEntryID) return;
     const timer = window.setTimeout(() => {
       document.getElementById(`flow-period-entry-${focusEntryID}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });

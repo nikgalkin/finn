@@ -3,7 +3,9 @@ import {
   Activity,
   AlertOctagon,
   AlertTriangle,
+  Check,
   CircleCheck,
+  Copy,
   RefreshCw
 } from 'lucide-react';
 import { fetchDataHealth } from '../../../lib/toolsApi';
@@ -44,6 +46,16 @@ export function DataHealthModal({ onClose }: DataHealthModalProps) {
   const [report, setReport] = useState<DataHealthReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copiedIssue, setCopiedIssue] = useState<string | null>(null);
+
+  const copyInspectionSQL = useCallback(async (issue: DataHealthIssue) => {
+    if (!issue.inspectionSql) return;
+    await navigator.clipboard.writeText(issue.inspectionSql);
+    setCopiedIssue(issue.code);
+    window.setTimeout(() => {
+      setCopiedIssue(current => current === issue.code ? null : current);
+    }, 1600);
+  }, []);
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -149,6 +161,23 @@ export function DataHealthModal({ onClose }: DataHealthModalProps) {
                               <ul>
                                 {issue.examples.map(example => <li key={example}><code>{example}</code></li>)}
                               </ul>
+                            </details>
+                          )}
+                          {issue.inspectionSql && (
+                            <details className="health-sql">
+                              <summary>Inspect with SQL</summary>
+                              <div className="health-sql-toolbar">
+                                <span>Read-only query for the source data</span>
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  onClick={() => void copyInspectionSQL(issue)}
+                                >
+                                  {copiedIssue === issue.code ? <Check size={13} /> : <Copy size={13} />}
+                                  {copiedIssue === issue.code ? 'Copied' : 'Copy SQL'}
+                                </button>
+                              </div>
+                              <pre><code>{issue.inspectionSql}</code></pre>
                             </details>
                           )}
                         </div>

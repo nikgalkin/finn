@@ -9,6 +9,7 @@ export type DataHealthIssue = {
   description: string;
   count: number;
   examples?: string[];
+  inspectionSql?: string;
 };
 
 export type DataHealthReport = {
@@ -64,6 +65,8 @@ export type BackupVerification = {
 export type ExportMetadata = {
   minMonth?: string;
   maxMonth?: string;
+  firstSnapshotMonth?: string;
+  lastSnapshotMonth?: string;
   months: string[];
   snapshotCount: number;
   flowCount: number;
