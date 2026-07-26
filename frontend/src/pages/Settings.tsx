@@ -45,7 +45,6 @@ const organizationListBodyStyle = { display: 'flex', flexDirection: 'column' as 
 const compactButtonStyle = { padding: '6px 12px', fontSize: '13px' };
 const iconButtonStyle = { padding: '8px' };
 const inputRowStyle = { height: '36px' };
-const enabledCheckboxStyle = { width: '17px', height: '17px', accentColor: 'var(--accent)' };
 const DEFAULT_CASH_FLOW: CashFlowSettings = { enabled: false, sources: [], taxRates: {}, categories: [] };
 const DEFAULT_LOCAL_AI: LocalAISettings = { enabled: false, provider: 'lmstudio', baseUrl: 'http://127.0.0.1:1234/v1', model: '' };
 const normalizeListValue = (value: string) => value.trim().toLocaleLowerCase();
@@ -115,10 +114,24 @@ const SettingsPanel = ({ children, description, enabled, icon, intro, onEnabledC
     <div className="cash-flow-settings-body">
       <div className="cash-flow-settings-status">
         <span>{intro}</span>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={enabled} onChange={event => onEnabledChange(event.target.checked)} style={enabledCheckboxStyle} />
-          Enabled
-        </label>
+        <div className="settings-enabled-switch" role="group" aria-label={`${title} status`}>
+          <button
+            type="button"
+            className={!enabled ? 'is-active is-off' : ''}
+            aria-pressed={!enabled}
+            onClick={() => onEnabledChange(false)}
+          >
+            Off
+          </button>
+          <button
+            type="button"
+            className={enabled ? 'is-active is-on' : ''}
+            aria-pressed={enabled}
+            onClick={() => onEnabledChange(true)}
+          >
+            On
+          </button>
+        </div>
       </div>
       {children}
     </div>

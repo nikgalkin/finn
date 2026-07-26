@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
+  ArrowRightLeft,
+  CircleCheck,
   Database,
   Plus,
   Scale,
@@ -14,16 +16,18 @@ import {
   calculateRebalance,
   calculateXirr,
   compareFxDeals,
+  compareFxDealsForTarget,
   suggestGoalTarget,
   suggestMonthlyContribution,
   type RebalanceItem
 } from '../../../lib/financialCalculators';
 import {
+  buildSnapshotCurrencyRebalanceRows,
   buildSnapshotRebalanceRows,
   buildSnapshotReturnFlows,
+  getSnapshotCurrencyHolding,
   getSnapshotFxQuote,
-  getSnapshotPortfolioTotal,
-  suggestFxQuoteBasis
+  getSnapshotPortfolioTotal
 } from '../../../lib/calculatorSnapshotDefaults';
 import { parseNumberExpression } from '../../../lib/numberExpression';
 import { useFlowEntries } from '../../../hooks/useFlowEntries';
@@ -166,6 +170,7 @@ function ResultMetric({
 
 export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'forecast' | 'goal'>('forecast');
+  const [capitalSource, setCapitalSource] = useState<'portfolio' | 'currency'>('portfolio');
   const {
     baseCurrency,
     currencies,
@@ -182,8 +187,10 @@ export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) 
   const [years, setYears] = useState<NumericValue>(5);
   const currency = currencyOverride || baseCurrency;
   const snapshotCapital = useMemo(
-    () => getSnapshotPortfolioTotal(latestSnapshot, currency),
-    [currency, latestSnapshot]
+    () => capitalSource === 'portfolio'
+      ? getSnapshotPortfolioTotal(latestSnapshot, currency)
+      : getSnapshotCurrencyHolding(latestSnapshot, currency),
+    [capitalSource, currency, latestSnapshot]
   );
   const startingCapital = startingCapitalOverride ?? snapshotCapital ?? 1_000_000;
   const monthlyContribution = monthlyContributionOverride
@@ -242,10 +249,24 @@ export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) 
           options={currencies}
           disabled={currenciesLoading}
         />
+        <SegmentedControl
+          compact
+          value={capitalSource}
+          onChange={value => {
+            setCapitalSource(value);
+            setStartingCapitalOverride(null);
+            setMonthlyContributionOverride(null);
+            setTargetAmountOverride(null);
+          }}
+          options={[
+            { value: 'portfolio', label: 'Whole portfolio' },
+            { value: 'currency', label: `${currency} held` }
+          ]}
+        />
         <SnapshotSourceButton
           month={latestSnapshot?.month}
           loading={snapshotLoading}
-          label="Use portfolio"
+          label={capitalSource === 'portfolio' ? 'Use portfolio' : `Use ${currency} held`}
           onClick={() => {
             setStartingCapitalOverride(null);
             setMonthlyContributionOverride(null);
@@ -264,7 +285,9 @@ export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) 
               onChange={setStartingCapitalOverride}
               suffix={currency}
               hint={startingCapitalOverride === null && latestSnapshot
-                ? `Portfolio value from ${latestSnapshot.month}`
+                ? capitalSource === 'portfolio'
+                  ? `Whole portfolio valued in ${currency} · ${latestSnapshot.month}`
+                  : `${currency} held without converting other currencies`
                 : undefined}
             />
             {mode === 'forecast'
@@ -342,23 +365,38 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
     snapshotLoading
   } = useCalculatorCurrencies();
   const [currencyOverride, setCurrencyOverride] = useState('');
+  const [grouping, setGrouping] = useState<'organizations' | 'currencies'>('organizations');
   const [additionalCash, setAdditionalCash] = useState<NumericValue>(100_000);
   const [buyOnly, setBuyOnly] = useState(true);
   const [rows, setRows] = useState<RebalanceDraft[]>(INITIAL_REBALANCE_ROWS);
   const snapshotInitialized = useRef(false);
   const currency = currencyOverride || baseCurrency;
 
+  const buildRowsFromSnapshot = useCallback((
+    nextCurrency: string,
+    nextGrouping: 'organizations' | 'currencies',
+    targets: ReadonlyMap<string, number> = new Map()
+  ) => nextGrouping === 'organizations'
+    ? buildSnapshotRebalanceRows(latestSnapshot, nextCurrency, targets)
+    : buildSnapshotCurrencyRebalanceRows(latestSnapshot, nextCurrency, targets), [latestSnapshot]);
+
   useEffect(() => {
     if (snapshotLoading || snapshotInitialized.current || !latestSnapshot) return;
-    const snapshotRows = buildSnapshotRebalanceRows(latestSnapshot, currency);
+    const snapshotRows = buildRowsFromSnapshot(currency, grouping);
     if (snapshotRows.length > 0) setRows(snapshotRows);
     snapshotInitialized.current = true;
-  }, [currency, latestSnapshot, snapshotLoading]);
+  }, [buildRowsFromSnapshot, currency, grouping, latestSnapshot, snapshotLoading]);
 
-  const loadSnapshotRows = (nextCurrency: string) => {
+  const loadSnapshotRows = (
+    nextCurrency: string,
+    nextGrouping = grouping,
+    preserveTargets = true
+  ) => {
     if (!latestSnapshot) return;
-    const targets = new Map(rows.map(row => [row.id, numeric(row.targetPercent)]));
-    const snapshotRows = buildSnapshotRebalanceRows(latestSnapshot, nextCurrency, targets);
+    const targets = preserveTargets
+      ? new Map(rows.map(row => [row.id, numeric(row.targetPercent)]))
+      : new Map<string, number>();
+    const snapshotRows = buildRowsFromSnapshot(nextCurrency, nextGrouping, targets);
     if (snapshotRows.length > 0) setRows(snapshotRows);
   };
 
@@ -424,6 +462,28 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
         />
       </div>
 
+      <div className="rebalance-source-guide">
+        <div>
+          <strong>Build allocation from the latest snapshot</strong>
+          <span>
+            Choose a grouping, set the desired Target percentages to 100%, then review the suggested trades.
+            Tags are not imported because one balance can carry several tags.
+          </span>
+        </div>
+        <SegmentedControl
+          compact
+          value={grouping}
+          onChange={value => {
+            setGrouping(value);
+            loadSnapshotRows(currency, value, false);
+          }}
+          options={[
+            { value: 'organizations', label: 'Organizations' },
+            { value: 'currencies', label: 'Currencies' }
+          ]}
+        />
+      </div>
+
       {!targetsValid && (
         <div className="tool-message is-warning">
           <div>
@@ -435,7 +495,8 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
 
       <div className="rebalance-editor">
         <div className="rebalance-heading">
-          <span>Asset</span><span>Current</span><span>Target</span><span />
+          <span>{grouping === 'organizations' ? 'Organization' : 'Currency'}</span>
+          <span>Current</span><span>Target</span><span />
         </div>
         {rows.map(row => (
           <div className="rebalance-edit-row" key={row.id}>
@@ -670,12 +731,13 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
   } = useCalculatorCurrencies();
   const [fromCurrencyOverride, setFromCurrencyOverride] = useState('');
   const [toCurrencyOverride, setToCurrencyOverride] = useState('');
+  const [amountMode, setAmountMode] = useState<'spend' | 'receive'>('spend');
   const [budget, setBudget] = useState<NumericValue>(100_000);
+  const [targetReceiveOverride, setTargetReceiveOverride] = useState<NumericValue | null>(null);
   const [rateAOverride, setRateAOverride] = useState<NumericValue | null>(null);
   const [rateBOverride, setRateBOverride] = useState<NumericValue | null>(null);
   const [feeA, setFeeA] = useState<NumericValue>(0);
   const [feeB, setFeeB] = useState<NumericValue>(0);
-  const [basisOverride, setBasisOverride] = useState<number | null>(null);
   const fromCurrency = fromCurrencyOverride || baseCurrency;
   const toCurrency = toCurrencyOverride
     || (settings.secondaryCurrency
@@ -685,40 +747,96 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
       : '')
     || currencies.find(currency => currency !== fromCurrency)
     || fromCurrency;
-  const suggestedBasis = suggestFxQuoteBasis(latestSnapshot, fromCurrency, toCurrency);
-  const basis = basisOverride ?? suggestedBasis;
   const snapshotQuote = getSnapshotFxQuote(
     latestSnapshot,
     fromCurrency,
-    toCurrency,
-    basis
+    toCurrency
   );
-  const rateA = rateAOverride ?? snapshotQuote ?? 7;
-  const rateB = rateBOverride ?? snapshotQuote ?? 7;
+  const quoteDirection = snapshotQuote?.direction ?? 'spend-per-buy';
+  const rateA = rateAOverride ?? snapshotQuote?.rate ?? 7;
+  const rateB = rateBOverride ?? snapshotQuote?.rate ?? 7;
+  const usesCostQuote = quoteDirection === 'spend-per-buy';
+  const ratePrompt = usesCostQuote
+    ? `Enter how much 1 ${toCurrency} costs in ${fromCurrency}`
+    : `Enter how much ${toCurrency} you receive for 1 ${fromCurrency}`;
+  const rateLabel = usesCostQuote
+    ? `Cost of 1 ${toCurrency}`
+    : `${toCurrency} per 1 ${fromCurrency}`;
 
   const resetSnapshotRates = () => {
-    setBasisOverride(null);
     setRateAOverride(null);
     setRateBOverride(null);
   };
 
+  const resetCurrencyPair = () => {
+    resetSnapshotRates();
+    setTargetReceiveOverride(null);
+  };
+
+  const swapCurrencies = () => {
+    setFromCurrencyOverride(toCurrency);
+    setToCurrencyOverride(fromCurrency);
+    resetCurrencyPair();
+  };
+
   const comparison = useMemo(() => compareFxDeals({
     budget: numeric(budget),
-    rate: numeric(rateA),
+    rate: Math.round(numeric(rateA) * 100) / 100,
     feePercent: numeric(feeA),
-    unitsPerQuote: basis
+    quoteDirection
   }, {
     budget: numeric(budget),
-    rate: numeric(rateB),
+    rate: Math.round(numeric(rateB) * 100) / 100,
     feePercent: numeric(feeB),
-    unitsPerQuote: basis
-  }), [basis, budget, feeA, feeB, rateA, rateB]);
-  const winner = comparison.betterDeal === 'equal' ? 'Same result' : `Deal ${comparison.betterDeal} is better`;
+    quoteDirection
+  }), [budget, feeA, feeB, quoteDirection, rateA, rateB]);
+  const targetReceive = targetReceiveOverride ?? comparison.dealA.receivedAmount;
+  const targetComparison = useMemo(() => compareFxDealsForTarget({
+    targetAmount: numeric(targetReceive),
+    rate: Math.round(numeric(rateA) * 100) / 100,
+    feePercent: numeric(feeA),
+    quoteDirection
+  }, {
+    targetAmount: numeric(targetReceive),
+    rate: Math.round(numeric(rateB) * 100) / 100,
+    feePercent: numeric(feeB),
+    quoteDirection
+  }), [feeA, feeB, quoteDirection, rateA, rateB, targetReceive]);
+  const betterDeal = amountMode === 'spend'
+    ? comparison.betterDeal
+    : targetComparison.betterDeal;
+  const activeDifference = amountMode === 'spend'
+    ? comparison.difference
+    : targetComparison.difference;
+  const activeDifferencePercent = amountMode === 'spend'
+    ? comparison.differencePercent
+    : targetComparison.differencePercent;
+  const winner = betterDeal === 'equal'
+    ? 'Both offers give the same result'
+    : amountMode === 'spend'
+      ? `Offer ${betterDeal} gives more ${toCurrency}`
+      : `Offer ${betterDeal} costs less ${fromCurrency}`;
+  const effectiveRateDifference = Number.isFinite(comparison.dealA.effectiveRate)
+    && Number.isFinite(comparison.dealB.effectiveRate)
+    ? Math.abs(comparison.dealA.effectiveRate - comparison.dealB.effectiveRate)
+    : null;
+  const effectiveRateBaseline = Math.min(
+    comparison.dealA.effectiveRate,
+    comparison.dealB.effectiveRate
+  );
+  const effectiveRateDifferencePercent = effectiveRateDifference !== null
+    && Number.isFinite(effectiveRateBaseline)
+    && effectiveRateBaseline > 0
+    ? effectiveRateDifference / effectiveRateBaseline * 100
+    : null;
+  const effectiveRateUnit = usesCostQuote
+    ? `${fromCurrency} per 1 ${toCurrency}`
+    : `${toCurrency} per 1 ${fromCurrency}`;
 
   return (
     <ToolModal
       title="FX Deal Comparator"
-      subtitle="Compare two exchange quotes, their fees, and the amount of currency you receive"
+      subtitle="Compare two exchange quotes by the amount you spend or want to receive"
       icon={ArrowLeftRight}
       accent="#14b8a6"
       onClose={onClose}
@@ -729,58 +847,99 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
           value={fromCurrency}
           onChange={value => {
             setFromCurrencyOverride(value);
-            resetSnapshotRates();
+            resetCurrencyPair();
           }}
           options={currencies}
           disabled={currenciesLoading}
         />
+        <button
+          type="button"
+          className="btn fx-swap-button"
+          title="Swap spend and buy currencies"
+          aria-label="Swap spend and buy currencies"
+          onClick={swapCurrencies}
+        >
+          <ArrowRightLeft size={15} />
+        </button>
         <CurrencyField
           label="Buy currency"
           value={toCurrency}
           onChange={value => {
             setToCurrencyOverride(value);
-            resetSnapshotRates();
+            resetCurrencyPair();
           }}
           options={currencies}
           disabled={currenciesLoading}
         />
-        <CalculatorField label="Budget" value={budget} onChange={setBudget} suffix={fromCurrency} />
-        <label className="calculator-field">
-          <span>Quote basis</span>
-          <select
-            className="input"
-            value={basis}
-            onChange={event => {
-              const nextBasis = Number(event.target.value);
-              const scale = nextBasis / basis;
-              setBasisOverride(nextBasis);
-              setRateAOverride(current => current === null ? null : numeric(current) * scale);
-              setRateBOverride(current => current === null ? null : numeric(current) * scale);
+        <div className="calculator-field fx-amount-mode">
+          <span>Calculate by</span>
+          <SegmentedControl
+            compact
+            value={amountMode}
+            onChange={value => {
+              if (value === 'receive' && targetReceiveOverride === null) {
+                setTargetReceiveOverride(
+                  Math.round(comparison.dealA.receivedAmount * 100) / 100
+                );
+              }
+              setAmountMode(value);
             }}
-          >
-            <option value={1}>per 1 {toCurrency}</option>
-            <option value={100}>per 100 {toCurrency}</option>
-            <option value={1000}>per 1,000 {toCurrency}</option>
-          </select>
-        </label>
+            options={[
+              { value: 'spend', label: 'Spend' },
+              { value: 'receive', label: 'Receive' }
+            ]}
+          />
+        </div>
+        {amountMode === 'spend'
+          ? <CalculatorField label="You spend" value={budget} onChange={setBudget} suffix={fromCurrency} />
+          : (
+            <CalculatorField
+              label="You receive"
+              value={targetReceive}
+              onChange={setTargetReceiveOverride}
+              suffix={toCurrency}
+            />
+          )}
+      </div>
+
+      <div className="fx-rate-guide">
+        <div>
+          <strong>{ratePrompt}</strong>
+          <span>
+            {snapshotQuote && latestSnapshot
+              ? `Snapshot reference: ${formatValue(snapshotQuote.rate)} ${usesCostQuote ? fromCurrency : toCurrency} · ${latestSnapshot.month}. `
+              : ''}
+            {usesCostQuote
+              ? 'A lower effective price is the better offer after fees.'
+              : 'A higher effective rate is the better offer after fees.'}
+          </span>
+        </div>
         <SnapshotSourceButton
           month={latestSnapshot?.month}
           loading={snapshotLoading}
-          label="Use rates"
+          label="Reset to reference"
           onClick={resetSnapshotRates}
         />
       </div>
 
       <div className="calculator-shell fx-deals">
-        <section className={`calculator-panel fx-deal${comparison.betterDeal === 'A' ? ' is-best' : ''}`}>
-          <h3>Deal A</h3>
+        <section className={`calculator-panel fx-deal is-offer-a${betterDeal === 'A' ? ' is-best' : ''}`}>
+          <div className="fx-deal-heading">
+            <h3>Offer A</h3>
+            <span className={betterDeal === 'A' ? 'is-best-badge' : undefined}>
+              {betterDeal === 'A' && <CircleCheck size={12} />}
+              {betterDeal === 'equal'
+                ? 'Same result'
+                : betterDeal === 'A' ? 'Best offer' : 'First quote'}
+            </span>
+          </div>
           <div className="calculator-field-grid">
             <CalculatorField
-              label={`Price per ${formatValue(basis, 0)} ${toCurrency}`}
+              label={rateLabel}
               value={rateA}
               onChange={setRateAOverride}
-              suffix={fromCurrency}
-              hint={rateAOverride === null && snapshotQuote !== null
+              suffix={usesCostQuote ? fromCurrency : toCurrency}
+              hint={rateAOverride === null && snapshotQuote
                 ? `Rate from ${latestSnapshot?.month}`
                 : undefined}
             />
@@ -788,24 +947,38 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
           </div>
           <ResultMetric
             primary
-            tone={comparison.betterDeal === 'A' ? 'positive' : 'neutral'}
-            label="You receive"
-            value={formatMoney(comparison.dealA.receivedAmount, toCurrency)}
+            tone={betterDeal === 'A' ? 'positive' : 'neutral'}
+            label={amountMode === 'spend' ? 'You receive' : 'You spend'}
+            value={amountMode === 'spend'
+              ? formatMoney(comparison.dealA.receivedAmount, toCurrency)
+              : formatMoney(targetComparison.dealA.spendAmount, fromCurrency)}
           />
           <small className="fx-effective-rate">
-            Effective price: {formatValue(comparison.dealA.effectiveRate, 6)} {fromCurrency} per {formatValue(basis, 0)} {toCurrency}
+            {usesCostQuote ? 'Effective price' : 'Effective rate'}:
+            {' '}
+            {formatValue(comparison.dealA.effectiveRate, 6)}
+            {' '}
+            {usesCostQuote ? `${fromCurrency} per 1 ${toCurrency}` : `${toCurrency} per 1 ${fromCurrency}`}
           </small>
         </section>
 
-        <section className={`calculator-panel fx-deal${comparison.betterDeal === 'B' ? ' is-best' : ''}`}>
-          <h3>Deal B</h3>
+        <section className={`calculator-panel fx-deal is-offer-b${betterDeal === 'B' ? ' is-best' : ''}`}>
+          <div className="fx-deal-heading">
+            <h3>Offer B</h3>
+            <span className={betterDeal === 'B' ? 'is-best-badge' : undefined}>
+              {betterDeal === 'B' && <CircleCheck size={12} />}
+              {betterDeal === 'equal'
+                ? 'Same result'
+                : betterDeal === 'B' ? 'Best offer' : 'Second quote'}
+            </span>
+          </div>
           <div className="calculator-field-grid">
             <CalculatorField
-              label={`Price per ${formatValue(basis, 0)} ${toCurrency}`}
+              label={rateLabel}
               value={rateB}
               onChange={setRateBOverride}
-              suffix={fromCurrency}
-              hint={rateBOverride === null && snapshotQuote !== null
+              suffix={usesCostQuote ? fromCurrency : toCurrency}
+              hint={rateBOverride === null && snapshotQuote
                 ? `Rate from ${latestSnapshot?.month}`
                 : undefined}
             />
@@ -813,25 +986,73 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
           </div>
           <ResultMetric
             primary
-            tone={comparison.betterDeal === 'B' ? 'positive' : 'neutral'}
-            label="You receive"
-            value={formatMoney(comparison.dealB.receivedAmount, toCurrency)}
+            tone={betterDeal === 'B' ? 'positive' : 'neutral'}
+            label={amountMode === 'spend' ? 'You receive' : 'You spend'}
+            value={amountMode === 'spend'
+              ? formatMoney(comparison.dealB.receivedAmount, toCurrency)
+              : formatMoney(targetComparison.dealB.spendAmount, fromCurrency)}
           />
           <small className="fx-effective-rate">
-            Effective price: {formatValue(comparison.dealB.effectiveRate, 6)} {fromCurrency} per {formatValue(basis, 0)} {toCurrency}
+            {usesCostQuote ? 'Effective price' : 'Effective rate'}:
+            {' '}
+            {formatValue(comparison.dealB.effectiveRate, 6)}
+            {' '}
+            {usesCostQuote ? `${fromCurrency} per 1 ${toCurrency}` : `${toCurrency} per 1 ${fromCurrency}`}
           </small>
         </section>
       </div>
 
-      <div className={`fx-comparison-result${comparison.betterDeal === 'equal' ? '' : ' has-winner'}`}>
+      <div className="fx-rate-comparison">
+        <div className="fx-rate-comparison-heading">
+          <strong>{usesCostQuote ? 'Effective price comparison' : 'Effective rate comparison'}</strong>
+          <span>Includes offer fees</span>
+        </div>
+        <div className="fx-rate-comparison-values">
+          <div className="fx-rate-value is-offer-a">
+            <span>Offer A</span>
+            <strong>{formatValue(comparison.dealA.effectiveRate, 6)}</strong>
+          </div>
+          <div className="fx-rate-gap">
+            <span>Difference</span>
+            <strong>
+              {effectiveRateDifference === null ? '—' : formatValue(effectiveRateDifference, 6)}
+              <small>{effectiveRateUnit}</small>
+            </strong>
+            <em>
+              {effectiveRateDifferencePercent === null
+                ? '—'
+                : `${formatValue(effectiveRateDifferencePercent)}%`}
+            </em>
+          </div>
+          <div className="fx-rate-value is-offer-b">
+            <span>Offer B</span>
+            <strong>{formatValue(comparison.dealB.effectiveRate, 6)}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className={`fx-comparison-result${betterDeal === 'equal' ? '' : ' has-winner'}`}>
         <ArrowLeftRight size={18} />
         <div>
           <strong>{winner}</strong>
-          <span>
-            Difference: {formatMoney(Math.abs(comparison.difference), toCurrency)}
-            {' · '}
-            {formatValue(comparison.differencePercent)}% more currency for the same budget
-          </span>
+          {betterDeal === 'equal'
+            ? (
+              <span>
+                {amountMode === 'spend'
+                  ? `Both return ${formatMoney(comparison.dealA.receivedAmount, toCurrency)} after fees.`
+                  : `Both require ${formatMoney(targetComparison.dealA.spendAmount, fromCurrency)} after fees.`}
+              </span>
+            )
+            : (
+              <span>
+                {amountMode === 'spend'
+                  ? `The better offer returns ${formatMoney(Math.abs(activeDifference), toCurrency)} more`
+                  : `The better offer requires ${formatMoney(Math.abs(activeDifference), fromCurrency)} less`}
+                {' · '}
+                {formatValue(activeDifferencePercent)}% advantage
+                {amountMode === 'spend' ? ' for the same budget' : ' for the same target'}
+              </span>
+            )}
         </div>
       </div>
     </ToolModal>

@@ -268,7 +268,10 @@ export type FxDealInput = {
   rate: number;
   feePercent?: number;
   unitsPerQuote?: number;
+  quoteDirection?: FxQuoteDirection;
 };
+
+export type FxQuoteDirection = 'spend-per-buy' | 'buy-per-spend';
 
 export type FxDealResult = {
   receivedAmount: number;
@@ -279,17 +282,26 @@ export const calculateFxDeal = ({
   budget,
   rate,
   feePercent = 0,
-  unitsPerQuote = 1
+  unitsPerQuote = 1,
+  quoteDirection = 'spend-per-buy'
 }: FxDealInput): FxDealResult => {
   const spend = nonNegative(budget);
   const quoteRate = nonNegative(rate);
   const basis = Math.max(1, nonNegative(unitsPerQuote));
   const feeMultiplier = Math.max(0, 1 - nonNegative(feePercent) / 100);
-  const receivedAmount = quoteRate > 0 ? spend * feeMultiplier / quoteRate * basis : 0;
+  const receivedAmount = quoteRate <= 0
+    ? 0
+    : quoteDirection === 'buy-per-spend'
+      ? spend / basis * quoteRate * feeMultiplier
+      : spend * feeMultiplier / quoteRate * basis;
 
   return {
     receivedAmount,
-    effectiveRate: feeMultiplier > 0 ? quoteRate / feeMultiplier : Number.POSITIVE_INFINITY
+    effectiveRate: feeMultiplier <= 0
+      ? quoteDirection === 'buy-per-spend' ? 0 : Number.POSITIVE_INFINITY
+      : quoteDirection === 'buy-per-spend'
+        ? quoteRate * feeMultiplier
+        : quoteRate / feeMultiplier
   };
 };
 
@@ -304,14 +316,122 @@ export type FxComparison = {
 export const compareFxDeals = (dealA: FxDealInput, dealB: FxDealInput): FxComparison => {
   const resultA = calculateFxDeal(dealA);
   const resultB = calculateFxDeal(dealB);
-  const difference = resultA.receivedAmount - resultB.receivedAmount;
+  const rawDifference = resultA.receivedAmount - resultB.receivedAmount;
+  const comparisonScale = Math.max(
+    1,
+    Math.abs(resultA.receivedAmount),
+    Math.abs(resultB.receivedAmount)
+  );
+  const materiallyEqual = Math.abs(rawDifference) <= Number.EPSILON * comparisonScale * 16;
+  const difference = materiallyEqual ? 0 : rawDifference;
   const baseline = Math.min(resultA.receivedAmount, resultB.receivedAmount);
 
   return {
     dealA: resultA,
     dealB: resultB,
     difference,
-    differencePercent: baseline > 0 ? Math.abs(difference) / baseline * 100 : 0,
-    betterDeal: Math.abs(difference) < 1e-9 ? 'equal' : difference > 0 ? 'A' : 'B'
+    differencePercent: materiallyEqual || baseline <= 0 ? 0 : Math.abs(difference) / baseline * 100,
+    betterDeal: materiallyEqual ? 'equal' : difference > 0 ? 'A' : 'B'
+  };
+};
+
+export type FxTargetDealInput = Omit<FxDealInput, 'budget'> & {
+  targetAmount: number;
+};
+
+export type FxTargetDealResult = {
+  spendAmount: number;
+  effectiveRate: number;
+};
+
+export const calculateFxSpendForTarget = ({
+  targetAmount,
+  rate,
+  feePercent = 0,
+  unitsPerQuote = 1,
+  quoteDirection = 'spend-per-buy'
+}: FxTargetDealInput): FxTargetDealResult => {
+  const target = nonNegative(targetAmount);
+  const quoteRate = nonNegative(rate);
+  const basis = Math.max(1, nonNegative(unitsPerQuote));
+  const feeMultiplier = Math.max(0, 1 - nonNegative(feePercent) / 100);
+  const effectiveRate = calculateFxDeal({
+    budget: 1,
+    rate: quoteRate,
+    feePercent,
+    unitsPerQuote: basis,
+    quoteDirection
+  }).effectiveRate;
+
+  if (target === 0) return { spendAmount: 0, effectiveRate };
+  if (quoteRate <= 0 || feeMultiplier <= 0) {
+    return { spendAmount: Number.POSITIVE_INFINITY, effectiveRate };
+  }
+
+  return {
+    spendAmount: quoteDirection === 'buy-per-spend'
+      ? target * basis / quoteRate / feeMultiplier
+      : target * quoteRate / basis / feeMultiplier,
+    effectiveRate
+  };
+};
+
+export type FxTargetComparison = {
+  dealA: FxTargetDealResult;
+  dealB: FxTargetDealResult;
+  difference: number;
+  differencePercent: number;
+  betterDeal: 'A' | 'B' | 'equal';
+};
+
+export const compareFxDealsForTarget = (
+  dealA: FxTargetDealInput,
+  dealB: FxTargetDealInput
+): FxTargetComparison => {
+  const resultA = calculateFxSpendForTarget(dealA);
+  const resultB = calculateFxSpendForTarget(dealB);
+
+  if (resultA.spendAmount === resultB.spendAmount) {
+    return {
+      dealA: resultA,
+      dealB: resultB,
+      difference: 0,
+      differencePercent: 0,
+      betterDeal: 'equal'
+    };
+  }
+  if (!Number.isFinite(resultA.spendAmount)) {
+    return {
+      dealA: resultA,
+      dealB: resultB,
+      difference: Number.POSITIVE_INFINITY,
+      differencePercent: Number.POSITIVE_INFINITY,
+      betterDeal: 'B'
+    };
+  }
+  if (!Number.isFinite(resultB.spendAmount)) {
+    return {
+      dealA: resultA,
+      dealB: resultB,
+      difference: Number.POSITIVE_INFINITY,
+      differencePercent: Number.POSITIVE_INFINITY,
+      betterDeal: 'A'
+    };
+  }
+
+  const rawDifference = resultB.spendAmount - resultA.spendAmount;
+  const comparisonScale = Math.max(1, resultA.spendAmount, resultB.spendAmount);
+  const materiallyEqual = Math.abs(rawDifference) <= Number.EPSILON * comparisonScale * 16;
+  const difference = materiallyEqual ? 0 : rawDifference;
+  const baseline = Math.min(resultA.spendAmount, resultB.spendAmount);
+
+  return {
+    dealA: resultA,
+    dealB: resultB,
+    difference,
+    differencePercent: materiallyEqual || baseline <= 0
+      ? 0
+      : Math.abs(difference) / baseline * 100,
+    betterDeal: materiallyEqual ? 'equal' : difference > 0 ? 'A' : 'B'
   };
 };

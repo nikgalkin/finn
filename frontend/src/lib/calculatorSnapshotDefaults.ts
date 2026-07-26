@@ -1,5 +1,7 @@
 import type { FlowEntry, ParsedSnapshot } from '../types.ts';
+import type { FxQuoteDirection } from './financialCalculators.ts';
 import {
+  calculateCurrencyTotals,
   calculateOrganizationTotal,
   calculateSnapshotTotalAtRates,
   convertAmount
@@ -30,6 +32,13 @@ export const getSnapshotPortfolioTotal = (
   ? roundMoney(calculateSnapshotTotalAtRates(snapshot, snapshot.data.rates, currency))
   : null;
 
+export const getSnapshotCurrencyHolding = (
+  snapshot: ParsedSnapshot | null,
+  currency: string
+) => snapshot
+  ? roundMoney(calculateCurrencyTotals(snapshot)[currency] || 0)
+  : null;
+
 export const buildSnapshotRebalanceRows = (
   snapshot: ParsedSnapshot | null,
   currency: string,
@@ -54,6 +63,35 @@ export const buildSnapshotRebalanceRows = (
     ...organization,
     targetPercent: existingTargets.get(organization.id)
       ?? (total > 0 ? organization.currentAmount / total * 100 : 0)
+  }));
+};
+
+export const buildSnapshotCurrencyRebalanceRows = (
+  snapshot: ParsedSnapshot | null,
+  currency: string,
+  existingTargets: ReadonlyMap<string, number> = new Map()
+): SnapshotRebalanceRow[] => {
+  if (!snapshot) return [];
+
+  const currencies = Object.entries(calculateCurrencyTotals(snapshot))
+    .map(([heldCurrency, amount]) => ({
+      id: `snapshot-currency-${heldCurrency}`,
+      label: heldCurrency,
+      currentAmount: roundMoney(convertAmount(
+        amount,
+        heldCurrency,
+        currency,
+        snapshot.data.rates
+      ))
+    }))
+    .filter(item => item.currentAmount > 0)
+    .sort((left, right) => right.currentAmount - left.currentAmount);
+  const total = currencies.reduce((sum, item) => sum + item.currentAmount, 0);
+
+  return currencies.map(item => ({
+    ...item,
+    targetPercent: existingTargets.get(item.id)
+      ?? (total > 0 ? item.currentAmount / total * 100 : 0)
   }));
 };
 
@@ -125,23 +163,37 @@ export const buildSnapshotReturnFlows = (
 
 export const getSnapshotFxQuote = (
   snapshot: ParsedSnapshot | null,
-  fromCurrency: string,
-  toCurrency: string,
-  basis: number
+  spendCurrency: string,
+  buyCurrency: string
 ) => {
-  if (!snapshot || !fromCurrency || !toCurrency || fromCurrency === toCurrency) return null;
-  const quote = convertAmount(basis, toCurrency, fromCurrency, snapshot.data.rates);
-  return Number.isFinite(quote) && quote > 0 ? quote : null;
-};
+  if (!snapshot || !spendCurrency || !buyCurrency || spendCurrency === buyCurrency) {
+    return null;
+  }
+  const spendPerBuy = convertAmount(
+    1,
+    buyCurrency,
+    spendCurrency,
+    snapshot.data.rates
+  );
+  if (!Number.isFinite(spendPerBuy) || spendPerBuy <= 0) return null;
 
-export const suggestFxQuoteBasis = (
-  snapshot: ParsedSnapshot | null,
-  fromCurrency: string,
-  toCurrency: string
-) => {
-  const unitQuote = getSnapshotFxQuote(snapshot, fromCurrency, toCurrency, 1);
-  if (unitQuote === null) return 1;
-  if (unitQuote < 0.1) return 1_000;
-  if (unitQuote < 1) return 100;
-  return 1;
+  if (spendPerBuy >= 1) {
+    return {
+      rate: spendPerBuy,
+      direction: 'spend-per-buy' as FxQuoteDirection
+    };
+  }
+
+  const buyPerSpend = convertAmount(
+    1,
+    spendCurrency,
+    buyCurrency,
+    snapshot.data.rates
+  );
+  if (!Number.isFinite(buyPerSpend) || buyPerSpend <= 0) return null;
+
+  return {
+    rate: buyPerSpend,
+    direction: 'buy-per-spend' as FxQuoteDirection
+  };
 };

@@ -50,6 +50,7 @@ type ToolDefinition = {
   description: string;
   icon: LucideIcon;
   accent: string;
+  badge?: 'advanced' | 'beta';
 };
 
 const TOOLS: ToolDefinition[] = [
@@ -58,7 +59,8 @@ const TOOLS: ToolDefinition[] = [
     name: 'SQL editor',
     description: 'Read and fix rows directly, with table hints and a dry run before anything is saved.',
     icon: Database,
-    accent: 'var(--accent)'
+    accent: 'var(--accent)',
+    badge: 'advanced'
   },
   {
     id: 'data-health',
@@ -96,14 +98,16 @@ const CALCULATORS: ToolDefinition[] = [
     name: 'Portfolio Rebalancer',
     description: 'Turn target allocations and new cash into specific buy and sell amounts.',
     icon: Scale,
-    accent: '#a78bfa'
+    accent: '#a78bfa',
+    badge: 'beta'
   },
   {
     id: 'return-calculator',
     name: 'Return Calculator',
     description: 'Calculate money-weighted annual return from dated investments and withdrawals.',
     icon: Percent,
-    accent: '#60a5fa'
+    accent: '#60a5fa',
+    badge: 'beta'
   },
   {
     id: 'fx-comparator',
@@ -118,6 +122,11 @@ function ToolTile({ tool, onOpen }: { tool: ToolDefinition; onOpen: (id: ToolId)
   const Icon = tool.icon;
   return (
     <button type="button" className="tools-tile glass-panel" onClick={() => onOpen(tool.id)}>
+      {tool.badge && (
+        <span className={`tools-tile-badge is-${tool.badge}`}>
+          {tool.badge}
+        </span>
+      )}
       <span className="tools-tile-icon" style={{ color: tool.accent }}>
         <Icon size={24} />
       </span>
