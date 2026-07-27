@@ -7,6 +7,7 @@ import {
   FinnHatLeftWordmark,
   FinnHatLetterWordmark,
   FinnHatWordmark,
+  FinnPlainWordmark,
 } from './pages/components/LogoConcepts';
 import { HeaderNav } from './pages/components/HeaderNav';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
@@ -33,6 +34,7 @@ const AIChat = lazy(() => loadDeferredRoutes().then(module => ({ default: module
 const Tools = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Tools })));
 
 function AppBrand({ logo }: { logo: LogoChoice }) {
+  if (logo === 'plain') return <FinnPlainWordmark />;
   if (logo === 'hat-left') return <FinnHatLeftWordmark />;
   if (logo === 'f-in-hat') return <FinnHatLetterWordmark />;
   return <FinnHatWordmark />;
@@ -68,7 +70,7 @@ function App() {
   const [shuttingDown, setShuttingDown] = useState(false);
   const [shutdownComplete, setShutdownComplete] = useState(false);
   const [shutdownBackup, setShutdownBackup] = useState<BackupReport | null>(null);
-  const [selectedLogo, setSelectedLogo] = useState(() => readVisualPreferences().logo);
+  const [visualPreferences, setVisualPreferences] = useState(readVisualPreferences);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -77,7 +79,7 @@ function App() {
   }, []);
 
   useEffect(
-    () => subscribeToVisualPreferences(preferences => setSelectedLogo(preferences.logo)),
+    () => subscribeToVisualPreferences(setVisualPreferences),
     [],
   );
 
@@ -207,8 +209,12 @@ function App() {
     <div className="container">
       <header className="app-header">
         <div className="flex items-center gap-2">
-          <Link to="/" className="app-brand flex items-center gap-2" aria-label="Finn Tracker home">
-            <AppBrand logo={selectedLogo} />
+          <Link
+            to="/"
+            className={`app-brand flex items-center gap-2${visualPreferences.logoGradient ? ' is-logo-gradient' : ''}`}
+            aria-label="Finn Tracker home"
+          >
+            <AppBrand logo={visualPreferences.logo} />
           </Link>
           <div style={{ width: '1px', height: '24px', background: 'var(--glass-border)', margin: '0 4px' }} />
           <button

@@ -1,3 +1,4 @@
+import type { MouseEventHandler } from 'react';
 import bmoMoneyLoader from '../../assets/bmo-money-loader-trail.png';
 import marcelineMoneyLoader from '../../assets/marceline-money-loader-animated.png';
 import { readVisualPreferences, type LoaderChoice } from '../../lib/visualPreferences';
@@ -10,6 +11,13 @@ type SpinnerProps = {
   character?: LoaderChoice;
   label?: string;
   size?: number;
+};
+
+type CompactLoaderProps = {
+  character?: LoaderChoice;
+  className?: string;
+  label?: string;
+  onClick?: MouseEventHandler<HTMLDivElement>;
 };
 
 export function Spinner({ character, label = 'Loading', size = 18 }: SpinnerProps) {
@@ -36,6 +44,20 @@ export function Spinner({ character, label = 'Loading', size = 18 }: SpinnerProp
         />
       </span>
     </span>
+  );
+}
+
+export function CompactLoader({
+  character,
+  className = '',
+  label = 'Loading',
+  onClick,
+}: CompactLoaderProps) {
+  return (
+    <div className={`compact-loader${className ? ` ${className}` : ''}`} onClick={onClick}>
+      <Spinner character={character} label={label} size={64} />
+      <span>{label}…</span>
+    </div>
   );
 }
 

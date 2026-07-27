@@ -1,6 +1,7 @@
 export type LoaderChoice = 'bmo' | 'marceline';
 
 export type LogoChoice =
+  | 'plain'
   | 'hat-dot'
   | 'hat-left'
   | 'f-in-hat';
@@ -8,14 +9,17 @@ export type LogoChoice =
 type VisualPreferences = {
   loader: LoaderChoice;
   logo: LogoChoice;
+  logoGradient: boolean;
 };
 
 const loaderStorageKey = 'finn:loader-choice';
 const logoStorageKey = 'finn:logo-choice';
+const logoGradientStorageKey = 'finn:logo-gradient';
 const preferenceEvent = 'finn:visual-preferences-changed';
 
 const loaderChoices = new Set<LoaderChoice>(['bmo', 'marceline']);
 const logoChoices = new Set<LogoChoice>([
+  'plain',
   'hat-dot',
   'hat-left',
   'f-in-hat',
@@ -24,10 +28,12 @@ const logoChoices = new Set<LogoChoice>([
 export function readVisualPreferences(): VisualPreferences {
   const storedLoader = window.localStorage.getItem(loaderStorageKey) as LoaderChoice | null;
   const storedLogo = window.localStorage.getItem(logoStorageKey) as LogoChoice | null;
+  const storedLogoGradient = window.localStorage.getItem(logoGradientStorageKey);
 
   return {
     loader: storedLoader && loaderChoices.has(storedLoader) ? storedLoader : 'bmo',
-    logo: storedLogo && logoChoices.has(storedLogo) ? storedLogo : 'hat-dot',
+    logo: storedLogo && logoChoices.has(storedLogo) ? storedLogo : 'plain',
+    logoGradient: storedLogoGradient === null ? true : storedLogoGradient === 'true',
   };
 }
 
@@ -45,6 +51,11 @@ export function selectLoader(loader: LoaderChoice) {
 
 export function selectLogo(logo: LogoChoice) {
   window.localStorage.setItem(logoStorageKey, logo);
+  announcePreferenceChange();
+}
+
+export function selectLogoGradient(enabled: boolean) {
+  window.localStorage.setItem(logoGradientStorageKey, String(enabled));
   announcePreferenceChange();
 }
 

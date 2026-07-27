@@ -6,6 +6,7 @@ import {
   readVisualPreferences,
   selectLoader,
   selectLogo,
+  selectLogoGradient,
   subscribeToVisualPreferences,
   type LoaderChoice,
   type LogoChoice,
@@ -14,8 +15,9 @@ import {
   FinnHatLeftWordmark,
   FinnHatLetterWordmark,
   FinnHatWordmark,
+  FinnPlainWordmark,
 } from './components/LogoConcepts';
-import { Spinner } from './components/PageLoader';
+import { CompactLoader, Spinner } from './components/PageLoader';
 import { StickyPageHeader } from './components/StickyPageHeader';
 
 export default function StyleLab() {
@@ -49,14 +51,14 @@ export default function StyleLab() {
   const chooseLogo = (logo: LogoChoice) => selectLogo(logo);
 
   return (
-    <div className="style-lab-page">
+    <div className={`style-lab-page${preferences.logoGradient ? ' is-logo-gradient' : ''}`}>
       <StickyPageHeader marginBottom="0" compactTop>
         <div className="flex items-center gap-4">
           <Link className="btn" title="Back to Settings" to="/settings"><ArrowLeft size={18} /></Link>
           <div>
             <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Style Lab</h2>
             <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
-              2 loaders · 3 brand marks · saved on this device
+              2 loaders · 4 logos · saved on this device
             </div>
           </div>
         </div>
@@ -114,20 +116,51 @@ export default function StyleLab() {
             <strong>Compact preview</strong>
             <span>The 64 px loader shown while Finn opens a tool.</span>
           </div>
-          <div className="style-lab-live-stage">
-            <Spinner character={preferences.loader} label="Loading tool" size={64} />
-            <span>Loading tool…</span>
-          </div>
+          <CompactLoader
+            character={preferences.loader}
+            className="style-lab-live-stage"
+            label="Loading tool"
+          />
         </div>
       </section>
 
       <section className="style-lab-section">
-        <div className="style-lab-section-heading">
-          <h3>LOGO</h3>
-          <p>Select the version shown in the application header.</p>
+        <div className="style-lab-section-heading style-lab-section-heading--with-control">
+          <div>
+            <h3>LOGO</h3>
+            <p>Select the version shown in the application header.</p>
+          </div>
+          <button
+            type="button"
+            className="style-lab-gradient-switch"
+            role="switch"
+            aria-checked={preferences.logoGradient}
+            onClick={() => selectLogoGradient(!preferences.logoGradient)}
+          >
+            <span>Gradient</span>
+            <span className="style-lab-gradient-switch__track" aria-hidden="true">
+              <span />
+            </span>
+          </button>
         </div>
 
         <div className="style-lab-brand-grid">
+          <button
+            type="button"
+            className={`glass-panel style-lab-choice style-lab-brand-choice${preferences.logo === 'plain' ? ' is-selected' : ''}`}
+            aria-pressed={preferences.logo === 'plain'}
+            onClick={() => chooseLogo('plain')}
+          >
+            {preferences.logo === 'plain' && (
+              <span className="style-lab-selected"><Check size={12} /> Selected</span>
+            )}
+            <span className="style-lab-brand-preview"><FinnPlainWordmark /></span>
+            <span className="style-lab-choice-copy">
+              <strong>Plain</strong>
+              <small>Just Finn Tracker, clean and quiet.</small>
+            </span>
+          </button>
+
           <button
             type="button"
             className={`glass-panel style-lab-choice style-lab-brand-choice${preferences.logo === 'hat-dot' ? ' is-selected' : ''}`}
@@ -175,6 +208,7 @@ export default function StyleLab() {
               <small>The hat carries the first letter of Finn.</small>
             </span>
           </button>
+
         </div>
       </section>
     </div>
