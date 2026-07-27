@@ -3,7 +3,6 @@ export const loaderChoices = ['bmo', 'marceline'] as const;
 export const logoChoices = [
   'plain',
   'hat-dot',
-  'hat-left',
   'mark',
   'face',
   'candle',
@@ -11,6 +10,8 @@ export const logoChoices = [
 
 export type LoaderChoice = (typeof loaderChoices)[number];
 export type LogoChoice = (typeof logoChoices)[number];
+
+export type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export type VisualPreferences = {
   loader: LoaderChoice;
@@ -23,17 +24,48 @@ const logoStorageKey = 'finn:logo-choice';
 const logoGradientStorageKey = 'finn:logo-gradient';
 const preferenceEvent = 'finn:visual-preferences-changed';
 
-function readChoice<T extends string>(key: string, choices: readonly T[], fallback: T): T {
-  const stored = window.localStorage.getItem(key) as T | null;
+const browserStorage = (): PreferenceStorage | null => {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+const safelyRead = (storage: PreferenceStorage | null, key: string): string | null => {
+  try {
+    return storage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const safelyWrite = (storage: PreferenceStorage | null, key: string, value: string) => {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    return;
+  }
+};
+
+function readChoice<T extends string>(
+  storage: PreferenceStorage | null,
+  key: string,
+  choices: readonly T[],
+  fallback: T,
+): T {
+  const stored = safelyRead(storage, key) as T | null;
   return stored !== null && choices.includes(stored) ? stored : fallback;
 }
 
-export function readVisualPreferences(): VisualPreferences {
-  const storedLogoGradient = window.localStorage.getItem(logoGradientStorageKey);
+export function readVisualPreferences(
+  storage: PreferenceStorage | null = browserStorage(),
+): VisualPreferences {
+  const storedLogoGradient = safelyRead(storage, logoGradientStorageKey);
 
   return {
-    loader: readChoice(loaderStorageKey, loaderChoices, 'bmo'),
-    logo: readChoice(logoStorageKey, logoChoices, 'plain'),
+    loader: readChoice(storage, loaderStorageKey, loaderChoices, 'bmo'),
+    logo: readChoice(storage, logoStorageKey, logoChoices, 'plain'),
     logoGradient: storedLogoGradient === null ? true : storedLogoGradient === 'true',
   };
 }
@@ -46,17 +78,17 @@ function announcePreferenceChange() {
 }
 
 export function selectLoader(loader: LoaderChoice) {
-  window.localStorage.setItem(loaderStorageKey, loader);
+  safelyWrite(browserStorage(), loaderStorageKey, loader);
   announcePreferenceChange();
 }
 
 export function selectLogo(logo: LogoChoice) {
-  window.localStorage.setItem(logoStorageKey, logo);
+  safelyWrite(browserStorage(), logoStorageKey, logo);
   announcePreferenceChange();
 }
 
 export function selectLogoGradient(enabled: boolean) {
-  window.localStorage.setItem(logoGradientStorageKey, String(enabled));
+  safelyWrite(browserStorage(), logoGradientStorageKey, String(enabled));
   announcePreferenceChange();
 }
 

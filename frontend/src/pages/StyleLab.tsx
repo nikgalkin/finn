@@ -18,7 +18,6 @@ import { StickyPageHeader } from './components/StickyPageHeader';
 const logoCopy: Record<LogoChoice, { title: string; hint: string }> = {
   'plain': { title: 'Plain', hint: 'Just Finn Tracker, clean and quiet.' },
   'hat-dot': { title: 'Hat Dot', hint: 'The Finn hat is tucked above the letter i.' },
-  'hat-left': { title: 'Hat Left', hint: 'The hat becomes a standalone mark beside the name.' },
   'mark': { title: 'Mark', hint: 'Badge only — the same shape as the favicon.' },
   'face': { title: 'Face', hint: 'Chibi Finn looks back at you, tongue out.' },
   'candle': { title: 'Candle', hint: 'A candlestick in the hood: the hat that tracks.' },

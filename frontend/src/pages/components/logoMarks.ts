@@ -3,7 +3,6 @@ import type { LogoChoice } from '../../lib/visualPreferences';
 import {
   FinnCandleWordmark,
   FinnFaceWordmark,
-  FinnHatLeftWordmark,
   FinnHatWordmark,
   FinnMark,
   FinnPlainWordmark,
@@ -12,7 +11,6 @@ import {
 export const logoMarks: Record<LogoChoice, ComponentType> = {
   'plain': FinnPlainWordmark,
   'hat-dot': FinnHatWordmark,
-  'hat-left': FinnHatLeftWordmark,
   'mark': FinnMark,
   'face': FinnFaceWordmark,
   'candle': FinnCandleWordmark,

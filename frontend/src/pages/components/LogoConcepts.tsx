@@ -58,9 +58,9 @@ function FinnFaceMark({ className }: { className: string }) {
         <ellipse className="finn-face__eye" cx="47" cy="29.7" rx="1.35" ry="1.75" />
         <path
           className="finn-face__tongue"
-          d="M30 40.35c2.4.5 5.1.45 7.5-.15-.35 5.8-7.1 5.9-7.5.15Z"
+          d="M29.7 40.37c2.59.69 5.51.62 8.1-.21-.38 8-7.67 8.14-8.1.21Z"
         />
-        <path className="finn-face__tongue-line" d="M30.2 40.65c.45 5.35 6.5 5.45 7.05-.1" />
+        <path className="finn-face__tongue-line" d="M29.92 40.79c.49 7.38 7.02 7.52 7.61-.14" />
         <path
           className="finn-face__smile"
           d="M24.9 37.8c2.8 2 6.1 2.9 9.5 2.8 3.2-.1 5.9-1 8-2.9"
@@ -96,7 +96,7 @@ export function FinnHatWordmark() {
 
 function FinnSideWordmark({ mark }: { mark: ReactNode }) {
   return (
-    <span aria-label="Finn Tracker" className="finn-hat-left-wordmark" role="img">
+    <span aria-label="Finn Tracker" className="finn-side-wordmark" role="img">
       {mark}
       <span aria-hidden="true">
         Finn <span className="finn-hat-wordmark__tracker">Tracker</span>
@@ -105,14 +105,10 @@ function FinnSideWordmark({ mark }: { mark: ReactNode }) {
   );
 }
 
-export function FinnHatLeftWordmark() {
-  return <FinnSideWordmark mark={<OrganicFinnHat className="finn-hat-left-wordmark__hat" />} />;
-}
-
 export function FinnCandleWordmark() {
   return (
     <FinnSideWordmark
-      mark={<OrganicFinnHat className="finn-hat-left-wordmark__hat" opening="candle" />}
+      mark={<OrganicFinnHat className="finn-side-wordmark__hat" opening="candle" />}
     />
   );
 }
