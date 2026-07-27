@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, Coins, Save, Plus, RefreshCw, RotateCcw, Server, Trash2, TrendingUp, Wallet } from 'lucide-react';
+import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, Coins, FlaskConical, Save, Plus, RefreshCw, RotateCcw, Server, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL, getCurrencyColor } from '../types';
 import type { CashFlowSettings, LocalAISettings, LocalAIStatus, Snapshot } from '../types';
@@ -750,9 +750,19 @@ export default function Settings() {
           <Link title="Back to dashboard" to="/" className="btn"><ArrowLeft size={18} /></Link>
           <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Settings</h2>
         </div>
-        <button className="btn btn-primary" onClick={handleSave}>
-          <Save size={18} /> Save
-        </button>
+        <div className="flex items-center gap-2">
+          <QuickHoverTooltip text="Open Style Lab">
+            <Link title="Open Style Lab" aria-label="Open Style Lab" to="/style-lab" className="btn settings-style-lab-link">
+              <span className="settings-style-lab-icon" aria-hidden="true">
+                <FlaskConical size={17} />
+              </span>
+              <span>Style Lab</span>
+            </Link>
+          </QuickHoverTooltip>
+          <button className="btn btn-primary" onClick={handleSave}>
+            <Save size={18} /> Save
+          </button>
+        </div>
       </div>
       <div className="glass-panel currency-framework-panel mb-4">
         <div className="currency-framework-header">

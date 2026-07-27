@@ -1,23 +1,28 @@
-import bubblegumMoneyLoader from '../../assets/bubblegum-money-loader-animated.png';
+import bmoMoneyLoader from '../../assets/bmo-money-loader-trail.png';
 import marcelineMoneyLoader from '../../assets/marceline-money-loader-animated.png';
+import { readVisualPreferences, type LoaderChoice } from '../../lib/visualPreferences';
 
 type PageLoaderProps = {
   label?: string;
 };
 
 type SpinnerProps = {
-  character?: 'bubblegum' | 'marceline';
+  character?: LoaderChoice;
   label?: string;
   size?: number;
 };
 
-export function Spinner({ character = 'marceline', label = 'Loading', size = 18 }: SpinnerProps) {
+export function Spinner({ character, label = 'Loading', size = 18 }: SpinnerProps) {
+  const selectedCharacter = character ?? readVisualPreferences().loader;
   const isLarge = size >= 48;
-  const image = character === 'bubblegum' ? bubblegumMoneyLoader : marcelineMoneyLoader;
+  const images = {
+    bmo: bmoMoneyLoader,
+    marceline: marcelineMoneyLoader,
+  };
 
   return (
     <span
-      className={`app-spinner ${isLarge ? 'app-spinner--large' : 'app-spinner--compact'}`}
+      className={`app-spinner app-spinner--${selectedCharacter} ${isLarge ? 'app-spinner--large' : 'app-spinner--compact'}`}
       role="status"
       aria-label={label}
       style={{ width: size, height: size, fontSize: size }}
@@ -25,7 +30,7 @@ export function Spinner({ character = 'marceline', label = 'Loading', size = 18 
       <span className="app-spinner__scene" aria-hidden="true">
         <img
           className="app-spinner__character"
-          src={image}
+          src={images[selectedCharacter]}
           alt=""
           draggable={false}
         />

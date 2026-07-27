@@ -1,8 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Wallet, Keyboard, Power } from 'lucide-react';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Keyboard, Power } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
-import LoaderDebug from './pages/LoaderDebug';
+import StyleLab from './pages/StyleLab';
+import {
+  FinnHatLeftWordmark,
+  FinnHatLetterWordmark,
+  FinnHatWordmark,
+} from './pages/components/LogoConcepts';
 import { HeaderNav } from './pages/components/HeaderNav';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
 import { getNavigationHotkey, isTextInputTarget } from './lib/hotkeys';
@@ -12,6 +17,11 @@ import { API_URL } from './types';
 import { useSettings } from './hooks/useSettings';
 import { pruneExpiredSnapshotDrafts } from './lib/snapshotDraftStorage';
 import { requestUnsavedNavigation } from './lib/unsavedNavigation';
+import {
+  readVisualPreferences,
+  subscribeToVisualPreferences,
+  type LogoChoice,
+} from './lib/visualPreferences';
 
 const loadDeferredRoutes = () => import('./pages/routeChunks/DeferredRoutes');
 const SnapshotEdit = lazy(() => loadDeferredRoutes().then(module => ({ default: module.SnapshotEdit })));
@@ -21,6 +31,12 @@ const Settings = lazy(() => loadDeferredRoutes().then(module => ({ default: modu
 const CashFlow = lazy(() => loadDeferredRoutes().then(module => ({ default: module.CashFlow })));
 const AIChat = lazy(() => loadDeferredRoutes().then(module => ({ default: module.AIChat })));
 const Tools = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Tools })));
+
+function AppBrand({ logo }: { logo: LogoChoice }) {
+  if (logo === 'hat-left') return <FinnHatLeftWordmark />;
+  if (logo === 'f-in-hat') return <FinnHatLetterWordmark />;
+  return <FinnHatWordmark />;
+}
 
 type BackupTargetResult = {
   name: string;
@@ -52,12 +68,18 @@ function App() {
   const [shuttingDown, setShuttingDown] = useState(false);
   const [shutdownComplete, setShutdownComplete] = useState(false);
   const [shutdownBackup, setShutdownBackup] = useState<BackupReport | null>(null);
+  const [selectedLogo, setSelectedLogo] = useState(() => readVisualPreferences().logo);
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
     pruneExpiredSnapshotDrafts();
   }, []);
+
+  useEffect(
+    () => subscribeToVisualPreferences(preferences => setSelectedLogo(preferences.logo)),
+    [],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -185,9 +207,8 @@ function App() {
     <div className="container">
       <header className="app-header">
         <div className="flex items-center gap-2">
-          <Link to="/" className="flex items-center gap-2">
-            <Wallet size={32} color="var(--accent)" />
-            <h1 className="app-title">Finn Tracker</h1>
+          <Link to="/" className="app-brand flex items-center gap-2" aria-label="Finn Tracker home">
+            <AppBrand logo={selectedLogo} />
           </Link>
           <div style={{ width: '1px', height: '24px', background: 'var(--glass-border)', margin: '0 4px' }} />
           <button
@@ -229,7 +250,8 @@ function App() {
             <Route path="/flow" element={<CashFlow />} />
             <Route path="/assistant" element={<AIChat />} />
             <Route path="/tools" element={<Tools />} />
-            <Route path="/loader-debug" element={<LoaderDebug />} />
+            <Route path="/style-lab" element={<StyleLab />} />
+            <Route path="/loader-debug" element={<Navigate replace to="/style-lab" />} />
           </Routes>
         </Suspense>
       </main>

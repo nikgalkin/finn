@@ -70,7 +70,7 @@ export function ToolModalLoader({
   return (
     <ModalPortal onClose={onClose} closeOnEscape className="tool-modal-overlay tool-modal-loading-overlay">
       <div className="tool-modal-loader" onClick={event => event.stopPropagation()}>
-        <Spinner label={label} size={28} />
+        <Spinner label={label} size={64} />
         <span>{label}…</span>
       </div>
     </ModalPortal>
