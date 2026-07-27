@@ -1,33 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ArrowLeft, Check, CheckCircle2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isTextInputTarget } from '../lib/hotkeys';
 import {
-  readVisualPreferences,
+  logoChoices,
   selectLoader,
   selectLogo,
   selectLogoGradient,
-  subscribeToVisualPreferences,
   type LoaderChoice,
   type LogoChoice,
 } from '../lib/visualPreferences';
-import {
-  FinnHatLeftWordmark,
-  FinnHatLetterWordmark,
-  FinnHatWordmark,
-  FinnPlainWordmark,
-} from './components/LogoConcepts';
+import { useVisualPreferences } from '../hooks/useVisualPreferences';
+import { logoMarks } from './components/logoMarks';
 import { CompactLoader, Spinner } from './components/PageLoader';
 import { StickyPageHeader } from './components/StickyPageHeader';
 
+const logoCopy: Record<LogoChoice, { title: string; hint: string }> = {
+  'plain': { title: 'Plain', hint: 'Just Finn Tracker, clean and quiet.' },
+  'hat-dot': { title: 'Hat Dot', hint: 'The Finn hat is tucked above the letter i.' },
+  'hat-left': { title: 'Hat Left', hint: 'The hat becomes a standalone mark beside the name.' },
+  'mark': { title: 'Mark', hint: 'Badge only — the same shape as the favicon.' },
+  'face': { title: 'Face', hint: 'Chibi Finn looks back at you, tongue out.' },
+  'candle': { title: 'Candle', hint: 'A candlestick in the hood: the hat that tracks.' },
+};
+
 export default function StyleLab() {
   const navigate = useNavigate();
-  const [preferences, setPreferences] = useState(readVisualPreferences);
-
-  useEffect(
-    () => subscribeToVisualPreferences(setPreferences),
-    [],
-  );
+  const preferences = useVisualPreferences();
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -51,14 +50,14 @@ export default function StyleLab() {
   const chooseLogo = (logo: LogoChoice) => selectLogo(logo);
 
   return (
-    <div className={`style-lab-page${preferences.logoGradient ? ' is-logo-gradient' : ''}`}>
+    <div className="style-lab-page">
       <StickyPageHeader marginBottom="0" compactTop>
         <div className="flex items-center gap-4">
           <Link className="btn" title="Back to Settings" to="/settings"><ArrowLeft size={18} /></Link>
           <div>
             <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Style Lab</h2>
             <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
-              2 loaders · 4 logos · saved on this device
+              2 loaders · {logoChoices.length} logos · saved on this device
             </div>
           </div>
         </div>
@@ -145,70 +144,29 @@ export default function StyleLab() {
         </div>
 
         <div className="style-lab-brand-grid">
-          <button
-            type="button"
-            className={`glass-panel style-lab-choice style-lab-brand-choice${preferences.logo === 'plain' ? ' is-selected' : ''}`}
-            aria-pressed={preferences.logo === 'plain'}
-            onClick={() => chooseLogo('plain')}
-          >
-            {preferences.logo === 'plain' && (
-              <span className="style-lab-selected"><Check size={12} /> Selected</span>
-            )}
-            <span className="style-lab-brand-preview"><FinnPlainWordmark /></span>
-            <span className="style-lab-choice-copy">
-              <strong>Plain</strong>
-              <small>Just Finn Tracker, clean and quiet.</small>
-            </span>
-          </button>
+          {logoChoices.map(choice => {
+            const Mark = logoMarks[choice];
+            const isSelected = preferences.logo === choice;
 
-          <button
-            type="button"
-            className={`glass-panel style-lab-choice style-lab-brand-choice${preferences.logo === 'hat-dot' ? ' is-selected' : ''}`}
-            aria-pressed={preferences.logo === 'hat-dot'}
-            onClick={() => chooseLogo('hat-dot')}
-          >
-            {preferences.logo === 'hat-dot' && (
-              <span className="style-lab-selected"><Check size={12} /> Selected</span>
-            )}
-            <span className="style-lab-brand-preview"><FinnHatWordmark /></span>
-            <span className="style-lab-choice-copy">
-              <strong>Hat Dot</strong>
-              <small>The Finn hat is tucked above the letter i.</small>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`glass-panel style-lab-choice style-lab-brand-choice${preferences.logo === 'hat-left' ? ' is-selected' : ''}`}
-            aria-pressed={preferences.logo === 'hat-left'}
-            onClick={() => chooseLogo('hat-left')}
-          >
-            {preferences.logo === 'hat-left' && (
-              <span className="style-lab-selected"><Check size={12} /> Selected</span>
-            )}
-            <span className="style-lab-brand-preview"><FinnHatLeftWordmark /></span>
-            <span className="style-lab-choice-copy">
-              <strong>Hat Left</strong>
-              <small>The hat becomes a standalone mark beside the name.</small>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`glass-panel style-lab-choice style-lab-brand-choice${preferences.logo === 'f-in-hat' ? ' is-selected' : ''}`}
-            aria-pressed={preferences.logo === 'f-in-hat'}
-            onClick={() => chooseLogo('f-in-hat')}
-          >
-            {preferences.logo === 'f-in-hat' && (
-              <span className="style-lab-selected"><Check size={12} /> Selected</span>
-            )}
-            <span className="style-lab-brand-preview"><FinnHatLetterWordmark /></span>
-            <span className="style-lab-choice-copy">
-              <strong>F in Hat</strong>
-              <small>The hat carries the first letter of Finn.</small>
-            </span>
-          </button>
-
+            return (
+              <button
+                key={choice}
+                type="button"
+                className={`glass-panel style-lab-choice style-lab-brand-choice${isSelected ? ' is-selected' : ''}`}
+                aria-pressed={isSelected}
+                onClick={() => chooseLogo(choice)}
+              >
+                {isSelected && (
+                  <span className="style-lab-selected"><Check size={12} /> Selected</span>
+                )}
+                <span className="style-lab-brand-preview"><Mark /></span>
+                <span className="style-lab-choice-copy">
+                  <strong>{logoCopy[choice].title}</strong>
+                  <small>{logoCopy[choice].hint}</small>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
     </div>

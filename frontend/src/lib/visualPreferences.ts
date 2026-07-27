@@ -1,12 +1,18 @@
-export type LoaderChoice = 'bmo' | 'marceline';
+export const loaderChoices = ['bmo', 'marceline'] as const;
 
-export type LogoChoice =
-  | 'plain'
-  | 'hat-dot'
-  | 'hat-left'
-  | 'f-in-hat';
+export const logoChoices = [
+  'plain',
+  'hat-dot',
+  'hat-left',
+  'mark',
+  'face',
+  'candle',
+] as const;
 
-type VisualPreferences = {
+export type LoaderChoice = (typeof loaderChoices)[number];
+export type LogoChoice = (typeof logoChoices)[number];
+
+export type VisualPreferences = {
   loader: LoaderChoice;
   logo: LogoChoice;
   logoGradient: boolean;
@@ -17,22 +23,17 @@ const logoStorageKey = 'finn:logo-choice';
 const logoGradientStorageKey = 'finn:logo-gradient';
 const preferenceEvent = 'finn:visual-preferences-changed';
 
-const loaderChoices = new Set<LoaderChoice>(['bmo', 'marceline']);
-const logoChoices = new Set<LogoChoice>([
-  'plain',
-  'hat-dot',
-  'hat-left',
-  'f-in-hat',
-]);
+function readChoice<T extends string>(key: string, choices: readonly T[], fallback: T): T {
+  const stored = window.localStorage.getItem(key) as T | null;
+  return stored !== null && choices.includes(stored) ? stored : fallback;
+}
 
 export function readVisualPreferences(): VisualPreferences {
-  const storedLoader = window.localStorage.getItem(loaderStorageKey) as LoaderChoice | null;
-  const storedLogo = window.localStorage.getItem(logoStorageKey) as LogoChoice | null;
   const storedLogoGradient = window.localStorage.getItem(logoGradientStorageKey);
 
   return {
-    loader: storedLoader && loaderChoices.has(storedLoader) ? storedLoader : 'bmo',
-    logo: storedLogo && logoChoices.has(storedLogo) ? storedLogo : 'plain',
+    loader: readChoice(loaderStorageKey, loaderChoices, 'bmo'),
+    logo: readChoice(logoStorageKey, logoChoices, 'plain'),
     logoGradient: storedLogoGradient === null ? true : storedLogoGradient === 'true',
   };
 }

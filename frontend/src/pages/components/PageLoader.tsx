@@ -1,7 +1,8 @@
 import type { MouseEventHandler } from 'react';
 import bmoMoneyLoader from '../../assets/bmo-money-loader-trail.png';
 import marcelineMoneyLoader from '../../assets/marceline-money-loader-animated.png';
-import { readVisualPreferences, type LoaderChoice } from '../../lib/visualPreferences';
+import { useVisualPreferences } from '../../hooks/useVisualPreferences';
+import type { LoaderChoice } from '../../lib/visualPreferences';
 
 type PageLoaderProps = {
   label?: string;
@@ -21,7 +22,8 @@ type CompactLoaderProps = {
 };
 
 export function Spinner({ character, label = 'Loading', size = 18 }: SpinnerProps) {
-  const selectedCharacter = character ?? readVisualPreferences().loader;
+  const preferences = useVisualPreferences();
+  const selectedCharacter = character ?? preferences.loader;
   const isLarge = size >= 48;
   const images = {
     bmo: bmoMoneyLoader,

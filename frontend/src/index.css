@@ -12,6 +12,16 @@
   --diff-positive: rgba(18, 192, 82, 0.85);
   --diff-negative: rgba(214, 60, 60, 0.925);
   --page-background-image: radial-gradient(circle at 50% -20%, #1e3a8a 0%, var(--bg-color) 40%);
+  --brand-solid: #60a5fa;
+  --brand-accent: #a78bfa;
+  --brand-gradient: linear-gradient(90deg, var(--brand-solid), var(--brand-accent));
+  --brand-hood: #e8ddd8;
+  --brand-hollow: #26344f;
+  --brand-hood-bright: #fff;
+  --brand-skin: #ffdfc7;
+  --brand-tongue: #f486a3;
+  --brand-ink: #111;
+  --brand-eye: #050505;
 }
 
 body {
@@ -699,16 +709,8 @@ main > .page-loader { animation: none; }
   padding: 14px 16px;
 }
 
-.finn-hat-wordmark {
-  color: #60a5fa;
-  font-size: 25px;
-  font-weight: 750;
-  letter-spacing: -0.025em;
-  white-space: nowrap;
-}
-
-.finn-plain-wordmark {
-  color: #60a5fa;
+:where(.finn-plain-wordmark, .finn-hat-wordmark, .finn-hat-left-wordmark) {
+  color: var(--brand-solid);
   font-size: 25px;
   font-weight: 750;
   letter-spacing: -0.025em;
@@ -722,7 +724,7 @@ main > .page-loader { animation: none; }
   height: 0.67em;
   margin: 0 0.05em 0 0.08em;
   border-radius: 0.05em;
-  background: #60a5fa;
+  background: var(--brand-solid);
 }
 
 .finn-hat-wordmark__cap {
@@ -738,35 +740,20 @@ main > .page-loader { animation: none; }
 }
 
 .finn-hat-wordmark__cap-hood {
-  fill: #e8ddd8;
+  fill: var(--brand-hood);
   stroke: rgba(248, 250, 252, 0.74);
   stroke-linejoin: round;
   stroke-width: 0.9;
 }
 
 .finn-hat-wordmark__cap-opening {
-  fill: #26344f;
+  fill: var(--brand-hollow);
   stroke: rgba(96, 165, 250, 0.74);
   stroke-width: 0.9;
 }
 
 .finn-hat-wordmark__cap-shade {
   fill: rgba(148, 163, 184, 0.15);
-}
-
-.finn-hat-wordmark__cap-letter {
-  fill: #60a5fa;
-  stroke: none;
-}
-
-.finn-hat-wordmark__cap-foreground {
-  fill: #e8ddd8;
-}
-
-.finn-hat-wordmark__cap-opening-rim {
-  fill: none;
-  stroke: rgba(226, 232, 240, 0.82);
-  stroke-width: 1.1;
 }
 
 .finn-hat-wordmark__cap-seam {
@@ -776,19 +763,72 @@ main > .page-loader { animation: none; }
   stroke-width: 0.7;
 }
 
+.finn-hat-wordmark__candle-body {
+  fill: var(--success);
+  stroke: rgba(240, 253, 244, 0.5);
+  stroke-width: 0.9;
+}
+
+.finn-hat-wordmark__candle-wick {
+  fill: none;
+  stroke: var(--success);
+  stroke-linecap: round;
+  stroke-width: 2.1;
+}
+
+.finn-face__hood {
+  fill: var(--brand-hood-bright);
+  stroke: var(--brand-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.finn-face__skin {
+  fill: var(--brand-skin);
+  stroke: var(--brand-ink);
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.finn-face__eye {
+  fill: var(--brand-eye);
+}
+
+.finn-face__tongue {
+  fill: var(--brand-tongue);
+}
+
+.finn-face__tongue-line {
+  fill: none;
+  stroke: var(--brand-ink);
+  stroke-linecap: butt;
+  stroke-width: 1.05;
+}
+
+.finn-face__smile {
+  fill: none;
+  stroke: var(--brand-ink);
+  stroke-linecap: round;
+  stroke-width: 1.3;
+}
+
+.finn-face-wordmark__face {
+  width: 1.3em;
+  height: 1.3em;
+  margin-right: -0.14em;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.42));
+}
+
 .finn-hat-wordmark__tracker {
-  color: #a78bfa;
+  color: var(--brand-accent);
 }
 
 .finn-hat-left-wordmark {
   display: inline-flex;
   align-items: center;
   gap: 0.38em;
-  color: #60a5fa;
-  font-size: 25px;
-  font-weight: 750;
-  letter-spacing: -0.025em;
-  white-space: nowrap;
 }
 
 .finn-hat-left-wordmark__hat {
@@ -799,51 +839,80 @@ main > .page-loader { animation: none; }
   filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.42));
 }
 
-.finn-hat-letter-wordmark {
-  gap: 0;
+.finn-mark {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--brand-solid);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.4);
 }
 
-.finn-hat-letter-wordmark__hat {
-  width: 1.36em;
-  height: 1.2em;
-  margin-right: -0.08em;
-  transform: translateY(-0.01em);
+.finn-mark__face {
+  width: 27px;
+  height: 27px;
 }
 
-.finn-hat-letter-wordmark__hat :where(
-  .finn-hat-wordmark__cap-hood,
-  .finn-hat-wordmark__cap-opening,
-  .finn-hat-wordmark__cap-shade,
-  .finn-hat-wordmark__cap-foreground,
-  .finn-hat-wordmark__cap-opening-rim,
-  .finn-hat-wordmark__cap-seam
+:root[data-logo-gradient='true'] :where(
+  .finn-plain-wordmark,
+  .finn-hat-wordmark,
+  .finn-hat-left-wordmark
 ) {
-  transform: rotate(-4deg);
-  transform-box: view-box;
-  transform-origin: 52% 56%;
-}
-
-.app-brand.is-logo-gradient .finn-hat-wordmark,
-.app-brand.is-logo-gradient .finn-hat-left-wordmark,
-.app-brand.is-logo-gradient .finn-plain-wordmark,
-.style-lab-page.is-logo-gradient .finn-hat-wordmark,
-.style-lab-page.is-logo-gradient .finn-hat-left-wordmark,
-.style-lab-page.is-logo-gradient .finn-plain-wordmark {
-  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  background: var(--brand-gradient);
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
 
-.app-brand.is-logo-gradient .finn-hat-wordmark__tracker,
-.style-lab-page.is-logo-gradient .finn-hat-wordmark__tracker {
+:root[data-logo-gradient='true'] .finn-hat-wordmark__tracker {
   color: inherit;
 }
 
-.app-brand.is-logo-gradient .finn-hat-wordmark__i,
-.style-lab-page.is-logo-gradient .finn-hat-wordmark__i {
-  background: linear-gradient(90deg, #60a5fa, #818cf8);
+:root[data-logo-gradient='true'] .finn-hat-wordmark__i {
+  background: color-mix(in srgb, var(--brand-solid) 72%, var(--brand-accent));
+}
+
+:root[data-logo-gradient='true'] .finn-mark {
+  background: var(--brand-gradient);
+}
+
+@media (forced-colors: active) {
+  :root[data-logo-gradient='true'] :where(
+    .finn-plain-wordmark,
+    .finn-hat-wordmark,
+    .finn-hat-left-wordmark
+  ) {
+    background: none;
+    color: CanvasText;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+@keyframes brand-hat-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -2px; }
+}
+
+.app-brand:hover :where(
+  .finn-hat-wordmark__cap,
+  .finn-hat-left-wordmark__hat,
+  .finn-mark__face,
+  .finn-face-wordmark__face
+) {
+  animation: brand-hat-bob 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-brand:hover :where(
+    .finn-hat-wordmark__cap,
+    .finn-hat-left-wordmark__hat,
+    .finn-mark__face,
+    .finn-face-wordmark__face
+  ) {
+    animation: none;
+  }
 }
 
 @media (max-width: 720px) {

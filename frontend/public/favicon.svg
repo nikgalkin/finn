@@ -8,33 +8,35 @@
     stroke-width="1.35"
   />
 
-  <path
-    d="M9.1 37.3c.1-10.5 10.7-17.6 23.7-18 13.7-.4 24.7 6.7 25.2 17.1.6 10.7-9.8 18.7-24.6 19.3-14.5.6-24.4-7.2-24.3-18.4Z"
-    fill="#ffdfc7"
-    stroke="#111"
-    stroke-linejoin="round"
-    stroke-width="1.35"
-  />
+  <g transform="translate(2.68 5.51) scale(0.92)">
+    <path
+      d="M9.1 37.3c.1-10.5 10.7-17.6 23.7-18 13.7-.4 24.7 6.7 25.2 17.1.6 10.7-9.8 18.7-24.6 19.3-14.5.6-24.4-7.2-24.3-18.4Z"
+      fill="#ffdfc7"
+      stroke="#111"
+      stroke-linejoin="round"
+      stroke-width="1.35"
+    />
 
-  <ellipse cx="20.2" cy="31.7" rx="1.35" ry="1.75" fill="#050505"/>
-  <ellipse cx="47" cy="29.7" rx="1.35" ry="1.75" fill="#050505"/>
+    <ellipse cx="20.2" cy="31.7" rx="1.35" ry="1.75" fill="#050505"/>
+    <ellipse cx="47" cy="29.7" rx="1.35" ry="1.75" fill="#050505"/>
 
-  <path
-    d="M30 40.35c2.4.5 5.1.45 7.5-.15-.35 5.8-7.1 5.9-7.5.15Z"
-    fill="#f486a3"
-  />
-  <path
-    d="M30.2 40.65c.45 5.35 6.5 5.45 7.05-.1"
-    fill="none"
-    stroke="#111"
-    stroke-linecap="butt"
-    stroke-width="1.05"
-  />
-  <path
-    d="M24.9 37.8c2.8 2 6.1 2.9 9.5 2.8 3.2-.1 5.9-1 8-2.9"
-    fill="none"
-    stroke="#111"
-    stroke-linecap="round"
-    stroke-width="1.3"
-  />
+    <path
+      d="M30 40.35c2.4.5 5.1.45 7.5-.15-.35 5.8-7.1 5.9-7.5.15Z"
+      fill="#f486a3"
+    />
+    <path
+      d="M30.2 40.65c.45 5.35 6.5 5.45 7.05-.1"
+      fill="none"
+      stroke="#111"
+      stroke-linecap="butt"
+      stroke-width="1.05"
+    />
+    <path
+      d="M24.9 37.8c2.8 2 6.1 2.9 9.5 2.8 3.2-.1 5.9-1 8-2.9"
+      fill="none"
+      stroke="#111"
+      stroke-linecap="round"
+      stroke-width="1.3"
+    />
+  </g>
 </svg>
