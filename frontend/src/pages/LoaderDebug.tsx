@@ -34,6 +34,18 @@ export default function LoaderDebug() {
           </div>
         </section>
       </div>
+
+      <section className="glass-panel loader-debug-compact-card">
+        <div>
+          <p className="loader-debug-eyebrow">Tools modal</p>
+          <h3>Compact loader</h3>
+          <p>Тот же loader размером 28 px, который используется во время запуска tools.</p>
+        </div>
+        <div className="loader-debug-compact-stage">
+          <Spinner character="marceline" label="Loading tool" size={28} />
+          <span>Loading tool…</span>
+        </div>
+      </section>
     </div>
   );
 }
