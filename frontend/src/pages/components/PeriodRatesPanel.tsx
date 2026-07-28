@@ -118,14 +118,20 @@ export function PeriodRatesPanel({
   onMonthChange,
   onRateChange
 }: PeriodRatesPanelProps) {
+  const baseCurrency = (settings.baseCurrency || 'RUB').toUpperCase();
+
   return (
-    <div className="glass-panel mb-4" style={{ display: 'flex', gap: '24px', alignItems: 'stretch', padding: '16px 18px' }}>
-      <div style={{ flex: '0 0 160px', display: 'flex', flexDirection: 'column' }}>
-        <div className="flex items-center justify-center mb-2" style={{ height: '32px' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem' }}>Period</h3>
+    <section className="glass-panel snapshot-period-panel" aria-label="Snapshot period and exchange rates">
+      <div className="snapshot-period-column">
+        <div className="snapshot-panel-heading">
+          <span className="snapshot-panel-icon" aria-hidden="true"><Calendar size={17} /></span>
+          <div>
+            <small>Snapshot date</small>
+            <h3>Period</h3>
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium text-center">Month</div>
+        <label className="snapshot-period-field" htmlFor="snapshot-month">
+          <span>Month</span>
           <input
             id="snapshot-month"
             name="snapshot-month"
@@ -134,20 +140,23 @@ export function PeriodRatesPanel({
             value={currentMonth}
             onChange={event => onMonthChange(event.target.value)}
             aria-label="Snapshot month"
-            style={{ textAlign: 'center', height: '36px' }}
           />
-        </div>
+        </label>
       </div>
 
-      <div style={{ width: '1px', background: 'rgba(255,255,255,0.05)' }}></div>
+      <div className="snapshot-period-divider" />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <div className="flex justify-between items-center mb-2" style={{ height: '32px' }}>
-          <h3 style={{ margin: 0, fontSize: '1rem' }}>
-            Exchange Rates (to {settings.baseCurrency || 'RUB'})
-          </h3>
-          <div className="flex gap-2">
-            <button className="btn" style={{ padding: '6px 10px', fontSize: '13px' }} onClick={onFetchLatestRates} disabled={fetchingRates !== null}>
+      <div className="snapshot-rates-column">
+        <div className="snapshot-rates-heading">
+          <div className="snapshot-panel-heading">
+            <span className="snapshot-panel-icon" aria-hidden="true"><RefreshCw size={17} /></span>
+            <div>
+              <small>Reference currency</small>
+              <h3>Exchange Rates <span>to {settings.baseCurrency || 'RUB'}</span></h3>
+            </div>
+          </div>
+          <div className="snapshot-rates-actions">
+            <button className="btn" onClick={onFetchLatestRates} disabled={fetchingRates !== null}>
               {fetchingRates === 'latest' ? <Spinner label="Fetching latest rates" size={15} /> : <RefreshCw size={15} />}
               Fetch Latest
             </button>
@@ -156,7 +165,6 @@ export function PeriodRatesPanel({
               onClick={onFetchPeriodStartRates}
               disabled={fetchingRates !== null}
               title={`Fetch exchange rates for ${currentMonth || 'YYYY-MM'}-01`}
-              style={{ padding: '6px 10px', fontSize: '13px' }}
             >
               {fetchingRates === 'periodStart' ? <Spinner label="Fetching rates for period start" size={15} /> : <Calendar size={15} />}
               Fetch on 1st
@@ -164,51 +172,34 @@ export function PeriodRatesPanel({
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', flex: 1, alignContent: 'flex-start' }}>
-          {Object.entries(rates).map(([currency, rate]) => {
-            const isBaseCurrency = currency === (settings.baseCurrency || 'RUB');
-
-            return (
-              <div key={currency} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-                <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+        <div className="snapshot-rates-grid">
+          {Object.entries(rates)
+            .filter(([currency]) => currency.toUpperCase() !== baseCurrency)
+            .map(([currency, rate]) => (
+              <div className="snapshot-rate-field" key={currency}>
+                <div className="snapshot-rate-label">
                   <span>{currency}</span>
-                  {isBaseCurrency
-                    ? <small style={{ color: 'var(--text-secondary)', fontSize: '9px', fontWeight: 700 }}>BASE</small>
-                    : toExchangeRateNumber(rate) > 0 && toExchangeRateNumber(rate) < 1 && (
-                      <small style={{ color: '#60a5fa', fontSize: '9px', fontWeight: 700 }}>{settings.baseCurrency || 'RUB'} → {currency}</small>
-                    )}
+                  {toExchangeRateNumber(rate) > 0 && toExchangeRateNumber(rate) < 1 && (
+                    <small style={{ color: '#60a5fa', fontSize: '9px', fontWeight: 700 }}>{baseCurrency} → {currency}</small>
+                  )}
                 </div>
-                {isBaseCurrency ? (
-                  <input
-                    id={`snapshot-exchange-rate-${currency}`}
-                    name={`snapshot-exchange-rate-${currency}`}
-                    className="input"
-                    value="1"
-                    readOnly
-                    aria-label={`${currency} exchange rate`}
-                    title={`${currency} is the base currency, so every other rate is expressed in it.`}
-                    style={{ opacity: 0.6, cursor: 'not-allowed' }}
-                  />
-                ) : (
-                  <ExchangeRateInput
-                    currency={currency}
-                    referenceCurrency={settings.baseCurrency || 'RUB'}
-                    value={rate}
-                    onChange={value => onRateChange(currency, value)}
-                  />
-                )}
+                <ExchangeRateInput
+                  currency={currency}
+                  referenceCurrency={baseCurrency}
+                  value={rate}
+                  onChange={value => onRateChange(currency, value)}
+                />
               </div>
-            );
-          })}
+            ))}
 
-          <div style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-            <div className="text-xs mb-1 font-medium" aria-hidden="true" style={{ visibility: 'hidden' }}>Action</div>
-            <button className="btn w-full justify-center" style={{ height: '36px', padding: '6px 10px' }} onClick={onAddRate}>
+          <div className="snapshot-rate-field snapshot-rate-add">
+            <div className="snapshot-rate-label" aria-hidden="true">Action</div>
+            <button className="btn w-full justify-center" onClick={onAddRate}>
               <Plus size={16} className="mr-1" /> Add
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
