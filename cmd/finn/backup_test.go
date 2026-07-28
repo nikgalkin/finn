@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -122,6 +123,52 @@ func TestDecryptDataRejectsATamperedHeader(t *testing.T) {
 
 	if _, err := decryptData(tampered, "passphrase"); err == nil {
 		t.Fatal("decryption succeeded after the salt was changed")
+	}
+}
+
+func TestBackupHeaderRejectsUnsafeArgon2Parameters(t *testing.T) {
+	valid := backupHeader{
+		kdf:         backupKDFArgon2id,
+		time:        argon2Time,
+		memory:      argon2MemoryKiB,
+		parallelism: argon2Parallelism,
+		salt:        make([]byte, backupSaltLength),
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*backupHeader)
+	}{
+		{name: "excessive time", mutate: func(header *backupHeader) { header.time = argon2MaxTime + 1 }},
+		{name: "excessive memory", mutate: func(header *backupHeader) { header.memory = argon2MaxMemoryKiB + 1 }},
+		{name: "excessive parallelism", mutate: func(header *backupHeader) { header.parallelism = argon2MaxParallelism + 1 }},
+		{name: "short salt", mutate: func(header *backupHeader) { header.salt = make([]byte, backupSaltLength-1) }},
+		{name: "long salt", mutate: func(header *backupHeader) { header.salt = make([]byte, backupSaltMaxLength+1) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := valid
+			tt.mutate(&header)
+			if err := header.validate(); err == nil {
+				t.Fatal("unsafe Argon2id parameters were accepted")
+			}
+		})
+	}
+}
+
+func TestDecryptDataRejectsUnsafeArgon2ParametersBeforeDerivingAKey(t *testing.T) {
+	encrypted, err := encryptData([]byte("sqlite payload"), "passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tampered := append([]byte(nil), encrypted...)
+	timeOffset := len(backupMagic) + 2
+	binary.BigEndian.PutUint32(tampered[timeOffset:], argon2MaxTime+1)
+
+	if _, err := decryptData(tampered, "passphrase"); err == nil || !strings.Contains(err.Error(), "time cost") {
+		t.Fatalf("decryptData error = %v, want an Argon2id time-cost validation error", err)
 	}
 }
 

@@ -16,6 +16,7 @@ func writeTestConfig(t *testing.T, body string) string {
 }
 
 func TestLoadConfigReadsAnExplicitPath(t *testing.T) {
+	t.Setenv("FINN_BACKUP_CIPHER_KEY", "")
 	path := writeTestConfig(t, `
 app:
   port: 9123
@@ -42,7 +43,7 @@ backup:
 		t.Fatalf("database filename = %q, want custom.db", cfg.Database.Filename)
 	}
 	if cfg.Backup.CipherKey != "from the explicit file" {
-		t.Fatalf("cipher key = %q, want the value from the explicit file", cfg.Backup.CipherKey)
+		t.Fatal("cipher key does not match the value from the explicit file")
 	}
 	if len(cfg.Backup.Targets) != 1 || cfg.Backup.Targets[0].Retention != 10 {
 		t.Fatalf("targets = %+v, want one target with the default retention", cfg.Backup.Targets)
@@ -96,7 +97,7 @@ func TestLoadConfigReadsTheCipherKeyFromTheEnvironment(t *testing.T) {
 	cfg := LoadConfig(writeTestConfig(t, "backup:\n  enabled: true\n"))
 
 	if cfg.Backup.CipherKey != "key from the environment" {
-		t.Fatalf("cipher key = %q, want the value from FINN_BACKUP_CIPHER_KEY", cfg.Backup.CipherKey)
+		t.Fatal("cipher key does not match FINN_BACKUP_CIPHER_KEY")
 	}
 }
 
@@ -106,7 +107,7 @@ func TestLoadConfigLetsTheEnvironmentOverrideTheConfiguredCipherKey(t *testing.T
 	cfg := LoadConfig(writeTestConfig(t, "backup:\n  enabled: true\n  cipher_key: \"key from the file\"\n"))
 
 	if cfg.Backup.CipherKey != "key from the environment" {
-		t.Fatalf("cipher key = %q, want the environment to win", cfg.Backup.CipherKey)
+		t.Fatal("cipher key from the environment did not override the configured value")
 	}
 }
 
@@ -117,7 +118,7 @@ func TestLoadConfigReadsTheCipherKeyFromTheEnvironmentWithoutAnyConfigFile(t *te
 	cfg := LoadConfig("")
 
 	if cfg.Backup.CipherKey != "key from the environment" {
-		t.Fatalf("cipher key = %q, want the value from FINN_BACKUP_CIPHER_KEY", cfg.Backup.CipherKey)
+		t.Fatal("cipher key does not match FINN_BACKUP_CIPHER_KEY")
 	}
 }
 

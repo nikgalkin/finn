@@ -40,14 +40,18 @@ const (
 	backupMagic         = "FINN"
 	backupFormatVersion = 1
 
-	backupKDFRaw       = 0
-	backupKDFArgon2id  = 1
-	backupKeyLength    = 32
-	backupSaltLength   = 16
-	argon2Time         = 3
-	argon2MemoryKiB    = 64 * 1024
-	argon2Parallelism  = 4
-	backupHeaderPrefix = len(backupMagic) + 1 + 1 + 4 + 4 + 1 + 1
+	backupKDFRaw         = 0
+	backupKDFArgon2id    = 1
+	backupKeyLength      = 32
+	backupSaltLength     = 16
+	backupSaltMaxLength  = 64
+	argon2Time           = 3
+	argon2MemoryKiB      = 64 * 1024
+	argon2Parallelism    = 4
+	argon2MaxTime        = 10
+	argon2MaxMemoryKiB   = 256 * 1024
+	argon2MaxParallelism = 16
+	backupHeaderPrefix   = len(backupMagic) + 1 + 1 + 4 + 4 + 1 + 1
 )
 
 const (
@@ -363,7 +367,37 @@ func parseBackupHeader(payload []byte) (backupHeader, []byte, error) {
 	return header, payload[cursor+saltLength:], nil
 }
 
+func (header backupHeader) validate() error {
+	switch header.kdf {
+	case backupKDFRaw:
+		if header.time != 0 || header.memory != 0 || header.parallelism != 0 || len(header.salt) != 0 {
+			return errors.New("backup header carries invalid raw-key parameters")
+		}
+	case backupKDFArgon2id:
+		if header.time == 0 || header.time > argon2MaxTime {
+			return fmt.Errorf("backup header carries an unsupported Argon2id time cost %d", header.time)
+		}
+		if header.parallelism == 0 || header.parallelism > argon2MaxParallelism {
+			return fmt.Errorf("backup header carries unsupported Argon2id parallelism %d", header.parallelism)
+		}
+		minimumMemory := 8 * uint32(header.parallelism)
+		if header.memory < minimumMemory || header.memory > argon2MaxMemoryKiB {
+			return fmt.Errorf("backup header carries an unsupported Argon2id memory cost %d KiB", header.memory)
+		}
+		if len(header.salt) < backupSaltLength || len(header.salt) > backupSaltMaxLength {
+			return fmt.Errorf("backup header carries an unsupported Argon2id salt length %d", len(header.salt))
+		}
+	default:
+		return fmt.Errorf("unsupported key derivation %d", header.kdf)
+	}
+	return nil
+}
+
 func (header backupHeader) deriveKey(passphrase string) ([]byte, error) {
+	if err := header.validate(); err != nil {
+		return nil, err
+	}
+
 	switch header.kdf {
 	case backupKDFRaw:
 		key, ok := rawBackupKey(passphrase)
@@ -372,13 +406,9 @@ func (header backupHeader) deriveKey(passphrase string) ([]byte, error) {
 		}
 		return key, nil
 	case backupKDFArgon2id:
-		if header.memory == 0 || header.time == 0 || header.parallelism == 0 {
-			return nil, errors.New("backup header carries invalid Argon2id parameters")
-		}
 		return argon2.IDKey([]byte(passphrase), header.salt, header.time, header.memory, header.parallelism, backupKeyLength), nil
-	default:
-		return nil, fmt.Errorf("unsupported key derivation %d", header.kdf)
 	}
+	panic("validated backup header has an unknown key derivation")
 }
 
 func newBackupHeader(passphrase string) (backupHeader, error) {
@@ -651,7 +681,7 @@ func RunBackupJob(cfg *Config, db *sql.DB) BackupReport {
 	var extension string
 
 	if cfg.Backup.CipherKey != "" {
-		log.Println("🔒 Backup: Encrypting dataset with quantum-resistant AES-256-GCM...")
+		log.Println("🔒 Backup: Encrypting dataset with authenticated AES-256-GCM...")
 		encrypted, err := encryptData(dbBytes, cfg.Backup.CipherKey)
 		if err != nil {
 			log.Printf("⚠️  Backup: Encryption failed: %v\n", err)

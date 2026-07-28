@@ -19,7 +19,7 @@ Finn grew out of the friction of maintaining an increasingly complex financial s
 * **Adaptive currency scaling:** Automatically cross-convert low-nominal currencies so charts remain readable
 * **Math in inputs:** Enter expressions such as `15000 + 5000` directly in a balance field
 * **Local and private:** Store all data locally in SQLite, with no cloud sync or telemetry. The only outbound request is the optional exchange-rate fetch, which asks a public currency API for the rates of the currencies you track and never sends your balances
-* **Multi-target backups:** Create raw backups or ones encrypted with quantum-resistant AES-256-GCM in multiple local or cloud-synced folders, each with its own retention policy
+* **Multi-target backups:** Create raw backups or ones encrypted with authenticated AES-256-GCM in multiple local or cloud-synced folders, each with its own retention policy
 * **Local AI assistant:** Analyze selected snapshots and precomputed metrics with a local model, or copy the prepared prompt to another AI tool
 * **Data utilities:** Scan data health, inspect and verify restore points, and export selected periods as portable JSON or a CSV bundle
 * **SQL editor:** Fix data directly when the UI is the long way round — click any result cell to build an `UPDATE` for it, including ranges and JSON fields, then dry run it to see what would change before anything is saved

@@ -41,7 +41,7 @@ For cloud-backed folders, the process that launches Finn needs both read and wri
 
 ## Encryption and recovery
 
-Set `backup.cipher_key` in `~/.finn/config.yaml` to encrypt new backups with quantum-resistant AES-256-GCM. Generate a 256-bit random key directly with Finn:
+Set `backup.cipher_key` in `~/.finn/config.yaml` to encrypt new backups with authenticated AES-256-GCM. Generate a 256-bit random key directly with Finn:
 
 ```shell
 finn backup generate-key
@@ -65,7 +65,7 @@ For automation, `finn backup generate-key --raw` prints only the Base64 key.
 
 Keep this key somewhere safe: encrypted backups cannot be recovered without it. Without `backup.cipher_key`, Finn writes unencrypted `.db` files and logs a warning.
 
-A generated key already holds 256 bits of entropy, so Finn uses it as the encryption key directly. Any other value is treated as a passphrase and stretched with Argon2id (64 MiB, 3 passes, 4 lanes) before it becomes a key, which adds roughly 30 ms to each backup and restore. Every file records the salt and the parameters it was written with, so a future change of defaults cannot make existing backups unreadable. A passphrase is always weaker than a generated key, and Finn says so once at startup.
+A generated key already holds 256 bits of entropy, so Finn uses it as the encryption key directly. Any other value is treated as a passphrase and stretched with Argon2id (64 MiB, 3 passes, 4 lanes) before it becomes a key. The derivation uses about 64 MiB of temporary memory, and its duration depends on the device. Every file records the salt and the parameters it was written with, so a future change of defaults cannot make existing backups unreadable. A human-chosen passphrase is generally weaker than a generated key, and Finn says so once at startup.
 
 List configured targets and their readable backup files:
 

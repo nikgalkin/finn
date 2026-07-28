@@ -16,6 +16,7 @@ import (
 	"time"
 
 	appassets "finn"
+
 	"github.com/gin-gonic/gin"
 )
 
