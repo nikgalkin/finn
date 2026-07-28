@@ -36,7 +36,7 @@ const getIconStyle = (hasComment: boolean) => ({
 
 const cellStyle = { padding: '5px 6px 5px 0' };
 const headerStyle = { padding: '7px 5px', textTransform: 'uppercase' as const, fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' as const };
-const tableHeaders = [['35%', 'Tags'], ['35%', 'Amount'], ['20%', 'Currency'], ['10%', '']] as const;
+const tableHeaders = [['25%', 'Tags'], ['45%', 'Amount'], ['20%', 'Currency'], ['10%', '']] as const;
 export function OrganizationsEditor({
   activeDropdownOrgId,
   isNew,

@@ -116,8 +116,8 @@ export function MultiTagSelect({
     }
   };
 
-  const visibleTags = selectedTags.slice(0, 2);
-  const hiddenTagsCount = selectedTags.length - 2;
+  const visibleTags = selectedTags.slice(0, 1);
+  const hiddenTagsCount = selectedTags.length - 1;
   const filteredTags = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     return query
@@ -175,15 +175,17 @@ export function MultiTagSelect({
                 alignItems: 'center',
                 gap: '4px',
                 whiteSpace: 'nowrap',
-                flexShrink: 0
+                minWidth: 0,
+                maxWidth: '100%',
+                flexShrink: 1
               }}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleTag(tag);
               }}
             >
-              {tag}
-              <X size={11} style={{ opacity: 0.8 }} />
+              <span className="snapshot-tag-chip-label">{tag}</span>
+              <X size={11} style={{ opacity: 0.8, flex: '0 0 auto' }} />
             </span>
           ))}
 
@@ -211,6 +213,7 @@ export function MultiTagSelect({
         <div
           ref={dropdownRef}
           className="app-select-dropdown snapshot-tag-dropdown"
+          data-escape-guard="true"
           style={{
             top: dropdownPosition.top,
             left: dropdownPosition.left,

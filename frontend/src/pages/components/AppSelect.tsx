@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Search } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search } from 'lucide-react';
 
 export type AppSelectOption = {
   value: string;
   label?: string;
   description?: string;
   meta?: string;
+  color?: string;
   disabled?: boolean;
   keywords?: string[];
+  isCustom?: boolean;
+  primary?: boolean;
 };
 
 type AppSelectProps = {
@@ -28,10 +31,13 @@ type AppSelectProps = {
   height?: string;
   textAlign?: 'left' | 'center';
   showSelectedMeta?: boolean;
+  allowCustom?: boolean;
+  maxVisibleOptions?: number;
 };
 
 type DropdownPosition = {
-  top: number;
+  top?: number;
+  bottom?: number;
   left: number;
   width: number;
   maxHeight: number;
@@ -60,7 +66,9 @@ export function AppSelect({
   dropdownWidth = 300,
   height = '38px',
   textAlign = 'left',
-  showSelectedMeta = true
+  showSelectedMeta = true,
+  allowCustom = false,
+  maxVisibleOptions
 }: AppSelectProps) {
   const generatedId = useId().replaceAll(':', '');
   const controlId = id || `app-select-${generatedId}`;
@@ -73,12 +81,35 @@ export function AppSelect({
   const [search, setSearch] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
   const [position, setPosition] = useState<DropdownPosition>({ top: 0, left: 0, width: dropdownWidth, maxHeight: 320 });
+  const hasSearch = searchable || allowCustom;
 
   const selectedOption = options.find(option => option.value === value);
   const filteredOptions = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
     return query ? options.filter(option => optionText(option).includes(query)) : options;
   }, [options, search]);
+  const visibleOptions = useMemo(() => {
+    const customValue = search.trim();
+    const exactOption = options.some(option => option.value.toLocaleLowerCase() === customValue.toLocaleLowerCase());
+    if (!allowCustom || !customValue || exactOption) return filteredOptions;
+    return [{
+      value: customValue,
+      label: `Create “${customValue}”`,
+      description: 'Use a new value',
+      isCustom: true
+    }, ...filteredOptions];
+  }, [allowCustom, filteredOptions, options, search]);
+  const dividerAfterIndex = useMemo(() => {
+    let lastPrimaryIndex = -1;
+    visibleOptions.forEach((option, index) => {
+      if (option.primary) lastPrimaryIndex = index;
+    });
+    if (
+      lastPrimaryIndex < 0
+      || !visibleOptions.slice(lastPrimaryIndex + 1).some(option => !option.primary)
+    ) return -1;
+    return lastPrimaryIndex;
+  }, [visibleOptions]);
 
   const firstEnabledIndex = useCallback((items: AppSelectOption[]) => (
     items.findIndex(option => !option.disabled)
@@ -97,13 +128,25 @@ export function AppSelect({
     const availableBelow = window.innerHeight - rect.bottom - viewportPadding - 8;
     const availableAbove = rect.top - viewportPadding - 8;
     const openBelow = availableBelow >= 210 || availableBelow >= availableAbove;
-    const maxHeight = Math.max(180, Math.min(340, openBelow ? availableBelow : availableAbove));
-    const top = openBelow
-      ? rect.bottom + 8
-      : Math.max(viewportPadding, rect.top - maxHeight - 8);
+    const availableHeight = openBelow ? availableBelow : availableAbove;
+    let maxHeight = Math.max(180, Math.min(340, availableHeight));
+    if (maxVisibleOptions) {
+      const dropdownChromeHeight = 14 + (hasSearch ? 37 : 0);
+      const heightForRows = (rowCount: number) => (
+        dropdownChromeHeight
+        + rowCount * 38
+        + Math.max(0, rowCount - 1) * 2
+        + (dividerAfterIndex >= 0 && dividerAfterIndex < rowCount ? 6 : 0)
+      );
+      let rowCount = Math.max(1, Math.min(maxVisibleOptions, visibleOptions.length));
+      while (rowCount > 1 && heightForRows(rowCount) > availableHeight) rowCount -= 1;
+      maxHeight = Math.min(heightForRows(rowCount), availableHeight);
+    }
+    const top = openBelow ? rect.bottom + 8 : undefined;
+    const bottom = openBelow ? undefined : window.innerHeight - rect.top + 8;
 
-    setPosition({ top, left, width, maxHeight });
-  }, [dropdownWidth]);
+    setPosition({ top, bottom, left, width, maxHeight });
+  }, [dividerAfterIndex, dropdownWidth, hasSearch, maxVisibleOptions, visibleOptions.length]);
 
   const open = useCallback((preferredDirection: 1 | -1 = 1) => {
     if (disabled) return;
@@ -137,16 +180,16 @@ export function AppSelect({
   }, []);
 
   const moveActive = useCallback((direction: 1 | -1) => {
-    if (filteredOptions.length === 0) return;
+    if (visibleOptions.length === 0) return;
     let index = activeIndex;
-    for (let step = 0; step < filteredOptions.length; step += 1) {
-      index = (index + direction + filteredOptions.length) % filteredOptions.length;
-      if (!filteredOptions[index].disabled) {
+    for (let step = 0; step < visibleOptions.length; step += 1) {
+      index = (index + direction + visibleOptions.length) % visibleOptions.length;
+      if (!visibleOptions[index].disabled) {
         setActiveIndex(index);
         return;
       }
     }
-  }, [activeIndex, filteredOptions]);
+  }, [activeIndex, visibleOptions]);
 
   const select = useCallback((option: AppSelectOption) => {
     if (option.disabled) return;
@@ -175,9 +218,9 @@ export function AppSelect({
 
   useEffect(() => {
     if (!isOpen) return;
-    const selectedIndex = filteredOptions.findIndex(option => option.value === value && !option.disabled);
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : firstEnabledIndex(filteredOptions));
-  }, [filteredOptions, firstEnabledIndex, isOpen, value]);
+    const selectedIndex = visibleOptions.findIndex(option => option.value === value && !option.disabled);
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : firstEnabledIndex(visibleOptions));
+  }, [firstEnabledIndex, isOpen, value, visibleOptions]);
 
   useEffect(() => {
     if (!isOpen || activeIndex < 0) return;
@@ -196,13 +239,14 @@ export function AppSelect({
 
   useEffect(() => {
     if (!isOpen) return;
-    const focusTarget = searchable ? searchInputRef.current : optionsRef.current;
+    const focusTarget = hasSearch ? searchInputRef.current : optionsRef.current;
     requestAnimationFrame(() => focusTarget?.focus({ preventScroll: true }));
-  }, [isOpen, searchable]);
+  }, [hasSearch, isOpen]);
 
   const handleNavigationKey = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       close(true);
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -212,18 +256,18 @@ export function AppSelect({
       moveActive(-1);
     } else if (event.key === 'Home') {
       event.preventDefault();
-      setActiveIndex(firstEnabledIndex(filteredOptions));
+      setActiveIndex(firstEnabledIndex(visibleOptions));
     } else if (event.key === 'End') {
       event.preventDefault();
-      for (let index = filteredOptions.length - 1; index >= 0; index -= 1) {
-        if (!filteredOptions[index].disabled) {
+      for (let index = visibleOptions.length - 1; index >= 0; index -= 1) {
+        if (!visibleOptions[index].disabled) {
           setActiveIndex(index);
           break;
         }
       }
     } else if (event.key === 'Enter' && activeIndex >= 0) {
       event.preventDefault();
-      const option = filteredOptions[activeIndex];
+      const option = visibleOptions[activeIndex];
       if (option) select(option);
     }
   };
@@ -232,14 +276,16 @@ export function AppSelect({
     <div
       ref={dropdownRef}
       className="app-select-dropdown"
+      data-escape-guard="true"
       style={{
         top: position.top,
+        bottom: position.bottom,
         left: position.left,
         width: position.width,
         maxHeight: position.maxHeight
       }}
     >
-      {searchable && (
+      {hasSearch && (
         <label className="app-select-search">
           <Search size={14} aria-hidden="true" />
           <input
@@ -249,7 +295,7 @@ export function AppSelect({
             value={search}
             onChange={event => setSearch(event.target.value)}
             onKeyDown={handleNavigationKey}
-            placeholder={searchPlaceholder}
+            placeholder={allowCustom ? 'Search or create…' : searchPlaceholder}
             aria-label={`${ariaLabel} search`}
             aria-controls={listboxId}
             aria-activedescendant={activeIndex >= 0 ? `${controlId}-option-${activeIndex}` : undefined}
@@ -262,11 +308,11 @@ export function AppSelect({
         role="listbox"
         aria-label={ariaLabel}
         aria-activedescendant={activeIndex >= 0 ? `${controlId}-option-${activeIndex}` : undefined}
-        tabIndex={searchable ? -1 : 0}
+        tabIndex={hasSearch ? -1 : 0}
         onKeyDown={handleNavigationKey}
         ref={optionsRef}
       >
-        {filteredOptions.map((option, index) => {
+        {visibleOptions.map((option, index) => {
           const selected = option.value === value;
           const active = index === activeIndex;
           return (
@@ -274,7 +320,7 @@ export function AppSelect({
               id={`${controlId}-option-${index}`}
               key={option.value}
               type="button"
-              className={`app-select-option${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}`}
+              className={`app-select-option${option.color ? ' has-color' : ''}${option.isCustom ? ' is-custom' : ''}${index === dividerAfterIndex ? ' has-divider-after' : ''}${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}`}
               role="option"
               aria-selected={selected}
               disabled={option.disabled}
@@ -283,8 +329,11 @@ export function AppSelect({
               }}
               onClick={() => select(option)}
             >
+              {option.color && (
+                <span className="app-select-option-color" style={{ backgroundColor: option.color }} aria-hidden="true" />
+              )}
               <span className="app-select-option-copy">
-                <strong>{option.label || option.value}</strong>
+                <strong>{option.isCustom && <Plus size={13} aria-hidden="true" />}{option.label || option.value}</strong>
                 {option.description && <small>{option.description}</small>}
               </span>
               {option.meta && <span className="app-select-option-meta">{option.meta}</span>}
@@ -294,7 +343,7 @@ export function AppSelect({
             </button>
           );
         })}
-        {filteredOptions.length === 0 && (
+        {visibleOptions.length === 0 && (
           <div className="app-select-empty">No matching options</div>
         )}
       </div>
@@ -327,6 +376,7 @@ export function AppSelect({
             open();
           } else if (event.key === 'Escape' && isOpen) {
             event.preventDefault();
+            event.stopPropagation();
             close();
           }
         }}
@@ -335,6 +385,9 @@ export function AppSelect({
           className="app-select-trigger-copy"
           style={{ justifyContent: textAlign === 'center' ? 'center' : 'flex-start' }}
         >
+          {selectedOption?.color && (
+            <span className="app-select-trigger-color" style={{ backgroundColor: selectedOption.color }} aria-hidden="true" />
+          )}
           <strong>{selectedOption?.label || selectedOption?.value || placeholder}</strong>
           {showSelectedMeta && selectedOption?.meta && <small>{selectedOption.meta}</small>}
         </span>
