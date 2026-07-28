@@ -576,12 +576,14 @@ main > .page-loader { animation: none; }
   font-size: 9px;
   font-weight: 750;
   letter-spacing: 0.055em;
+  white-space: nowrap;
 }
 
 .app-select-option-check {
   display: inline-grid;
   width: 20px;
   height: 20px;
+  grid-column: -2 / -1;
   place-items: center;
   border-radius: 6px;
   color: #93c5fd;
@@ -2261,6 +2263,18 @@ main > .page-loader { animation: none; }
 
 .timeframe-control { min-height: 38px; padding: 8px 16px; }
 
+.timeframe-control .app-select-trigger {
+  padding: 4px 7px;
+  gap: 4px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.timeframe-control .app-select-trigger > svg {
+  width: 14px;
+  height: 14px;
+}
+
 .timeframe-control > span:first-child,
 .ai-timeframe-control > span:first-child { color: var(--text-secondary); font-weight: 500; }
 
@@ -2990,19 +3004,27 @@ main > .page-loader { animation: none; }
 
 .currency-framework-select { position: relative; }
 
-.currency-framework-select i {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  z-index: 1;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
+.currency-framework-select .input { width: 100%; height: 36px; font-weight: 750; }
+
+.currency-framework-select .app-select-trigger {
+  padding: 6px 9px 6px 10px;
 }
 
-.currency-framework-select .input { width: 100%; height: 36px; padding-left: 30px; font-weight: 750; }
+.settings-country-select .app-select-trigger-copy strong {
+  min-width: 0;
+  flex: 1;
+  font-size: 12px;
+}
+
+.settings-country-select .app-select-trigger-copy small {
+  min-width: 31px;
+  margin-left: auto;
+  text-align: right;
+}
+
+.country-select-dropdown .app-select-option-copy strong {
+  font-size: 12px;
+}
 
 .currency-framework-field-description { color: var(--text-secondary); font-size: 10px; line-height: 1.4; }
 
@@ -3503,6 +3525,18 @@ main > .page-loader { animation: none; }
 .snapshot-diff-period-picker:hover {
   border-color: rgba(96, 165, 250, 0.4);
   background: rgba(59, 130, 246, 0.08);
+}
+
+.snapshot-diff-period-picker .app-select-trigger {
+  padding: 2px 6px;
+  gap: 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.snapshot-diff-period-picker .app-select-trigger > svg {
+  width: 13px;
+  height: 13px;
 }
 
 .snapshot-diff-period-arrow { opacity: 0.45; }
@@ -4136,6 +4170,20 @@ main > .page-loader { animation: none; }
 .ai-chat-heading-title p { margin: 6px 0 0; color: var(--text-secondary); font-size: 14px; }
 
 .ai-timeframe-control { height: 38px; padding: 5px 10px; }
+
+.ai-timeframe-control .app-select-trigger,
+.ai-response-style-control .app-select-trigger {
+  padding: 4px 7px;
+  gap: 4px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.ai-timeframe-control .app-select-trigger > svg,
+.ai-response-style-control .app-select-trigger > svg {
+  width: 14px;
+  height: 14px;
+}
 
 .ai-status-card {
   display: flex;
@@ -4915,6 +4963,13 @@ main > .page-loader { animation: none; }
   color: var(--text-secondary);
   font-size: 9px;
   line-height: 1.35;
+}
+
+.calculator-currency-field .app-select-trigger {
+  padding: 4px 8px;
+  gap: 5px;
+  border-radius: 7px;
+  font-size: 13px;
 }
 
 .calculator-input {

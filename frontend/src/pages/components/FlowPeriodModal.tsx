@@ -377,29 +377,29 @@ export function FlowPeriodModal({
                   <div className="cash-flow-field cash-flow-period-counterparty cash-flow-period-transfer-from">
                     <span className="cash-flow-label-with-help">From account · tag <HelpTooltip text={TAG_FIELD_HELP} ariaLabel="Source tag help" width={330} /></span>
                     <div className="cash-flow-account-control">
-                      <AppSelect ariaLabel={`Movement ${index + 1} source account`} value={draft.account} onChange={account => updateDraft(draft.clientID, { account })} options={accountSelectOptions} placeholder="Account" searchable searchPlaceholder="Find account…" width="100%" dropdownWidth={240} height="36px" textAlign="left" maxVisibleOptions={7} />
-                      <AppSelect ariaLabel={`Movement ${index + 1} source tag`} value={draft.tag || NO_TAG_OPTION} onChange={tag => updateDraft(draft.clientID, { tag: tag === NO_TAG_OPTION ? '' : tag })} options={tagSelectOptionsFor(draft.account)} placeholder={NO_TAG_OPTION} searchable searchPlaceholder="Find tag…" width="100%" dropdownWidth={220} height="36px" textAlign="left" maxVisibleOptions={7} />
+                      <AppSelect ariaLabel={`Movement ${index + 1} source account`} value={draft.account} onChange={account => updateDraft(draft.clientID, { account })} options={accountSelectOptions} placeholder="Account" searchable searchPlaceholder="Find account…" width="100%" dropdownWidth={240} height="36px" textAlign="left" />
+                      <AppSelect ariaLabel={`Movement ${index + 1} source tag`} value={draft.tag || NO_TAG_OPTION} onChange={tag => updateDraft(draft.clientID, { tag: tag === NO_TAG_OPTION ? '' : tag })} options={tagSelectOptionsFor(draft.account)} placeholder={NO_TAG_OPTION} searchable searchPlaceholder="Find tag…" width="100%" dropdownWidth={220} height="36px" textAlign="left" />
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-amount">
                     <span>Sent</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.amount} onChange={amount => updateDraft(draft.clientID, { amount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} sent amount`} />
-                      <AppSelect id={`flow-${draft.clientID}-sent-currency`} name={`flow-${draft.clientID}-sent-currency`} ariaLabel={`Movement ${index + 1} sent currency`} value={draft.currency} onChange={currency => updateDraft(draft.clientID, { currency })} options={currencySelectOptions} placeholder="Currency" searchable={currencyOptions.length > 8} searchPlaceholder="Find currency…" width="100%" dropdownWidth={180} height="36px" textAlign="left" maxVisibleOptions={7} />
+                      <AppSelect id={`flow-${draft.clientID}-sent-currency`} name={`flow-${draft.clientID}-sent-currency`} ariaLabel={`Movement ${index + 1} sent currency`} value={draft.currency} onChange={currency => updateDraft(draft.clientID, { currency })} options={currencySelectOptions} placeholder="Currency" searchable={currencyOptions.length > 8} searchPlaceholder="Find currency…" width="100%" dropdownWidth={180} height="36px" textAlign="left" />
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-destination">
                     <span className="cash-flow-label-with-help">To account · tag <HelpTooltip text={TAG_FIELD_HELP} ariaLabel="Destination tag help" width={330} /></span>
                     <div className="cash-flow-account-control">
-                      <AppSelect ariaLabel={`Movement ${index + 1} destination account`} value={draft.toAccount} onChange={toAccount => updateDraft(draft.clientID, { toAccount })} options={accountSelectOptions} placeholder="Account" searchable searchPlaceholder="Find account…" width="100%" dropdownWidth={240} height="36px" textAlign="left" maxVisibleOptions={7} />
-                      <AppSelect ariaLabel={`Movement ${index + 1} destination tag`} value={draft.toTag || NO_TAG_OPTION} onChange={toTag => updateDraft(draft.clientID, { toTag: toTag === NO_TAG_OPTION ? '' : toTag })} options={tagSelectOptionsFor(draft.toAccount)} placeholder={NO_TAG_OPTION} searchable searchPlaceholder="Find tag…" width="100%" dropdownWidth={220} height="36px" textAlign="left" maxVisibleOptions={7} />
+                      <AppSelect ariaLabel={`Movement ${index + 1} destination account`} value={draft.toAccount} onChange={toAccount => updateDraft(draft.clientID, { toAccount })} options={accountSelectOptions} placeholder="Account" searchable searchPlaceholder="Find account…" width="100%" dropdownWidth={240} height="36px" textAlign="left" />
+                      <AppSelect ariaLabel={`Movement ${index + 1} destination tag`} value={draft.toTag || NO_TAG_OPTION} onChange={toTag => updateDraft(draft.clientID, { toTag: toTag === NO_TAG_OPTION ? '' : toTag })} options={tagSelectOptionsFor(draft.toAccount)} placeholder={NO_TAG_OPTION} searchable searchPlaceholder="Find tag…" width="100%" dropdownWidth={220} height="36px" textAlign="left" />
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-received">
                     <span>Received</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.toAmount} onChange={toAmount => updateDraft(draft.clientID, { toAmount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} received amount`} />
-                      <AppSelect id={`flow-${draft.clientID}-received-currency`} name={`flow-${draft.clientID}-received-currency`} ariaLabel={`Movement ${index + 1} received currency`} value={draft.toCurrency} onChange={toCurrency => updateDraft(draft.clientID, { toCurrency })} options={currencySelectOptions} placeholder="Currency" searchable={currencyOptions.length > 8} searchPlaceholder="Find currency…" width="100%" dropdownWidth={180} height="36px" textAlign="left" maxVisibleOptions={7} />
+                      <AppSelect id={`flow-${draft.clientID}-received-currency`} name={`flow-${draft.clientID}-received-currency`} ariaLabel={`Movement ${index + 1} received currency`} value={draft.toCurrency} onChange={toCurrency => updateDraft(draft.clientID, { toCurrency })} options={currencySelectOptions} placeholder="Currency" searchable={currencyOptions.length > 8} searchPlaceholder="Find currency…" width="100%" dropdownWidth={180} height="36px" textAlign="left" />
                     </div>
                   </div>
                 </>
@@ -407,20 +407,20 @@ export function FlowPeriodModal({
                 <>
                   <div className="cash-flow-field cash-flow-period-counterparty">
                     <span>{draft.direction === 'in' ? 'From' : 'To'}</span>
-                    <AppSelect ariaLabel={`Movement ${index + 1} ${draft.direction === 'in' ? 'from' : 'to'}`} value={draft.counterparty} onChange={counterparty => updateDraft(draft.clientID, { counterparty, taxRate: draft.direction === 'in' ? defaultTaxRate(counterparty) : 0 })} options={counterpartySelectOptions} placeholder={draft.direction === 'in' ? 'Source' : 'Recipient'} searchable searchPlaceholder="Find counterparty…" width="100%" dropdownWidth={260} height="36px" textAlign="left" maxVisibleOptions={7} />
+                    <AppSelect ariaLabel={`Movement ${index + 1} ${draft.direction === 'in' ? 'from' : 'to'}`} value={draft.counterparty} onChange={counterparty => updateDraft(draft.clientID, { counterparty, taxRate: draft.direction === 'in' ? defaultTaxRate(counterparty) : 0 })} options={counterpartySelectOptions} placeholder={draft.direction === 'in' ? 'Source' : 'Recipient'} searchable searchPlaceholder="Find counterparty…" width="100%" dropdownWidth={260} height="36px" textAlign="left" />
                   </div>
                   <div className="cash-flow-field cash-flow-period-account">
                     <span className="cash-flow-label-with-help">Own account · tag <HelpTooltip text={TAG_FIELD_HELP} ariaLabel="Own account and tag help" width={330} /></span>
                     <div className="cash-flow-account-control">
-                      <AppSelect ariaLabel={`Movement ${index + 1} own account`} value={draft.account || NO_ACCOUNT_OPTION} onChange={account => updateDraft(draft.clientID, { account: account === NO_ACCOUNT_OPTION ? '' : account })} options={ownAccountSelectOptions} placeholder={NO_ACCOUNT_OPTION} searchable searchPlaceholder="Find account…" width="100%" dropdownWidth={240} height="36px" textAlign="left" maxVisibleOptions={7} />
-                      <AppSelect ariaLabel={`Movement ${index + 1} tag`} value={draft.tag || NO_TAG_OPTION} onChange={tag => updateDraft(draft.clientID, { tag: tag === NO_TAG_OPTION ? '' : tag })} options={tagSelectOptionsFor(draft.account)} placeholder={NO_TAG_OPTION} searchable searchPlaceholder="Find tag…" width="100%" dropdownWidth={220} height="36px" textAlign="left" maxVisibleOptions={7} />
+                      <AppSelect ariaLabel={`Movement ${index + 1} own account`} value={draft.account || NO_ACCOUNT_OPTION} onChange={account => updateDraft(draft.clientID, { account: account === NO_ACCOUNT_OPTION ? '' : account })} options={ownAccountSelectOptions} placeholder={NO_ACCOUNT_OPTION} searchable searchPlaceholder="Find account…" width="100%" dropdownWidth={240} height="36px" textAlign="left" />
+                      <AppSelect ariaLabel={`Movement ${index + 1} tag`} value={draft.tag || NO_TAG_OPTION} onChange={tag => updateDraft(draft.clientID, { tag: tag === NO_TAG_OPTION ? '' : tag })} options={tagSelectOptionsFor(draft.account)} placeholder={NO_TAG_OPTION} searchable searchPlaceholder="Find tag…" width="100%" dropdownWidth={220} height="36px" textAlign="left" />
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-amount">
                     <span>{draft.direction === 'in' && Number(draft.taxRate) > 0 ? 'Gross amount' : 'Amount'}</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.amount} onChange={amount => updateDraft(draft.clientID, { amount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} amount`} />
-                      <AppSelect id={`flow-${draft.clientID}-currency`} name={`flow-${draft.clientID}-currency`} ariaLabel={`Movement ${index + 1} currency`} value={draft.currency} onChange={currency => updateDraft(draft.clientID, { currency })} options={currencySelectOptions} placeholder="Currency" searchable={currencyOptions.length > 8} searchPlaceholder="Find currency…" width="100%" dropdownWidth={180} height="36px" textAlign="left" maxVisibleOptions={7} />
+                      <AppSelect id={`flow-${draft.clientID}-currency`} name={`flow-${draft.clientID}-currency`} ariaLabel={`Movement ${index + 1} currency`} value={draft.currency} onChange={currency => updateDraft(draft.clientID, { currency })} options={currencySelectOptions} placeholder="Currency" searchable={currencyOptions.length > 8} searchPlaceholder="Find currency…" width="100%" dropdownWidth={180} height="36px" textAlign="left" />
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-tax">
@@ -429,7 +429,7 @@ export function FlowPeriodModal({
                   </div>
                   <div className="cash-flow-field cash-flow-period-category">
                     <span>Category</span>
-                    <AppSelect ariaLabel={`Movement ${index + 1} category`} value={draft.category || NO_CATEGORY_OPTION} onChange={category => updateDraft(draft.clientID, { category: category === NO_CATEGORY_OPTION ? '' : category })} options={categorySelectOptions} placeholder={NO_CATEGORY_OPTION} allowCustom searchPlaceholder="Find category…" width="100%" dropdownWidth={220} height="36px" textAlign="left" maxVisibleOptions={7} />
+                    <AppSelect ariaLabel={`Movement ${index + 1} category`} value={draft.category || NO_CATEGORY_OPTION} onChange={category => updateDraft(draft.clientID, { category: category === NO_CATEGORY_OPTION ? '' : category })} options={categorySelectOptions} placeholder={NO_CATEGORY_OPTION} allowCustom searchPlaceholder="Find category…" width="100%" dropdownWidth={220} height="36px" textAlign="left" />
                   </div>
                 </>
               )}

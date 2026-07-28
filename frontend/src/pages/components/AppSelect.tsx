@@ -28,11 +28,12 @@ type AppSelectProps = {
   disabled?: boolean;
   width?: string;
   dropdownWidth?: number;
+  dropdownAlign?: 'left' | 'center' | 'right';
+  dropdownClassName?: string;
   height?: string;
   textAlign?: 'left' | 'center';
   showSelectedMeta?: boolean;
   allowCustom?: boolean;
-  maxVisibleOptions?: number;
 };
 
 type DropdownPosition = {
@@ -64,11 +65,12 @@ export function AppSelect({
   disabled = false,
   width = '100%',
   dropdownWidth = 300,
+  dropdownAlign = 'center',
+  dropdownClassName,
   height = '38px',
   textAlign = 'left',
   showSelectedMeta = true,
-  allowCustom = false,
-  maxVisibleOptions
+  allowCustom = false
 }: AppSelectProps) {
   const generatedId = useId().replaceAll(':', '');
   const controlId = id || `app-select-${generatedId}`;
@@ -77,6 +79,7 @@ export function AppSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const activeIndexSourceRef = useRef<'sync' | 'keyboard' | 'pointer'>('sync');
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -99,6 +102,8 @@ export function AppSelect({
       isCustom: true
     }, ...filteredOptions];
   }, [allowCustom, filteredOptions, options, search]);
+  const selectedVisibleIndex = visibleOptions.findIndex(option => option.value === value && !option.disabled);
+  const firstVisibleEnabledIndex = visibleOptions.findIndex(option => !option.disabled);
   const dividerAfterIndex = useMemo(() => {
     let lastPrimaryIndex = -1;
     visibleOptions.forEach((option, index) => {
@@ -121,35 +126,28 @@ export function AppSelect({
 
     const viewportPadding = 8;
     const width = Math.min(dropdownWidth, window.innerWidth - viewportPadding * 2);
+    const preferredLeft = dropdownAlign === 'left'
+      ? rect.left
+      : dropdownAlign === 'right'
+        ? rect.right - width
+        : rect.left + (rect.width - width) / 2;
     const left = Math.max(
       viewportPadding,
-      Math.min(rect.left + (rect.width - width) / 2, window.innerWidth - width - viewportPadding)
+      Math.min(preferredLeft, window.innerWidth - width - viewportPadding)
     );
     const availableBelow = window.innerHeight - rect.bottom - viewportPadding - 8;
     const availableAbove = rect.top - viewportPadding - 8;
     const openBelow = availableBelow >= 210 || availableBelow >= availableAbove;
-    const availableHeight = openBelow ? availableBelow : availableAbove;
-    let maxHeight = Math.max(180, Math.min(340, availableHeight));
-    if (maxVisibleOptions) {
-      const dropdownChromeHeight = 14 + (hasSearch ? 37 : 0);
-      const heightForRows = (rowCount: number) => (
-        dropdownChromeHeight
-        + rowCount * 38
-        + Math.max(0, rowCount - 1) * 2
-        + (dividerAfterIndex >= 0 && dividerAfterIndex < rowCount ? 6 : 0)
-      );
-      let rowCount = Math.max(1, Math.min(maxVisibleOptions, visibleOptions.length));
-      while (rowCount > 1 && heightForRows(rowCount) > availableHeight) rowCount -= 1;
-      maxHeight = Math.min(heightForRows(rowCount), availableHeight);
-    }
+    const maxHeight = Math.max(180, Math.min(340, openBelow ? availableBelow : availableAbove));
     const top = openBelow ? rect.bottom + 8 : undefined;
     const bottom = openBelow ? undefined : window.innerHeight - rect.top + 8;
 
     setPosition({ top, bottom, left, width, maxHeight });
-  }, [dividerAfterIndex, dropdownWidth, hasSearch, maxVisibleOptions, visibleOptions.length]);
+  }, [dropdownAlign, dropdownWidth]);
 
   const open = useCallback((preferredDirection: 1 | -1 = 1) => {
     if (disabled) return;
+    activeIndexSourceRef.current = 'sync';
     updatePosition();
     setSearch('');
     setIsOpen(true);
@@ -181,6 +179,7 @@ export function AppSelect({
 
   const moveActive = useCallback((direction: 1 | -1) => {
     if (visibleOptions.length === 0) return;
+    activeIndexSourceRef.current = 'keyboard';
     let index = activeIndex;
     for (let step = 0; step < visibleOptions.length; step += 1) {
       index = (index + direction + visibleOptions.length) % visibleOptions.length;
@@ -218,22 +217,25 @@ export function AppSelect({
 
   useEffect(() => {
     if (!isOpen) return;
-    const selectedIndex = visibleOptions.findIndex(option => option.value === value && !option.disabled);
-    setActiveIndex(selectedIndex >= 0 ? selectedIndex : firstEnabledIndex(visibleOptions));
-  }, [firstEnabledIndex, isOpen, value, visibleOptions]);
+    activeIndexSourceRef.current = 'sync';
+    setActiveIndex(selectedVisibleIndex >= 0 ? selectedVisibleIndex : firstVisibleEnabledIndex);
+  }, [firstVisibleEnabledIndex, isOpen, search, selectedVisibleIndex, value]);
 
   useEffect(() => {
-    if (!isOpen || activeIndex < 0) return;
+    if (!isOpen || activeIndex < 0 || activeIndexSourceRef.current === 'pointer') return;
     const optionsElement = optionsRef.current;
     const activeOption = document.getElementById(`${controlId}-option-${activeIndex}`);
     if (!optionsElement || !activeOption) return;
 
-    const optionsRect = optionsElement.getBoundingClientRect();
-    const optionRect = activeOption.getBoundingClientRect();
-    if (optionRect.top < optionsRect.top) {
-      optionsElement.scrollTop -= optionsRect.top - optionRect.top;
-    } else if (optionRect.bottom > optionsRect.bottom) {
-      optionsElement.scrollTop += optionRect.bottom - optionsRect.bottom;
+    const optionTop = activeOption.offsetTop - optionsElement.offsetTop;
+    const optionBottom = optionTop + activeOption.offsetHeight;
+    const visibleTop = optionsElement.scrollTop;
+    const visibleBottom = visibleTop + optionsElement.clientHeight;
+    const scrollPadding = 3;
+    if (optionTop < visibleTop + scrollPadding) {
+      optionsElement.scrollTop = Math.max(0, optionTop - scrollPadding);
+    } else if (optionBottom > visibleBottom - scrollPadding) {
+      optionsElement.scrollTop = optionBottom - optionsElement.clientHeight + scrollPadding;
     }
   }, [activeIndex, controlId, isOpen]);
 
@@ -256,9 +258,11 @@ export function AppSelect({
       moveActive(-1);
     } else if (event.key === 'Home') {
       event.preventDefault();
+      activeIndexSourceRef.current = 'keyboard';
       setActiveIndex(firstEnabledIndex(visibleOptions));
     } else if (event.key === 'End') {
       event.preventDefault();
+      activeIndexSourceRef.current = 'keyboard';
       for (let index = visibleOptions.length - 1; index >= 0; index -= 1) {
         if (!visibleOptions[index].disabled) {
           setActiveIndex(index);
@@ -275,7 +279,7 @@ export function AppSelect({
   const dropdown = isOpen ? createPortal(
     <div
       ref={dropdownRef}
-      className="app-select-dropdown"
+      className={`app-select-dropdown${dropdownClassName ? ` ${dropdownClassName}` : ''}`}
       data-escape-guard="true"
       style={{
         top: position.top,
@@ -325,7 +329,10 @@ export function AppSelect({
               aria-selected={selected}
               disabled={option.disabled}
               onMouseEnter={() => {
-                if (!option.disabled) setActiveIndex(index);
+                if (!option.disabled) {
+                  activeIndexSourceRef.current = 'pointer';
+                  setActiveIndex(index);
+                }
               }}
               onClick={() => select(option)}
             >
@@ -388,7 +395,7 @@ export function AppSelect({
           {selectedOption?.color && (
             <span className="app-select-trigger-color" style={{ backgroundColor: selectedOption.color }} aria-hidden="true" />
           )}
-          <strong>{selectedOption?.label || selectedOption?.value || placeholder}</strong>
+          <strong>{selectedOption?.label || selectedOption?.value || value || placeholder}</strong>
           {showSelectedMeta && selectedOption?.meta && <small>{selectedOption.meta}</small>}
         </span>
         <ChevronDown size={16} aria-hidden="true" />

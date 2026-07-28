@@ -33,8 +33,8 @@ import { parseNumberExpression } from '../../../lib/numberExpression';
 import { useFlowEntries } from '../../../hooks/useFlowEntries';
 import { useSettings } from '../../../hooks/useSettings';
 import { useSnapshots } from '../../../hooks/useSnapshots';
+import { AppSelect } from '../AppSelect';
 import { AmountInput } from '../AmountInput';
-import { SearchableSelect } from '../graphs/SearchableSelect';
 import { SegmentedControl } from '../SegmentedControl';
 import { ToolModal } from './ToolModal';
 
@@ -83,23 +83,27 @@ function CurrencyField({
   options: string[];
   disabled?: boolean;
 }) {
+  const selectOptions = useMemo(
+    () => options.map((option, index) => ({ value: option, primary: index === 0 })),
+    [options]
+  );
+
   return (
     <label className="calculator-field calculator-currency-field">
       <span>{label}</span>
-      <SearchableSelect
+      <AppSelect
         ariaLabel={label}
         value={value}
         onChange={onChange}
-        options={options}
+        options={selectOptions}
         placeholder="Currency"
+        searchable
+        searchPlaceholder="Find currency…"
         width="100%"
-        dropdownWidth="180px"
+        dropdownWidth={180}
         height="34px"
         textAlign="left"
         disabled={disabled}
-        primaryOptions={options.slice(0, 1)}
-        portal
-        portalZIndex={100010}
       />
     </label>
   );

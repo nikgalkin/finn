@@ -12,6 +12,7 @@ import { SETTINGS_UPDATED_EVENT, useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { ArchiveOrganizationModal } from './components/ArchiveOrganizationModal';
+import { AppSelect, type AppSelectOption } from './components/AppSelect';
 import { CountrySelect } from './components/CountrySelect';
 import { HelpTooltip } from './components/HelpTooltip';
 import { PageLoader, Spinner } from './components/PageLoader';
@@ -142,25 +143,43 @@ type CurrencyFieldProps = {
   allowNone?: boolean; currencies: string[]; description: string; label: string; onChange: (value: string) => void; role: 'base' | 'secondary'; value: string;
 };
 
-const CurrencyField = ({ allowNone, currencies, description, label, onChange, role, value }: CurrencyFieldProps) => (
-  <div className={`currency-framework-field is-${role}`}>
-    <div className="currency-framework-field-heading">
-      <span>{role === 'base' ? '1' : '2'}</span>
-      <div>
-        <strong>{label}</strong>
-        <small>{role === 'base' ? 'Portfolio standard' : 'Optional comparison'}</small>
+const CurrencyField = ({ allowNone, currencies, description, label, onChange, role, value }: CurrencyFieldProps) => {
+  const options: AppSelectOption[] = [
+    ...(allowNone ? [{ value: '', label: 'None', description: 'Disable the comparison currency' }] : []),
+    ...currencies.map(currency => ({ value: currency, color: getCurrencyColor(currency) }))
+  ];
+
+  return (
+    <div className={`currency-framework-field is-${role}`}>
+      <div className="currency-framework-field-heading">
+        <span>{role === 'base' ? '1' : '2'}</span>
+        <div>
+          <strong>{label}</strong>
+          <small>{role === 'base' ? 'Portfolio standard' : 'Optional comparison'}</small>
+        </div>
       </div>
+      <div className="currency-framework-select">
+        <AppSelect
+          id={`settings-${role}-currency`}
+          name={`settings-${role}-currency`}
+          ariaLabel={label}
+          value={value}
+          onChange={onChange}
+          options={options}
+          placeholder="Select currency"
+          searchable={currencies.length > 8}
+          searchPlaceholder="Find currency…"
+          width="100%"
+          dropdownWidth={220}
+          dropdownAlign="left"
+          height="36px"
+          textAlign="left"
+        />
+      </div>
+      <span className="currency-framework-field-description">{description}</span>
     </div>
-    <div className="currency-framework-select">
-      <i style={{ background: value ? getCurrencyColor(value) : 'var(--text-secondary)' }} />
-      <select id={`settings-${role}-currency`} name={`settings-${role}-currency`} className="input" value={value} onChange={event => onChange(event.target.value)}>
-        {allowNone && <option value="">— None —</option>}
-        {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
-      </select>
-    </div>
-    <span className="currency-framework-field-description">{description}</span>
-  </div>
-);
+  );
+};
 
 export default function Settings() {
   const { settings, setSettings, loading } = useSettings();

@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { API_URL } from '../types';
 import type { AIResponseStyle, LocalAIContextFilter, LocalAIContextPreview, LocalAIStatus } from '../types';
-import { SearchableSelect } from './components/graphs/SearchableSelect';
+import { AppSelect } from './components/AppSelect';
 import { StickyPageHeader } from './components/StickyPageHeader';
 import { AIContextPreviewModal } from './components/AIContextPreviewModal';
 import { Spinner } from './components/PageLoader';
@@ -35,12 +35,14 @@ const CONTEXT_PRESETS = [
   { value: 'all', label: 'ALL', filter: {} }
 ] as const;
 const CONTEXT_PRESET_LABELS = CONTEXT_PRESETS.map(preset => preset.label);
+const CONTEXT_PRESET_OPTIONS = CONTEXT_PRESET_LABELS.map(value => ({ value }));
 const RESPONSE_STYLES: Array<{ value: AIResponseStyle; label: string }> = [
   { value: 'strict', label: 'Strict' },
   { value: 'balanced', label: 'Balanced' },
   { value: 'playful', label: 'Playful' }
 ];
 const RESPONSE_STYLE_LABELS = RESPONSE_STYLES.map(style => style.label);
+const RESPONSE_STYLE_OPTIONS = RESPONSE_STYLE_LABELS.map(value => ({ value }));
 
 type ContextPreset = typeof CONTEXT_PRESETS[number]['value'] | 'custom';
 const DEFAULT_CONTEXT_FILTER: LocalAIContextFilter = { months: 12 };
@@ -497,6 +499,12 @@ export default function AIChat() {
       ? status?.availableMonths?.[Math.max(0, status.availableMonths.length - contextFilter.months)] || firstAvailableMonth
       : firstAvailableMonth;
   const selectedEndMonth = contextPreset === 'custom' ? customToMonth : lastAvailableMonth;
+  const startMonthOptions = (status?.availableMonths || [])
+    .filter(month => !selectedEndMonth || month <= selectedEndMonth)
+    .map(value => ({ value }));
+  const endMonthOptions = (status?.availableMonths || [])
+    .filter(month => !selectedStartMonth || month >= selectedStartMonth)
+    .map(value => ({ value }));
 
   const handleContextPresetLabelChange = (label: string) => {
     const preset = CONTEXT_PRESETS.find(candidate => candidate.label === label);
@@ -520,29 +528,45 @@ export default function AIChat() {
           {!!status?.availableMonths.length && (
             <div className="ai-timeframe-control">
               <span>Context:</span>
-              <SearchableSelect
+              <AppSelect
+                ariaLabel="AI context period"
                 value={selectedContextLabel}
                 onChange={handleContextPresetLabelChange}
-                options={CONTEXT_PRESET_LABELS}
+                options={CONTEXT_PRESET_OPTIONS}
                 placeholder="Period"
-                showSearch={false}
                 width="84px"
-                dropdownWidth="96px"
+                dropdownWidth={112}
+                height="28px"
+                textAlign="center"
                 disabled={generating || statusLoading}
               />
-              <SearchableSelect
+              <AppSelect
+                ariaLabel="AI context start month"
                 value={selectedStartMonth}
                 onChange={value => updateCustomRange(value, selectedEndMonth)}
-                options={status.availableMonths}
+                options={startMonthOptions}
                 placeholder="Start"
+                searchable
+                searchPlaceholder="Find month…"
+                width="100px"
+                dropdownWidth={156}
+                height="28px"
+                textAlign="center"
                 disabled={generating || statusLoading}
               />
               <span className="ai-timeframe-arrow">➔</span>
-              <SearchableSelect
+              <AppSelect
+                ariaLabel="AI context end month"
                 value={selectedEndMonth}
                 onChange={value => updateCustomRange(selectedStartMonth, value)}
-                options={status.availableMonths.filter(month => !selectedStartMonth || month >= selectedStartMonth)}
+                options={endMonthOptions}
                 placeholder="End"
+                searchable
+                searchPlaceholder="Find month…"
+                width="100px"
+                dropdownWidth={156}
+                height="28px"
+                textAlign="center"
                 disabled={generating || statusLoading}
               />
             </div>
@@ -580,14 +604,16 @@ export default function AIChat() {
             </div>
             <div className="ai-response-style-control">
               <span>Tone:</span>
-              <SearchableSelect
+              <AppSelect
+                ariaLabel="AI response tone"
                 value={selectedResponseStyleLabel}
                 onChange={handleResponseStyleChange}
-                options={RESPONSE_STYLE_LABELS}
+                options={RESPONSE_STYLE_OPTIONS}
                 placeholder="Tone"
-                showSearch={false}
                 width="92px"
-                dropdownWidth="110px"
+                dropdownWidth={132}
+                height="28px"
+                textAlign="center"
                 disabled={generating}
               />
             </div>

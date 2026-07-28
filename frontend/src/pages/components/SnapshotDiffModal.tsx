@@ -14,7 +14,7 @@ import { isTextInputTarget } from '../../lib/hotkeys';
 import { FlowNetSummary } from './FlowNetSummary';
 import { HelpTooltip } from './HelpTooltip';
 import { ModalPortal } from './ModalPortal';
-import { SearchableSelect } from './graphs/SearchableSelect';
+import { AppSelect } from './AppSelect';
 
 type DiffRateNode = {
   key: string;
@@ -296,8 +296,19 @@ export function SnapshotDiffModal({
   onScrollTopChangeRef.current = onScrollTopChange;
   const selectedCurrent = snapshots.find(snapshot => snapshot.month === currentMonth) || current;
   const selectedPrevious = snapshots.find(snapshot => snapshot.month === previousMonth) || null;
-  const availableMonths = snapshots.map(snapshot => snapshot.month);
-  const toOptions = availableMonths.filter(month => !selectedPrevious || month >= selectedPrevious.month);
+  const availableMonths = useMemo(() => snapshots.map(snapshot => snapshot.month), [snapshots]);
+  const availableMonthOptions = useMemo(
+    () => availableMonths.map(value => ({ value })),
+    [availableMonths]
+  );
+  const toOptions = useMemo(
+    () => availableMonths.filter(month => !selectedPrevious || month >= selectedPrevious.month),
+    [availableMonths, selectedPrevious]
+  );
+  const toMonthOptions = useMemo(
+    () => toOptions.map(value => ({ value })),
+    [toOptions]
+  );
 
   const treeDiffData = useMemo(
     () => buildTreeDiffData(selectedCurrent, selectedPrevious, onlyChanges),
@@ -380,27 +391,33 @@ export function SnapshotDiffModal({
         <div className="snapshot-diff-header mb-3">
           <div className="snapshot-diff-period-picker">
             <span>From</span>
-            <SearchableSelect
+            <AppSelect
               ariaLabel="Diff start month"
               value={selectedPrevious?.month || ''}
               onChange={handlePreviousMonthChange}
-              options={availableMonths}
+              options={availableMonthOptions}
               placeholder="Select"
+              searchable
+              searchPlaceholder="Find month…"
               width="104px"
-              dropdownWidth="132px"
+              dropdownWidth={156}
               height="24px"
+              textAlign="center"
             />
             <span aria-hidden="true" className="snapshot-diff-period-arrow">→</span>
             <span>To</span>
-            <SearchableSelect
+            <AppSelect
               ariaLabel="Diff end month"
               value={selectedCurrent.month}
               onChange={handleCurrentMonthChange}
-              options={toOptions}
+              options={toMonthOptions}
               placeholder="Select"
+              searchable
+              searchPlaceholder="Find month…"
               width="104px"
-              dropdownWidth="132px"
+              dropdownWidth={156}
               height="24px"
+              textAlign="center"
             />
           </div>
           <h3>Snapshot Diff</h3>
