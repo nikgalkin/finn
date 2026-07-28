@@ -357,6 +357,30 @@ func convertAIAmount(amount float64, from, to string, rates map[string]any, base
 	return amount * sourceRate / targetRate
 }
 
+// normalizeAIRates mirrors normalizeRates on the frontend: the base currency is
+// pinned to 1 so a snapshot quoted in another currency still converts, and both
+// sides read the same numbers out of the same snapshot.
+func normalizeAIRates(rates map[string]any, baseCurrency string) map[string]any {
+	normalized := make(map[string]any, len(rates)+1)
+	for currency, rate := range rates {
+		normalized[currency] = numberValue(rate)
+	}
+
+	baseRate := numberValue(normalized[baseCurrency])
+	if baseRate <= 0 {
+		normalized[baseCurrency] = float64(1)
+		return normalized
+	}
+	if baseRate == 1 {
+		return normalized
+	}
+
+	for currency, rate := range normalized {
+		normalized[currency] = numberValue(rate) / baseRate
+	}
+	return normalized
+}
+
 func validateAISnapshotRates(data aiSnapshotData, baseCurrency, secondaryCurrency string) error {
 	for _, organization := range data.Organizations {
 		for _, balance := range organization.Balances {
@@ -729,17 +753,16 @@ func buildFinancialContext(db *sql.DB, filter aiContextFilter) (aiContextInfo, e
 		if err := decoder.Decode(&parsed); err != nil {
 			return aiContextInfo{}, fmt.Errorf("decode snapshot %s: %w", month, err)
 		}
+		parsed.Rates = normalizeAIRates(parsed.Rates, baseCurrency)
 		if err := validateAISnapshotRates(parsed, baseCurrency, secondaryCurrency); err != nil {
 			return aiContextInfo{}, fmt.Errorf("snapshot %s: %w", month, err)
 		}
-		snapshotData := json.RawMessage(rawData)
 		if organizationAnonymizer != nil {
 			anonymizeAISnapshot(&parsed, organizationAnonymizer)
-			anonymizedData, err := json.Marshal(parsed)
-			if err != nil {
-				return aiContextInfo{}, fmt.Errorf("anonymize snapshot %s: %w", month, err)
-			}
-			snapshotData = anonymizedData
+		}
+		snapshotData, err := json.Marshal(parsed)
+		if err != nil {
+			return aiContextInfo{}, fmt.Errorf("encode snapshot %s: %w", month, err)
 		}
 		derived := deriveAISnapshot(parsed, baseCurrency, secondaryCurrency)
 		dataset.Snapshots = append(dataset.Snapshots, aiContextSnapshot{

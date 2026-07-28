@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { API_URL, type AppSettings, type Snapshot, type SnapshotDraftData } from '../../types';
 import { useSettings } from '../../hooks/useSettings';
+import { normalizeRates } from '../../lib/finance';
 
-const initialSnapshotData: SnapshotDraftData = { comment: '', rates: { USD: 90, EUR: 100 }, organizations: [] };
+const initialSnapshotData: SnapshotDraftData = { comment: '', rates: {}, organizations: [] };
 
 type UseSnapshotEditorDataProps = { isCopy: boolean; isNew: boolean; month?: string; sourceMonth?: string };
 
@@ -28,6 +29,7 @@ const withNormalizedSnapshotData = (
   excludeArchived = false
 ): SnapshotDraftData => ({
   ...snapshotData,
+  rates: normalizeRates(snapshotData.rates || {}, settings.baseCurrency || 'RUB'),
   organizations: (snapshotData.organizations || [])
     .filter(org => {
       if (!excludeArchived) return true;

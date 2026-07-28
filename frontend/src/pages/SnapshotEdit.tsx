@@ -17,6 +17,7 @@ import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { copyFlowPeriodEntries } from '../lib/cashFlow';
+import { normalizeRates } from '../lib/finance';
 import { normalizeSnapshotAmounts } from '../lib/snapshotAmounts';
 import { removeSnapshotDraft } from '../lib/snapshotDraftStorage';
 import {
@@ -373,14 +374,13 @@ export default function SnapshotEdit() {
     });
 
     const baseCur = settings.baseCurrency || 'RUB';
+    const normalizedRates = normalizeRates(data.rates, baseCur);
     const missingRates: string[] = [];
 
     usedCurrencies.forEach(curr => {
-      if (curr !== baseCur) {
-        const rate = Number(data.rates[curr]);
-        if (isNaN(rate) || rate <= 0) {
-          missingRates.push(curr);
-        }
+      const rate = normalizedRates[curr];
+      if (!Number.isFinite(rate) || rate <= 0) {
+        missingRates.push(curr);
       }
     });
 
@@ -393,6 +393,7 @@ export default function SnapshotEdit() {
 
     const snapshotData: SnapshotData = {
       ...data,
+      rates: normalizedRates,
       organizations: normalizedOrganizations.map(org => {
         if (org.country) return org;
         const configured = settings.organizations.find(organization => (
@@ -487,17 +488,17 @@ export default function SnapshotEdit() {
       const newRates = { ...prev.rates };
 
       Object.keys(newRates).forEach(currency => {
-        if (!autoFetchList.has(currency.toUpperCase())) return;
+        if (currency.toUpperCase() === base || !autoFetchList.has(currency.toUpperCase())) return;
 
         const sourceCurrency = currency === 'USDT' && !normalizedRates.USDT ? 'USD' : currency;
         const fetchedRate = normalizedRates[sourceCurrency];
 
-        if (currency === base) {
-          newRates[currency] = 1;
-        } else if (Number.isFinite(fetchedRate) && fetchedRate > 0) {
+        if (Number.isFinite(fetchedRate) && fetchedRate > 0) {
           newRates[currency] = 1 / fetchedRate;
         }
       });
+
+      newRates[base] = 1;
 
       return { ...prev, rates: newRates };
     });

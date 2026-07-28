@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
 import { API_URL } from '../types';
 import type { ParsedSnapshot, Snapshot } from '../types';
+import { normalizeSnapshotRates } from '../lib/finance';
 
 type SortDirection = 'asc' | 'desc';
 
 type UseSnapshotsOptions = {
   sort?: SortDirection;
+  baseCurrency: string;
 };
 
-const parseSnapshot = (snapshot: Snapshot): ParsedSnapshot => ({
+const parseSnapshot = (snapshot: Snapshot, baseCurrency: string): ParsedSnapshot => normalizeSnapshotRates({
   ...snapshot,
   data: JSON.parse(snapshot.data)
-});
+}, baseCurrency);
 
 const sortSnapshots = (snapshots: ParsedSnapshot[], direction: SortDirection) => {
   return [...snapshots].sort((a, b) => {
@@ -20,8 +22,8 @@ const sortSnapshots = (snapshots: ParsedSnapshot[], direction: SortDirection) =>
   });
 };
 
-export function useSnapshots(options: UseSnapshotsOptions = {}) {
-  const { sort = 'asc' } = options;
+export function useSnapshots(options: UseSnapshotsOptions) {
+  const { sort = 'asc', baseCurrency } = options;
   const [snapshots, setSnapshots] = useState<ParsedSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -33,7 +35,7 @@ export function useSnapshots(options: UseSnapshotsOptions = {}) {
       .then(res => res.json())
       .then((data: Snapshot[]) => {
         if (cancelled) return;
-        setSnapshots(sortSnapshots((data || []).map(parseSnapshot), sort));
+        setSnapshots(sortSnapshots((data || []).map(snapshot => parseSnapshot(snapshot, baseCurrency)), sort));
       })
       .catch(err => {
         if (cancelled) return;
@@ -47,7 +49,7 @@ export function useSnapshots(options: UseSnapshotsOptions = {}) {
     return () => {
       cancelled = true;
     };
-  }, [sort]);
+  }, [sort, baseCurrency]);
 
   return { snapshots, setSnapshots, loading, error };
 }

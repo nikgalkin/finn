@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Plus, Search } from 'lucide-react';
 
 type SearchableSelectProps = {
   id?: string;
+  name?: string;
   ariaLabel?: string;
   value: string;
   onChange: (val: string) => void;
@@ -32,7 +33,9 @@ const OptionDot = ({ color }: { color?: string }) => color
 
 const optionsStyle = { overflowY: 'auto' as const, flex: 1, display: 'flex', flexDirection: 'column' as const, gap: '2px' };
 
-export function SearchableSelect({ id, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false, portalZIndex = 10000, allowCustom = false, primaryOptions, optionColor }: SearchableSelectProps) {
+export function SearchableSelect({ id, name, ariaLabel, value, onChange, options, placeholder, showSearch = true, width = '100px', dropdownWidth = '140px', height = '28px', disabled = false, textAlign = 'center', portal = false, portalZIndex = 10000, allowCustom = false, primaryOptions, optionColor }: SearchableSelectProps) {
+  const generatedId = `searchable-select-${useId()}`;
+  const controlId = id || generatedId;
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [portalPosition, setPortalPosition] = useState({ top: 0, left: 0 });
@@ -111,6 +114,8 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
         <div style={{ position: 'relative', padding: '2px', marginBottom: '4px' }}>
           <Search size={12} style={searchIconStyle} />
           <input
+            id={`${controlId}-search`}
+            name={name || `${controlId}-search`}
             type="text"
             aria-label={`${ariaLabel || placeholder} search`}
             value={search}
@@ -184,7 +189,7 @@ export function SearchableSelect({ id, ariaLabel, value, onChange, options, plac
   return (
     <div ref={containerRef} style={{ position: 'relative', width, opacity: disabled ? 0.5 : 1 }}>
       <div
-        id={id}
+        id={controlId}
         onClick={() => {
           if (disabled) return;
           updatePortalPosition();

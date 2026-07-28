@@ -14,6 +14,7 @@ import { useSettings } from './hooks/useSettings';
 import { pruneExpiredSnapshotDrafts } from './lib/snapshotDraftStorage';
 import { requestUnsavedNavigation } from './lib/unsavedNavigation';
 import { useVisualPreferences } from './hooks/useVisualPreferences';
+import { HistoryScrollRestoration } from './lib/historyEntryState';
 
 const loadDeferredRoutes = () => import('./pages/routeChunks/DeferredRoutes');
 const SnapshotEdit = lazy(() => loadDeferredRoutes().then(module => ({ default: module.SnapshotEdit })));
@@ -191,6 +192,7 @@ function App() {
 
   return (
     <div className="container">
+      <HistoryScrollRestoration />
       <header className="app-header">
         <div className="flex items-center gap-2">
           <Link to="/" className="app-brand flex items-center gap-2" aria-label="Finn Tracker home">

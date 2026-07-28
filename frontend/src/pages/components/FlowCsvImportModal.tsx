@@ -66,6 +66,8 @@ export function FlowCsvImportModal({ preview, importing, error, importDuplicates
               {preview.duplicates.length > 0 && (
                 <label className="cash-flow-import-duplicates-toggle">
                   <input
+                    id="cash-flow-import-duplicates"
+                    name="cash-flow-import-duplicates"
                     type="checkbox"
                     checked={importDuplicates}
                     onChange={event => onImportDuplicatesChange(event.target.checked)}

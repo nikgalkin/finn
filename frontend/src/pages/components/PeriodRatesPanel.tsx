@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Plus, RefreshCw } from 'lucide-react';
 import type { AppSettings, SnapshotData } from '../../types';
+import { formatExchangeRate } from '../../lib/format';
 import { Spinner } from './PageLoader';
 
 type PeriodRatesPanelProps = {
@@ -21,13 +22,10 @@ const toExchangeRateNumber = (value: number | string) => {
   return normalized ? Number(normalized) : 0;
 };
 
-const formatExchangeRate = (value: number) => {
+const formatRateInput = (value: number) => {
   if (value === 0 || !Number.isFinite(value)) return '';
   const displayedValue = value > 0 && value < 1 ? 1 / value : value;
-  return new Intl.NumberFormat('en-US', {
-    useGrouping: false,
-    maximumFractionDigits: 1
-  }).format(displayedValue);
+  return formatExchangeRate(displayedValue, false);
 };
 
 const parseExchangeRate = (value: string) => {
@@ -47,7 +45,7 @@ type ExchangeRateInputProps = {
 function ExchangeRateInput({ currency, referenceCurrency, value, onChange }: ExchangeRateInputProps) {
   const numericValue = toExchangeRateNumber(value);
   const inverted = Number.isFinite(numericValue) && numericValue > 0 && numericValue < 1;
-  const formattedValue = formatExchangeRate(numericValue);
+  const formattedValue = formatRateInput(numericValue);
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [draft, setDraft] = useState(formattedValue);
@@ -71,7 +69,7 @@ function ExchangeRateInput({ currency, referenceCurrency, value, onChange }: Exc
 
     const storedValue = inverted && parsed > 0 ? 1 / parsed : parsed;
     onChange(storedValue);
-    setDraft(formatExchangeRate(storedValue));
+    setDraft(formatRateInput(storedValue));
   };
 
   const preciseValue = Number.isFinite(numericValue)
@@ -80,6 +78,8 @@ function ExchangeRateInput({ currency, referenceCurrency, value, onChange }: Exc
 
   return (
     <input
+      id={`snapshot-exchange-rate-${currency}`}
+      name={`snapshot-exchange-rate-${currency}`}
       type="text"
       inputMode="decimal"
       className="input"
@@ -127,6 +127,8 @@ export function PeriodRatesPanel({
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
           <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium text-center">Month</div>
           <input
+            id="snapshot-month"
+            name="snapshot-month"
             className="input w-full text-center cash-flow-month-input"
             type="month"
             value={currentMonth}
@@ -163,22 +165,41 @@ export function PeriodRatesPanel({
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', flex: 1, alignContent: 'flex-start' }}>
-          {Object.entries(rates).map(([currency, rate]) => (
-            <div key={currency} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
-              <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                <span>{currency}</span>
-                {toExchangeRateNumber(rate) > 0 && toExchangeRateNumber(rate) < 1 && (
-                  <small style={{ color: '#60a5fa', fontSize: '9px', fontWeight: 700 }}>{settings.baseCurrency || 'RUB'} → {currency}</small>
+          {Object.entries(rates).map(([currency, rate]) => {
+            const isBaseCurrency = currency === (settings.baseCurrency || 'RUB');
+
+            return (
+              <div key={currency} style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
+                <div className="text-xs text-[var(--text-secondary)] mb-1 font-medium" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                  <span>{currency}</span>
+                  {isBaseCurrency
+                    ? <small style={{ color: 'var(--text-secondary)', fontSize: '9px', fontWeight: 700 }}>BASE</small>
+                    : toExchangeRateNumber(rate) > 0 && toExchangeRateNumber(rate) < 1 && (
+                      <small style={{ color: '#60a5fa', fontSize: '9px', fontWeight: 700 }}>{settings.baseCurrency || 'RUB'} → {currency}</small>
+                    )}
+                </div>
+                {isBaseCurrency ? (
+                  <input
+                    id={`snapshot-exchange-rate-${currency}`}
+                    name={`snapshot-exchange-rate-${currency}`}
+                    className="input"
+                    value="1"
+                    readOnly
+                    aria-label={`${currency} exchange rate`}
+                    title={`${currency} is the base currency, so every other rate is expressed in it.`}
+                    style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                  />
+                ) : (
+                  <ExchangeRateInput
+                    currency={currency}
+                    referenceCurrency={settings.baseCurrency || 'RUB'}
+                    value={rate}
+                    onChange={value => onRateChange(currency, value)}
+                  />
                 )}
               </div>
-              <ExchangeRateInput
-                currency={currency}
-                referenceCurrency={settings.baseCurrency || 'RUB'}
-                value={rate}
-                onChange={value => onRateChange(currency, value)}
-              />
-            </div>
-          ))}
+            );
+          })}
 
           <div style={{ flex: '1 1 100px', minWidth: '100px', maxWidth: '150px' }}>
             <div className="text-xs mb-1 font-medium" aria-hidden="true" style={{ visibility: 'hidden' }}>Action</div>

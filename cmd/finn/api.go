@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -54,20 +55,10 @@ type SnapshotRequest struct {
 	DurationSeconds int    `json:"duration_seconds"`
 }
 
-// isLocalRequest guards endpoints that must never be reachable from another
-// origin. CORS allows all origins, so without this check any page open in the
-// browser could drive these endpoints against the local server.
-func isLocalRequest(r *http.Request) bool {
-	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !net.ParseIP(remoteHost).IsLoopback() {
-		return false
-	}
-
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true
-	}
-
+// isLoopbackOrigin reports whether a browser Origin header belongs to this
+// machine. It is the CORS gate, so a page on any other origin cannot read a
+// response even when the request itself reaches the server.
+func isLoopbackOrigin(origin string) bool {
 	parsedOrigin, err := url.Parse(origin)
 	if err != nil {
 		return false
@@ -82,21 +73,57 @@ func isLocalRequest(r *http.Request) bool {
 	return originIP != nil && originIP.IsLoopback()
 }
 
+// isLocalRequest guards endpoints that must never be reachable from another
+// origin. Without this check any page open in the browser could drive these
+// endpoints against the local server, whatever CORS lets it read back.
+func isLocalRequest(r *http.Request) bool {
+	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || !net.ParseIP(remoteHost).IsLoopback() {
+		return false
+	}
+
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+
+	return isLoopbackOrigin(origin)
+}
+
+// newCORSMiddleware is the outer layer: only a page served from this machine may
+// read a response. The loopback check on the API group is what actually blocks a
+// foreign origin from driving the endpoints.
+func newCORSMiddleware() gin.HandlerFunc {
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowOriginFunc = isLoopbackOrigin
+	return cors.New(corsConfig)
+}
+
+// requireLocalRequest keeps every endpoint of a group reachable only from this
+// machine. The snapshot, settings, flow and AI endpoints all read or write the
+// user's financial data, so a page on any other origin must not reach them.
+func requireLocalRequest(message string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isLocalRequest(c.Request) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": message})
+			return
+		}
+		c.Next()
+	}
+}
+
 func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBackup func() BackupReport) {
-	r.GET("/api/version", func(c *gin.Context) {
+	api := r.Group("/api")
+	api.Use(requireLocalRequest("this API is only available locally"))
+
+	api.GET("/version", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"version": version})
 	})
 
-	api := r.Group("/api")
 	setupAIAPI(api, db)
 	setupFlowAPI(api, db)
 
 	api.POST("/shutdown", func(c *gin.Context) {
-		if !isLocalRequest(c.Request) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "shutdown is only available locally"})
-			return
-		}
-
 		if c.Query("skip_backup") == "true" {
 			c.JSON(http.StatusAccepted, gin.H{"status": "shutting_down", "backup": gin.H{"status": "bypassed"}})
 			c.Writer.Flush()

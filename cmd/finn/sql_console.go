@@ -353,15 +353,7 @@ func (console *SQLConsole) ensureBackup() *BackupReport {
 
 func (console *SQLConsole) registerRoutes(api *gin.RouterGroup) {
 	group := api.Group("/sql")
-	group.Use(func(c *gin.Context) {
-		// CORS is wide open for convenience, so the loopback+Origin check is what
-		// stops any random site in the browser from driving this endpoint.
-		if !isLocalRequest(c.Request) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "the SQL console is only available locally"})
-			return
-		}
-		c.Next()
-	})
+	group.Use(requireLocalRequest("the SQL console is only available locally"))
 
 	group.GET("/schema", console.handleSchema)
 	group.POST("/exec", console.handleExec)

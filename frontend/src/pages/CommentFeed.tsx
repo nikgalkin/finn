@@ -16,6 +16,7 @@ import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR, format
 import { PageLoader } from './components/PageLoader';
 import { SegmentedControl } from './components/SegmentedControl';
 import { StickyPageHeader } from './components/StickyPageHeader';
+import { useSnapshotDiffHistory } from './hooks/useSnapshotDiffHistory';
 
 type FeedMode = 'all' | 'comments';
 
@@ -485,12 +486,12 @@ const buildFeedPeriods = (snapshots: ParsedSnapshot[], feedItems: FeedItem[], mo
 
 export default function CommentFeed() {
   const { settings } = useSettings();
-  const { snapshots, loading } = useSnapshots({ sort: 'asc' });
   const baseCurrency = settings.baseCurrency || 'RUB';
+  const { snapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
   const navigate = useNavigate();
   const [mode, setMode] = useState<FeedMode>('all');
-  const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
-  const [onlyChanges, setOnlyChanges] = useState(true);
+  const diffHistory = useSnapshotDiffHistory('comment-feed-diff', snapshots);
+  const diffModalData = diffHistory.data;
   const { entries: flowEntries } = useFlowEntries(Boolean(settings.cashFlow?.enabled && diffModalData));
   useEscapeToDashboard({ blocked: Boolean(diffModalData) });
 
@@ -508,16 +509,16 @@ export default function CommentFeed() {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        setDiffModalData(null);
+        diffHistory.close();
       } else if (event.code === 'KeyD') {
         event.preventDefault();
-        setOnlyChanges(previous => !previous);
+        diffHistory.toggleOnlyChanges();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [diffModalData]);
+  }, [diffHistory, diffModalData]);
 
   const openSnapshot = (item: FeedItem) => {
     if (item.targetOrgName) {
@@ -650,7 +651,7 @@ export default function CommentFeed() {
                     ? `Compare with ${period.previousSnapshot.month}`
                     : snapshots.length > 1 ? 'Choose a comparison period' : 'Not enough snapshots to compare'}
                   disabled={snapshots.length < 2}
-                  onClick={() => setDiffModalData({ current: period.snapshot, previous: period.previousSnapshot })}
+                  onClick={() => diffHistory.open(period.snapshot, period.previousSnapshot)}
                 >
                   <ArrowLeftRight size={15} /> Diff
                 </button>
@@ -670,9 +671,12 @@ export default function CommentFeed() {
           snapshots={snapshots}
           cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
           flowEntries={flowEntries}
-          onlyChanges={onlyChanges}
-          onOnlyChangesChange={setOnlyChanges}
-          onClose={() => setDiffModalData(null)}
+          onlyChanges={diffHistory.onlyChanges}
+          onOnlyChangesChange={diffHistory.setOnlyChanges}
+          scrollTop={diffHistory.scrollTop}
+          onScrollTopChange={diffHistory.persistScrollTop}
+          onPeriodChange={diffHistory.setPeriod}
+          onClose={diffHistory.close}
         />
       )}
     </div>

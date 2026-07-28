@@ -11,10 +11,10 @@
 
 ### Overview
 
-![Finn overview](../media/overview.jpg)
+![Finn overview](media/overview.jpg)
 
 ### History and advanced analytics
 
-![Finn history and analytics](../media/history.jpg)
+![Finn history and analytics](media/history.jpg)
 
 [Back to the README](../README.md)

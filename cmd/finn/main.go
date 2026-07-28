@@ -16,7 +16,6 @@ import (
 	"time"
 
 	appassets "finn"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -52,7 +51,7 @@ func main() {
 }
 
 func runApp(opts appOptions) error {
-	cfg := LoadConfig()
+	cfg := LoadConfig(opts.configPath)
 
 	// If --force-demo is active, it automatically implies --demo mode
 	isDemoMode := opts.demo || opts.forceDemo
@@ -88,10 +87,7 @@ func runApp(opts appOptions) error {
 		}
 	}
 
-	// CORS configuration
-	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowAllOrigins = true
-	r.Use(cors.New(corsConfig))
+	r.Use(newCORSMiddleware())
 
 	// Register API endpoints from api.go
 	setupAPI(r, db, requestShutdown, func() BackupReport {

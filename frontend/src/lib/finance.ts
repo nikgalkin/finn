@@ -67,6 +67,40 @@ export const getRateToReference = (
   return toNumber(rates[currency]);
 };
 
+export const monthsBetween = (fromMonth: string, toMonth: string) => {
+  const [fromYear, fromMonthNumber] = fromMonth.split('-').map(Number);
+  const [toYear, toMonthNumber] = toMonth.split('-').map(Number);
+  if (![fromYear, fromMonthNumber, toYear, toMonthNumber].every(Number.isFinite)) return 0;
+
+  return (toYear - fromYear) * 12 + (toMonthNumber - fromMonthNumber);
+};
+
+export const normalizeRates = (
+  rates: Record<string, number | string>,
+  baseCurrency: string
+): Record<string, number> => {
+  const numericRates: Record<string, number> = {};
+  Object.entries(rates || {}).forEach(([currency, rate]) => {
+    numericRates[currency] = toNumber(rate);
+  });
+
+  const baseRate = numericRates[baseCurrency];
+  if (!(baseRate > 0)) return { ...numericRates, [baseCurrency]: 1 };
+  if (baseRate === 1) return numericRates;
+
+  return Object.fromEntries(Object.entries(numericRates).map(
+    ([currency, rate]) => [currency, rate / baseRate]
+  ));
+};
+
+export const normalizeSnapshotRates = <T extends { data: { rates: Record<string, number | string> } }>(
+  snapshot: T,
+  baseCurrency: string
+): T => ({
+  ...snapshot,
+  data: { ...snapshot.data, rates: normalizeRates(snapshot.data.rates, baseCurrency) }
+});
+
 export const convertAmount = (
   amount: number,
   fromCurrency: string,

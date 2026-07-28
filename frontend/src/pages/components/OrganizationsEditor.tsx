@@ -127,6 +127,8 @@ export function OrganizationsEditor({
                 <div className="flex-1 flex justify-center">
                   <div className="flex items-center gap-2">
                     <select
+                      id={`snapshot-organization-${org.id}`}
+                      name={`snapshot-organization-${org.id}`}
                       className="input"
                       value={org.name}
                       onChange={event => onUpdateOrganizationField(org.id, 'name', event.target.value)}
@@ -198,10 +200,13 @@ export function OrganizationsEditor({
                         <AmountInput
                           value={balance.amount}
                           onChange={value => onUpdateBalance(org.id, index, 'amount', value)}
+                          maximumFractionDigits={8}
                         />
                       </td>
                       <td style={cellStyle}>
                         <select
+                          id={`snapshot-balance-${org.id}-${index}-currency`}
+                          name={`snapshot-balance-${org.id}-${index}-currency`}
                           className="input"
                           value={balance.currency}
                           onChange={event => onUpdateBalance(org.id, index, 'currency', event.target.value)}

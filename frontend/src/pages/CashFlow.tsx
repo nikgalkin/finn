@@ -19,7 +19,7 @@ import { FlowNetSummary } from './components/FlowNetSummary';
 import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 import { orientExchangeRate } from '../lib/finance';
-import { formatMonth } from '../lib/format';
+import { formatExchangeRate, formatMonth } from '../lib/format';
 
 type FlowMovementFilter = 'all' | FlowDirection | 'transfer';
 
@@ -60,9 +60,8 @@ const formatTaxAmount = (amount: number, currency: string) => (
 const formatTransferRate = (entry: FlowEntry) => {
   if (entry.currency === entry.toCurrency || entry.amount === 0 || entry.toAmount === 0) return '';
   const directRate = entry.toAmount / entry.amount;
-  const formatRate = (rate: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(rate);
   const displayRate = orientExchangeRate(entry.currency, entry.toCurrency, directRate);
-  return `1 ${displayRate.fromCurrency} = ${formatRate(displayRate.rate)} ${displayRate.toCurrency}`;
+  return `1 ${displayRate.fromCurrency} = ${formatExchangeRate(displayRate.rate)} ${displayRate.toCurrency}`;
 };
 
 const nextMonth = (month: string) => {
@@ -100,7 +99,7 @@ const fetchFlowEntries = async () => {
 
 export default function CashFlow() {
   const { settings, loading: settingsLoading } = useSettings();
-  const { snapshots } = useSnapshots({ sort: 'desc' });
+  const { snapshots } = useSnapshots({ sort: 'desc', baseCurrency: settings.baseCurrency || 'RUB' });
   const [searchParams] = useSearchParams();
   const [entries, setEntries] = useState<FlowEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -559,6 +558,8 @@ export default function CashFlow() {
         </div>
         <div className="flex items-center gap-2">
           <input
+            id="cash-flow-csv-file"
+            name="cash-flow-csv-file"
             ref={csvFileInputRef}
             type="file"
             accept=".csv,text/csv"
@@ -593,17 +594,17 @@ export default function CashFlow() {
                 setEndMonth(end);
               }}
             />
-            <select className="input" aria-label="Movement type" value={directionFilter} onChange={event => setDirectionFilter(event.target.value as FlowMovementFilter)} style={{ width: 'auto', minWidth: '150px' }}>
+            <select id="cash-flow-movement-type-filter" name="cash-flow-movement-type-filter" className="input" aria-label="Movement type" value={directionFilter} onChange={event => setDirectionFilter(event.target.value as FlowMovementFilter)} style={{ width: 'auto', minWidth: '150px' }}>
               <option value="all">All movements</option>
               <option value="in" disabled={!timeframeDirections.has('in')}>Incoming</option>
               <option value="out" disabled={!timeframeDirections.has('out')}>Outgoing</option>
               <option value="transfer" disabled={!timeframeDirections.has('transfer')}>Transfers</option>
             </select>
-            <select className="input" aria-label={counterpartyAriaLabel} value={counterpartyFilter} onChange={event => setCounterpartyFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
+            <select id="cash-flow-counterparty-filter" name="cash-flow-counterparty-filter" className="input" aria-label={counterpartyAriaLabel} value={counterpartyFilter} onChange={event => setCounterpartyFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
               <option value="all">{counterpartyAllLabel}</option>
               {counterparties.map(counterparty => <option key={counterparty} value={counterparty}>{counterparty}</option>)}
             </select>
-            <select className="input" aria-label="Category" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
+            <select id="cash-flow-category-filter" name="cash-flow-category-filter" className="input" aria-label="Category" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
               <option value="all">All categories</option>
               {hasUncategorizedEntries && <option value="none">No category</option>}
               {categories.map(category => <option key={category} value={category}>{category}</option>)}

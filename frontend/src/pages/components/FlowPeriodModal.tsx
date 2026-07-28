@@ -281,6 +281,8 @@ export function FlowPeriodModal({
         <div className="cash-flow-period-header">
           <div className="cash-flow-period-header-month">
             <input
+              id="cash-flow-period-month"
+              name="cash-flow-period-month"
               className="input cash-flow-month-input"
               type="month"
               aria-label="Cash Flow month"
@@ -363,7 +365,7 @@ export function FlowPeriodModal({
                     <span>Sent</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.amount} onChange={amount => updateDraft(draft.clientID, { amount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} sent amount`} />
-                      <select className="input" aria-label={`Movement ${index + 1} sent currency`} value={draft.currency} style={{ color: getCurrencyColor(draft.currency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
+                      <select id={`flow-${draft.clientID}-sent-currency`} name={`flow-${draft.clientID}-sent-currency`} className="input" aria-label={`Movement ${index + 1} sent currency`} value={draft.currency} style={{ color: getCurrencyColor(draft.currency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
                         {currencyOptions.map(currency => <option key={currency} value={currency}>{currency}</option>)}
                       </select>
                     </div>
@@ -379,7 +381,7 @@ export function FlowPeriodModal({
                     <span>Received</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.toAmount} onChange={toAmount => updateDraft(draft.clientID, { toAmount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} received amount`} />
-                      <select className="input" aria-label={`Movement ${index + 1} received currency`} value={draft.toCurrency} style={{ color: getCurrencyColor(draft.toCurrency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { toCurrency: event.target.value })}>
+                      <select id={`flow-${draft.clientID}-received-currency`} name={`flow-${draft.clientID}-received-currency`} className="input" aria-label={`Movement ${index + 1} received currency`} value={draft.toCurrency} style={{ color: getCurrencyColor(draft.toCurrency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { toCurrency: event.target.value })}>
                         {currencyOptions.map(currency => <option key={currency} value={currency}>{currency}</option>)}
                       </select>
                     </div>
@@ -402,14 +404,14 @@ export function FlowPeriodModal({
                     <span>{draft.direction === 'in' && Number(draft.taxRate) > 0 ? 'Gross amount' : 'Amount'}</span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.amount} onChange={amount => updateDraft(draft.clientID, { amount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} amount`} />
-                      <select className="input" aria-label={`Movement ${index + 1} currency`} value={draft.currency} style={{ color: getCurrencyColor(draft.currency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
+                      <select id={`flow-${draft.clientID}-currency`} name={`flow-${draft.clientID}-currency`} className="input" aria-label={`Movement ${index + 1} currency`} value={draft.currency} style={{ color: getCurrencyColor(draft.currency), fontWeight: 700 }} onChange={event => updateDraft(draft.clientID, { currency: event.target.value })}>
                         {currencyOptions.map(currency => <option key={currency} value={currency}>{currency}</option>)}
                       </select>
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-tax">
                     <span className="cash-flow-period-tax-label">Tax {draft.direction === 'in' && Number(draft.taxRate) > 0 && Number(draft.amount) > 0 && <small>−{new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(draft.amount) * Number(draft.taxRate) / 100)} {draft.currency}</small>}</span>
-                    {draft.direction === 'in' ? <div className="cash-flow-tax-rate-control"><input className="input" type="number" min="0" max="100" step="0.01" aria-label={`Movement ${index + 1} tax rate`} value={draft.taxRate} onChange={event => updateDraft(draft.clientID, { taxRate: event.target.value })} /><span>%</span></div> : <div className="cash-flow-tax-disabled">—</div>}
+                    {draft.direction === 'in' ? <div className="cash-flow-tax-rate-control"><input id={`flow-${draft.clientID}-tax-rate`} name={`flow-${draft.clientID}-tax-rate`} className="input" type="number" min="0" max="100" step="0.01" aria-label={`Movement ${index + 1} tax rate`} value={draft.taxRate} onChange={event => updateDraft(draft.clientID, { taxRate: event.target.value })} /><span>%</span></div> : <div className="cash-flow-tax-disabled">—</div>}
                   </div>
                   <div className="cash-flow-field cash-flow-period-category">
                     <span>Category</span>

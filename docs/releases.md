@@ -3,7 +3,7 @@
 Finn uses three GitHub Actions workflows:
 
 * [`ci.yml`](../.github/workflows/ci.yml) validates pull requests and pushes to `master`. It contains checks only, so pull requests do not display skipped release jobs.
-* [`auto-release.yml`](../.github/workflows/auto-release.yml) starts after a successful CI run on `master`, calculates the version, and creates the automatic tag.
+* [`auto-release.yml`](../.github/workflows/auto-release.yml) starts after a successful CI run on `master`, decides whether the push changed anything that ships, calculates the version, and creates the automatic tag.
 * [`release.yml`](../.github/workflows/release.yml) builds platform binaries and publishes the GitHub release. It can be called by the auto-release workflow or triggered by a manually pushed `v*` tag.
 
 ## Pull requests
@@ -32,6 +32,29 @@ It also tests the release-version calculation rules. A failed check stops the pi
 A push to `master` runs the same frontend and backend checks. After they pass, the auto-release workflow selects a version, creates a lightweight Git tag, and calls the release workflow directly.
 
 The release workflow is called directly because tags created with the workflow's `GITHUB_TOKEN` do not start another workflow run.
+
+### Documentation-only pushes
+
+A release only happens when something that reaches a built binary has changed. Before a version is calculated, auto-release compares the new `master` commit with the latest stable tag and drops these masks from the diff:
+
+| Mask | Reason |
+| --- | --- |
+| `*.md` | Documentation anywhere in the tree |
+| `docs/**` | Guides and the screenshots under `docs/media/` |
+| `bin/**` | Install and build scripts |
+| `build/**` | Local build output |
+| `.github/**`, `.claude/**` | Workflow and editor tooling |
+| `LICENSE`, `.gitignore` | Repository metadata |
+
+If nothing else changed, CI still validates the push, but no tag and no release are created. Everything else counts as a release, including `demo/demo.sql` and `migrations/`, because both are embedded into the binary through [`assets.go`](../assets.go).
+
+The masks are Git pathspecs, so `*` also crosses directory separators: `*.md` covers `docs/usage.md` as well as `README.md`. They live in `env.RELEASE_IGNORE_PATHS` at the top of the workflow.
+
+Since `bin/**` is excluded, a change to `bin/build.sh` alone does not ship: the new build logic reaches users with the next code release, or immediately through a manually pushed tag.
+
+The comparison uses the latest stable tag rather than the previous commit, so documentation pushes never swallow a later code change: once code lands, the accumulated range contains it and the release goes out.
+
+A manually pushed tag always releases, whatever the diff contains.
 
 ### Version selection
 

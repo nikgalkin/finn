@@ -28,13 +28,7 @@ type toolsAPI struct {
 func setupToolsAPI(api *gin.RouterGroup, cfg *Config, db *sql.DB, isDemo bool) {
 	handler := &toolsAPI{cfg: cfg, db: db, isDemo: isDemo}
 	group := api.Group("/tools")
-	group.Use(func(c *gin.Context) {
-		if !isLocalRequest(c.Request) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "tools are only available locally"})
-			return
-		}
-		c.Next()
-	})
+	group.Use(requireLocalRequest("tools are only available locally"))
 
 	group.GET("/health", handler.handleHealth)
 	group.GET("/backups", handler.handleBackupList)

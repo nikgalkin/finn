@@ -153,7 +153,7 @@ const CurrencyField = ({ allowNone, currencies, description, label, onChange, ro
     </div>
     <div className="currency-framework-select">
       <i style={{ background: value ? getCurrencyColor(value) : 'var(--text-secondary)' }} />
-      <select className="input" value={value} onChange={event => onChange(event.target.value)}>
+      <select id={`settings-${role}-currency`} name={`settings-${role}-currency`} className="input" value={value} onChange={event => onChange(event.target.value)}>
         {allowNone && <option value="">— None —</option>}
         {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
       </select>
@@ -636,6 +636,8 @@ export default function Settings() {
                 />
               )}
               <input
+                id={`settings-${list}-${i}`}
+                name={`settings-${list}-${i}`}
                 className="input"
                 aria-label={`${title} item ${i + 1}`}
                 value={item}
@@ -696,6 +698,8 @@ export default function Settings() {
           return (
             <div key={index} className="flex gap-2 items-center">
               <input
+                id={`settings-organization-${index}-name`}
+                name={`settings-organization-${index}-name`}
                 className="input"
                 value={organization.name}
                 placeholder="Organization name"
@@ -832,6 +836,8 @@ export default function Settings() {
                   return (
                     <div key={index} className="cash-flow-source-setting-row">
                       <input
+                        id={`settings-cash-flow-source-${index}`}
+                        name={`settings-cash-flow-source-${index}`}
                         className="input" value={source} disabled={!settings.cashFlow?.enabled}
                         onChange={event => updateFlowSource(index, event.target.value)}
                         placeholder="e.g. Employer or landlord"
@@ -839,6 +845,8 @@ export default function Settings() {
                       />
                       <div className="cash-flow-tax-rate-setting">
                         <input
+                          id={`settings-cash-flow-source-${index}-tax-rate`}
+                          name={`settings-cash-flow-source-${index}-tax-rate`}
                           className="input" type="number" min="0" max="100" step="0.01"
                           aria-label={`${source || `Source ${index + 1}`} default tax rate`}
                           value={settings.cashFlow?.taxRates?.[source] ?? 0}
@@ -879,6 +887,8 @@ export default function Settings() {
                   return (
                     <div key={index} className="cash-flow-simple-setting-row">
                       <input
+                        id={`settings-cash-flow-category-${index}`}
+                        name={`settings-cash-flow-category-${index}`}
                         className="input" value={category} disabled={!settings.cashFlow?.enabled}
                         onChange={event => updateFlowCategory(index, event.target.value)}
                         placeholder="e.g. Debt repayment"
@@ -910,6 +920,8 @@ export default function Settings() {
               <div className="cash-flow-field">
                 <label>Provider</label>
                 <select
+                  id="settings-local-ai-provider"
+                  name="settings-local-ai-provider"
                   className="input" value={settings.localAI?.provider || 'lmstudio'} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ provider: event.target.value as LocalAISettings['provider'] })}
                 >
@@ -920,6 +932,8 @@ export default function Settings() {
               <div className="cash-flow-field">
                 <label>Server URL</label>
                 <input
+                  id="settings-local-ai-server-url"
+                  name="settings-local-ai-server-url"
                   className="input" value={settings.localAI?.baseUrl || 'http://127.0.0.1:1234/v1'} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ baseUrl: event.target.value })}
                   placeholder="http://127.0.0.1:1234/v1"
@@ -928,6 +942,8 @@ export default function Settings() {
               <div className="cash-flow-field">
                 <label>Chat model</label>
                 <select
+                  id="settings-local-ai-model"
+                  name="settings-local-ai-model"
                   className="input" value={settings.localAI?.model || ''} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ model: event.target.value })}
                 >

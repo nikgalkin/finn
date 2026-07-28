@@ -593,6 +593,8 @@ export default function AIChat() {
             </div>
             <label className="ai-hide-organizations-control" title="Replace organization names with Organization1, Organization2, and so on">
               <input
+                id="ai-hide-organizations"
+                name="ai-hide-organizations"
                 type="checkbox"
                 checked={hideOrganizations}
                 onChange={event => handleHideOrganizationsChange(event.target.checked)}
@@ -692,6 +694,8 @@ export default function AIChat() {
 
           <div className="ai-composer">
             <textarea
+              id="ai-message"
+              name="ai-message"
               className="input"
               value={draft}
               onChange={event => setDraft(event.target.value)}

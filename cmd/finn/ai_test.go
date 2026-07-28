@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -254,6 +255,37 @@ func TestDeriveAISnapshotSumsDuplicateOrganizations(t *testing.T) {
 	}
 	if metrics.CurrencyValues["RUB"] != 350 || metrics.CurrencyShares["RUB"] != 100 {
 		t.Fatalf("unexpected currency metrics: values=%+v shares=%+v", metrics.CurrencyValues, metrics.CurrencyShares)
+	}
+}
+
+func TestNormalizeAIRatesPinsTheBaseCurrency(t *testing.T) {
+	implicitBase := normalizeAIRates(map[string]any{"USD": 90.0, "EUR": 100.0}, "RUB")
+	if implicitBase["RUB"] != 1.0 || implicitBase["USD"] != 90.0 {
+		t.Fatalf("implicit base currency was not pinned: %+v", implicitBase)
+	}
+
+	rescaled := normalizeAIRates(map[string]any{"RUB": 1.0, "USD": 90.0, "EUR": 100.0}, "USD")
+	if rescaled["USD"] != 1.0 {
+		t.Fatalf("base currency was not rescaled to one: %+v", rescaled)
+	}
+	if euro := numberValue(rescaled["EUR"]); math.Abs(euro-100.0/90.0) > 1e-12 {
+		t.Fatalf("EUR was not rescaled to the base currency: %v", euro)
+	}
+}
+
+func TestDeriveAISnapshotValuesRatesQuotedInAnotherCurrency(t *testing.T) {
+	data := aiSnapshotData{
+		Rates: map[string]any{"RUB": 1.0, "USD": 90.0, "EUR": 100.0},
+		Organizations: []aiOrganization{{
+			Name:     "Broker",
+			Balances: []aiBalance{{Currency: "EUR", Amount: 1000.0}},
+		}},
+	}
+	data.Rates = normalizeAIRates(data.Rates, "USD")
+
+	metrics := deriveAISnapshot(data, "USD", "")
+	if math.Abs(metrics.TotalBase-1000.0*100.0/90.0) > 1e-3 {
+		t.Fatalf("total was not valued in the base currency: %v", metrics.TotalBase)
 	}
 }
 

@@ -29,6 +29,15 @@ export const formatPercent = (value: number, fractionDigits = 2) => {
   return `${normalized > 0 ? '+' : ''}${normalized.toFixed(fractionDigits)}%`;
 };
 
+export const EXCHANGE_RATE_FRACTION_DIGITS = 1;
+
+export const formatExchangeRate = (value: number, useGrouping = true) => (
+  new Intl.NumberFormat('en-US', {
+    useGrouping,
+    maximumFractionDigits: EXCHANGE_RATE_FRACTION_DIGITS
+  }).format(value)
+);
+
 export const formatNativeAmount = (value: number) => {
   const absolute = Math.abs(value);
   const maximumFractionDigits = absolute >= 1000 ? 0 : absolute >= 1 ? 2 : 6;

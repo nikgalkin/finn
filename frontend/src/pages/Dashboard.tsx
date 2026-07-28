@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock } from 'lucide-react';
 import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -14,6 +14,7 @@ import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphToolt
 import { ScrollForMore } from './components/ScrollForMore';
 import { SnapshotDraftsNotice } from './components/SnapshotDraftsNotice';
 import { isTextInputTarget } from '../lib/hotkeys';
+import { useHistoryEntryState } from '../lib/historyEntryState';
 import { formatCompact, formatPercent, formatSigned, getDeltaColor, getMoneyDeltaColor } from '../lib/format';
 import {
   calculateCurrencyTotals,
@@ -25,6 +26,21 @@ import {
 } from '../lib/finance';
 
 const DASHBOARD_PIE_VISIBLE_ROWS = 7;
+
+type DashboardModalState =
+  | { type: 'notes'; month: string }
+  | { type: 'diff'; currentMonth: string; previousMonth: string; scrollTop: number }
+  | null;
+
+type DashboardViewState = {
+  modal: DashboardModalState;
+  onlyChanges: boolean;
+};
+
+const INITIAL_DASHBOARD_VIEW_STATE: DashboardViewState = {
+  modal: null,
+  onlyChanges: true
+};
 
 const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency }: any) => {
   if (!active || !payload || !payload.length) return null;
@@ -57,13 +73,25 @@ const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency
 
 export default function Dashboard() {
   const { settings } = useSettings();
-  const { snapshots, setSnapshots, loading } = useSnapshots({ sort: 'asc' });
   const baseCurrency = settings.baseCurrency || 'RUB';
+  const { snapshots, setSnapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
   const secondaryCurrency = settings.secondaryCurrency ?? 'USD';
 
-  const [activeViewNotes, setActiveViewNotes] = useState<ParsedSnapshot | null>(null);
-  const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
-  const [onlyChanges, setOnlyChanges] = useState(true);
+  const [dashboardView, setDashboardView, persistDashboardView] = useHistoryEntryState(
+    'dashboard',
+    INITIAL_DASHBOARD_VIEW_STATE
+  );
+  const dashboardModal = dashboardView.modal;
+  const activeViewNotes = dashboardModal?.type === 'notes'
+    ? snapshots.find(snapshot => snapshot.month === dashboardModal.month) || null
+    : null;
+  const diffModalData = dashboardModal?.type === 'diff'
+    ? {
+        current: snapshots.find(snapshot => snapshot.month === dashboardModal.currentMonth) || null,
+        previous: snapshots.find(snapshot => snapshot.month === dashboardModal.previousMonth) || null
+      }
+    : null;
+  const onlyChanges = dashboardView.onlyChanges;
   const { entries: flowEntries } = useFlowEntries(Boolean(settings.cashFlow?.enabled && diffModalData));
 
   const navigate = useNavigate();
@@ -76,8 +104,7 @@ export default function Dashboard() {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        setActiveViewNotes(null);
-        setDiffModalData(null);
+        setDashboardView(previous => ({ ...previous, modal: null }));
         return;
       }
 
@@ -89,10 +116,10 @@ export default function Dashboard() {
         return;
       }
 
-      if (diffModalData) {
+      if (dashboardModal?.type === 'diff') {
         if (e.code === 'KeyD') {
           e.preventDefault();
-          setOnlyChanges(prev => !prev);
+          setDashboardView(previous => ({ ...previous, onlyChanges: !previous.onlyChanges }));
         }
         return;
       }
@@ -104,7 +131,7 @@ export default function Dashboard() {
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [activeViewNotes, diffModalData, latestSnapshot, navigate]);
+  }, [activeViewNotes, dashboardModal, latestSnapshot, navigate, setDashboardView]);
 
   const handleDelete = (month: string) => {
     const confirmText = prompt(`To delete this snapshot, type its name: ${month}`);
@@ -186,7 +213,10 @@ export default function Dashboard() {
       const clickedMonth = state.activeLabel;
       const snapshot = snapshots.find(s => s.month === clickedMonth);
       if (snapshot && hasAnyComments(snapshot)) {
-        setActiveViewNotes(snapshot);
+        setDashboardView(previous => ({
+          ...previous,
+          modal: { type: 'notes', month: snapshot.month }
+        }));
       }
     }
   };
@@ -253,7 +283,15 @@ export default function Dashboard() {
   const handleOpenDiff = (currentSnapshot: ParsedSnapshot) => {
     const globalIndex = snapshots.findIndex(s => s.month === currentSnapshot.month);
     const previousSnapshot = globalIndex > 0 ? snapshots[globalIndex - 1] : null;
-    setDiffModalData({ current: currentSnapshot, previous: previousSnapshot });
+    setDashboardView(previous => ({
+      ...previous,
+      modal: {
+        type: 'diff',
+        currentMonth: currentSnapshot.month,
+        previousMonth: previousSnapshot?.month || '',
+        scrollTop: 0
+      }
+    }));
   };
 
   return (
@@ -489,7 +527,7 @@ export default function Dashboard() {
                             <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
                               <div style={{ fontWeight: 500, fontSize: '1.05em' }}>{s.month}</div>
                               <div className="flex flex-col gap-1 items-start mt-2">
-                                {hasAnyComments(s) && <button className="btn text-primary hover:underline" style={{ padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85em', color: '#3b82f6' }} onClick={() => setActiveViewNotes(s)}><MessageSquare size={14} /> Notes</button>}
+                                {hasAnyComments(s) && <button className="btn text-primary hover:underline" style={{ padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85em', color: '#3b82f6' }} onClick={() => setDashboardView(previous => ({ ...previous, modal: { type: 'notes', month: s.month } }))}><MessageSquare size={14} /> Notes</button>}
                                 <button className="btn text-primary hover:underline" style={{ padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85em', color: '#10b981' }} onClick={() => handleOpenDiff(s)}><ArrowLeftRight size={14} /> Diff</button>
                                 {s.duration_seconds !== undefined && s.duration_seconds > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75em', color: 'var(--text-secondary)', marginTop: '4px' }}><Clock size={12} /> {formatDuration(s.duration_seconds)}</div>}
                               </div>
@@ -554,11 +592,11 @@ export default function Dashboard() {
       {activeViewNotes && (
         <SnapshotNotesModal
           snapshot={activeViewNotes}
-          onClose={() => setActiveViewNotes(null)}
+          onClose={() => setDashboardView(previous => ({ ...previous, modal: null }))}
         />
       )}
 
-      {diffModalData && (
+      {diffModalData?.current && dashboardView.modal?.type === 'diff' && (
         <SnapshotDiffModal
           current={diffModalData.current}
           previous={diffModalData.previous}
@@ -566,8 +604,19 @@ export default function Dashboard() {
           cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
           flowEntries={flowEntries}
           onlyChanges={onlyChanges}
-          onOnlyChangesChange={setOnlyChanges}
-          onClose={() => setDiffModalData(null)}
+          onOnlyChangesChange={value => setDashboardView(previous => ({ ...previous, onlyChanges: value }))}
+          scrollTop={dashboardView.modal.scrollTop}
+          onScrollTopChange={scrollTop => persistDashboardView(previous => (
+            previous.modal?.type === 'diff'
+              ? { ...previous, modal: { ...previous.modal, scrollTop } }
+              : previous
+          ))}
+          onPeriodChange={(currentMonth, previousMonth) => setDashboardView(previous => (
+            previous.modal?.type === 'diff'
+              ? { ...previous, modal: { ...previous.modal, currentMonth, previousMonth } }
+              : previous
+          ))}
+          onClose={() => setDashboardView(previous => ({ ...previous, modal: null }))}
         />
       )}
     </div>

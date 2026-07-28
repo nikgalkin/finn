@@ -1,12 +1,12 @@
 # 📈 Finn — Personal Net Worth Tracker
 
-Finn is a net worth tracker for people with accounts in multiple countries and currencies. Think of it as Git for your net worth: take a snapshot of your financial state once a month and see how it evolves over time
+Finn is a local-first net worth tracker built around monthly snapshots. Think of it as Git for your net worth: capture your financial state once a month and see how it evolves over time
 
 No daily expense tracking. No budgets. No mandatory transaction history. Just snapshots.
 
 ## Why Finn exists
 
-Finn is for people whose finances span accounts in several countries and currencies. As this setup grows, adding new financial organizations and currencies to Google Sheets becomes increasingly difficult. Finn was created as a simple, local, and easily extensible alternative that can adapt as financial needs change
+Finn grew out of the friction of maintaining an increasingly complex financial setup in Google Sheets. Each new financial organization or currency made the spreadsheet harder to extend, so Finn was created as a simple, local alternative that can adapt as financial needs change
 
 ## ✨ Features
 
@@ -18,8 +18,8 @@ Finn is for people whose finances span accounts in several countries and currenc
 * **Flexible timeframes:** Switch between `6M`, `1Y`, `ALL`, or a custom month range
 * **Adaptive currency scaling:** Automatically cross-convert low-nominal currencies so charts remain readable
 * **Math in inputs:** Enter expressions such as `15000 + 5000` directly in a balance field
-* **Local and private:** Store all data locally in SQLite, with no cloud sync or telemetry
-* **Multi-target backups:** Create encrypted or raw backups in multiple local or cloud-synced folders, each with its own retention policy
+* **Local and private:** Store all data locally in SQLite, with no cloud sync or telemetry. The only outbound request is the optional exchange-rate fetch, which asks a public currency API for the rates of the currencies you track and never sends your balances
+* **Multi-target backups:** Create raw backups or ones encrypted with quantum-resistant AES-256-GCM in multiple local or cloud-synced folders, each with its own retention policy
 * **Local AI assistant:** Analyze selected snapshots and precomputed metrics with a local model, or copy the prepared prompt to another AI tool
 * **Data utilities:** Scan data health, inspect and verify restore points, and export selected periods as portable JSON or a CSV bundle
 * **SQL editor:** Fix data directly when the UI is the long way round — click any result cell to build an `UPDATE` for it, including ranges and JSON fields, then dry run it to see what would change before anything is saved
@@ -32,7 +32,7 @@ Finn is for people whose finances span accounts in several countries and currenc
 When enabled, Cash Flow also provides:
 
 * **Transfers and currency exchanges:** Record separate sent and received amounts between your accounts without treating them as income or spending
-* **Estimated capital return:** Reconcile balance changes, external flows, and FX impact into an approximate earnings amount and rate, including breakdowns by balance tag when movements carry a tag or are assigned to accounts
+* **Estimated capital return:** Reconcile balance changes, external flows, and FX impact into an approximate earnings amount and rate, including breakdowns by balance tag. Movements participate through either a tag set directly on the movement or the balance tags of its assigned account
 * **Earnings or unrecorded spending:** Mark tags such as `cash` or `checking` as non-yielding, and analytics reads their unexplained change as estimated spending instead of capital earnings
 * **CSV import:** Import existing movements through a validated preview with duplicate detection
 
