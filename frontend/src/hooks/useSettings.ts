@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { API_URL } from '../types';
 import type { AppSettings, ConfiguredOrganization } from '../types';
+import { readCachedSettings, writeCachedSettings } from '../lib/settingsCache';
 
 export const SETTINGS_UPDATED_EVENT = 'finn-settings-updated';
 
@@ -64,6 +65,15 @@ const normalizeSettings = (settings: StoredSettings): AppSettings => ({
 let cachedSettings: AppSettings | null = null;
 let settingsRequest: Promise<AppSettings> | null = null;
 
+const storedSeed = readCachedSettings<StoredSettings>();
+const seedSettings = storedSeed ? normalizeSettings(storedSeed) : null;
+
+const rememberSettings = (settings: AppSettings) => {
+  cachedSettings = settings;
+  writeCachedSettings(settings);
+  return settings;
+};
+
 const loadSettings = () => {
   if (cachedSettings) return Promise.resolve(cachedSettings);
 
@@ -73,10 +83,7 @@ const loadSettings = () => {
         if (!response.ok) throw new Error('Could not load settings.');
         return response.json() as Promise<{ value: string }>;
       })
-      .then(data => {
-        cachedSettings = normalizeSettings(JSON.parse(data.value));
-        return cachedSettings;
-      })
+      .then(data => rememberSettings(normalizeSettings(JSON.parse(data.value))))
       .catch(error => {
         settingsRequest = null;
         throw error;
@@ -87,7 +94,7 @@ const loadSettings = () => {
 };
 
 export function useSettings() {
-  const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? defaultSettings);
+  const [settings, setSettings] = useState<AppSettings>(() => cachedSettings ?? seedSettings ?? defaultSettings);
   const [loading, setLoading] = useState(() => cachedSettings === null);
   const [error, setError] = useState<Error | null>(null);
 
@@ -97,8 +104,7 @@ export function useSettings() {
     const handleSettingsUpdated = (event: Event) => {
       const updatedSettings = (event as CustomEvent<StoredSettings>).detail;
       if (updatedSettings) {
-        cachedSettings = normalizeSettings(updatedSettings);
-        setSettings(cachedSettings);
+        setSettings(rememberSettings(normalizeSettings(updatedSettings)));
       }
     };
 
