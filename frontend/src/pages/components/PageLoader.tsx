@@ -1,26 +1,95 @@
-import { LoaderCircle } from 'lucide-react';
+import { useLayoutEffect, useRef, type MouseEventHandler } from 'react';
+import bmoMoneyLoader from '../../assets/bmo-money-loader-trail.png';
+import marcelineMoneyLoader from '../../assets/marceline-money-loader-animated.png';
+import { useVisualPreferences } from '../../hooks/useVisualPreferences';
+import type { LoaderChoice } from '../../lib/visualPreferences';
+
+function StandardRing() {
+  const ringRef = useRef<SVGSVGElement>(null);
+
+  useLayoutEffect(() => {
+    for (const animation of ringRef.current?.getAnimations() ?? []) {
+      animation.startTime = 0;
+    }
+  }, []);
+
+  return (
+    <span className="app-spinner__ring" aria-hidden="true">
+      <svg ref={ringRef} viewBox="0 0 50 50">
+        <circle className="app-spinner__ring-track" cx="25" cy="25" r="20" />
+        <circle className="app-spinner__ring-indicator" cx="25" cy="25" r="20" pathLength="100" />
+      </svg>
+    </span>
+  );
+}
 
 type PageLoaderProps = {
   label?: string;
 };
 
 type SpinnerProps = {
+  character?: LoaderChoice;
   label?: string;
   size?: number;
 };
 
-export function Spinner({ label = 'Loading', size = 18 }: SpinnerProps) {
+type CompactLoaderProps = {
+  character?: LoaderChoice;
+  className?: string;
+  label?: string;
+  onClick?: MouseEventHandler<HTMLDivElement>;
+};
+
+export function Spinner({ character, label = 'Loading', size = 18 }: SpinnerProps) {
+  const preferences = useVisualPreferences();
+  const selectedCharacter = character ?? preferences.loader;
+  const isLarge = size >= 48;
+  const images = {
+    bmo: bmoMoneyLoader,
+    marceline: marcelineMoneyLoader,
+  };
+
   return (
-    <span className="app-spinner" role="status" aria-label={label} style={{ width: size, height: size }}>
-      <LoaderCircle size={size} aria-hidden="true" />
+    <span
+      className={`app-spinner app-spinner--${selectedCharacter} ${isLarge ? 'app-spinner--large' : 'app-spinner--compact'}`}
+      role="status"
+      aria-label={label}
+      style={{ width: size, height: size, fontSize: size }}
+    >
+      {selectedCharacter === 'standard' ? (
+        <StandardRing />
+      ) : (
+        <span className="app-spinner__scene" aria-hidden="true">
+          <img
+            className="app-spinner__character"
+            src={images[selectedCharacter]}
+            alt=""
+            draggable={false}
+          />
+        </span>
+      )}
     </span>
+  );
+}
+
+export function CompactLoader({
+  character,
+  className = '',
+  label = 'Loading',
+  onClick,
+}: CompactLoaderProps) {
+  return (
+    <div className={`compact-loader${className ? ` ${className}` : ''}`} onClick={onClick}>
+      <Spinner character={character} label={label} size={64} />
+      <span>{label}…</span>
+    </div>
   );
 }
 
 export function PageLoader({ label = 'Loading' }: PageLoaderProps) {
   return (
     <div className="page-loader">
-      <Spinner label={label} size={32} />
+      <Spinner label={label} size={128} />
     </div>
   );
 }

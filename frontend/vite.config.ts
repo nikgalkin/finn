@@ -7,6 +7,6 @@ export default defineConfig({
   build: {
     // Finn is served locally, so prefer two coarse application chunks over
     // extra requests made only to satisfy Vite's generic 500 kB threshold.
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 800,
   },
 })
