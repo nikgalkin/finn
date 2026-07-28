@@ -1,4 +1,4 @@
-export const loaderChoices = ['bmo', 'marceline'] as const;
+export const loaderChoices = ['standard', 'bmo', 'marceline'] as const;
 
 export const logoChoices = [
   'plain',

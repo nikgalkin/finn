@@ -3,8 +3,7 @@ import type { ReactNode } from 'react';
 const finnHatHoodPath = 'M6.8 39C4.4 32.1 7.2 22.2 5.8 6.4 5.4 2 8.3.8 10.4 4.1c.9 1.5 1.2 3.4 1.2 5.6 8.6-5.3 20.1-5.4 28.7-.7.6-2.7 1.9-5.2 4.2-6 2.1-.7 3.4 1 3 3.5-.8 5.2-2.7 8.5-1.2 14.4 1.4 5.6 1.7 10.6 1.2 14.6 1.7-.9 2.6 0 2.5 1.5-.1 3.5-5.2 5.2-10.7 5.7-9.5.9-17.1-2.7-24.2-3.4-3.3-.3-5.7 2.5-8.3-.3Z';
 const finnHatOpeningPath = 'M14.5 14.3C20.2 7.2 31.9 7.3 39.6 13.5c7.3 5.9 9 16 3.4 21.9-5.5 5.8-15.4 4.8-22.3-.2-7.8-5.8-11.2-14.8-6.2-20.9Z';
 
-const faceHoodPath = 'M4.2 51.4C2 43.7 2.3 33.8 2.8 22.2c.3-6.2 2.1-10.5 5.5-11.8 4.2-1.6 7.1 1.4 7.8 8.6 10-2.2 22-2.8 33.5-2.1-.1-6.7 1.9-10.6 4.9-10.6 4.4 0 6.1 5.7 6.8 14.1.8 10 2.4 23.8.5 30.7-2.3 8.2-14.2 10.6-28.3 10.8-15.4.2-26.5-.8-29.3-10.5Z';
-const faceSkinPath = 'M9.1 37.3c.1-10.5 10.7-17.6 23.7-18 13.7-.4 24.7 6.7 25.2 17.1.6 10.7-9.8 18.7-24.6 19.3-14.5.6-24.4-7.2-24.3-18.4Z';
+const faceMarkUrl = '/favicon.svg';
 
 type HatOpening = 'hollow' | 'candle';
 
@@ -49,25 +48,7 @@ function OrganicFinnHat({
 }
 
 function FinnFaceMark({ className }: { className: string }) {
-  return (
-    <svg aria-hidden="true" className={className} viewBox="0 0 64 64">
-      <path className="finn-face__hood" d={faceHoodPath} />
-      <g transform="translate(2.68 5.51) scale(0.92)">
-        <path className="finn-face__skin" d={faceSkinPath} />
-        <ellipse className="finn-face__eye" cx="20.2" cy="31.7" rx="1.35" ry="1.75" />
-        <ellipse className="finn-face__eye" cx="47" cy="29.7" rx="1.35" ry="1.75" />
-        <path
-          className="finn-face__tongue"
-          d="M29.7 40.37c2.59.69 5.51.62 8.1-.21-.38 8-7.67 8.14-8.1.21Z"
-        />
-        <path className="finn-face__tongue-line" d="M29.92 40.79c.49 7.38 7.02 7.52 7.61-.14" />
-        <path
-          className="finn-face__smile"
-          d="M24.9 37.8c2.8 2 6.1 2.9 9.5 2.8 3.2-.1 5.9-1 8-2.9"
-        />
-      </g>
-    </svg>
-  );
+  return <img alt="" className={className} draggable={false} src={faceMarkUrl} />;
 }
 
 export function FinnPlainWordmark() {

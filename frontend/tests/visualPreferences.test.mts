@@ -38,6 +38,13 @@ test('reads stored choices and keeps the gradient on unless it was turned off', 
   assert.equal(readVisualPreferences(storage).logoGradient, false);
 });
 
+test('accepts the standard loader choice', () => {
+  const storage = new MemoryStorage();
+  storage.setItem('finn:loader-choice', 'standard');
+
+  assert.equal(readVisualPreferences(storage).loader, 'standard');
+});
+
 test('ignores choices that no longer exist', () => {
   const storage = new MemoryStorage();
   storage.setItem('finn:logo-choice', 'stacked');

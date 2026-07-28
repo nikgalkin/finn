@@ -3,6 +3,7 @@ import { ArrowLeft, Check, CheckCircle2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isTextInputTarget } from '../lib/hotkeys';
 import {
+  loaderChoices,
   logoChoices,
   selectLoader,
   selectLogo,
@@ -56,7 +57,7 @@ export default function StyleLab() {
           <div>
             <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Style Lab</h2>
             <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginTop: '4px' }}>
-              2 loaders · {logoChoices.length} logos · saved on this device
+              {loaderChoices.length} loaders · {logoChoices.length} logos · saved on this device
             </div>
           </div>
         </div>
@@ -72,6 +73,24 @@ export default function StyleLab() {
         </div>
 
         <div className="style-lab-loader-grid">
+          <button
+            type="button"
+            className={`glass-panel style-lab-choice style-lab-loader-choice${preferences.loader === 'standard' ? ' is-selected' : ''}`}
+            aria-pressed={preferences.loader === 'standard'}
+            onClick={() => chooseLoader('standard')}
+          >
+            {preferences.loader === 'standard' && (
+              <span className="style-lab-selected"><Check size={12} /> Selected</span>
+            )}
+            <span className="style-lab-loader-preview">
+              <Spinner character="standard" label="Standard loader preview" size={176} />
+            </span>
+            <span className="style-lab-choice-copy">
+              <strong>Standard</strong>
+              <small>Simple rotating ring</small>
+            </span>
+          </button>
+
           <button
             type="button"
             className={`glass-panel style-lab-choice style-lab-loader-choice${preferences.loader === 'marceline' ? ' is-selected' : ''}`}

@@ -17,11 +17,6 @@
   --brand-gradient: linear-gradient(90deg, var(--brand-solid), var(--brand-accent));
   --brand-hood: #e8ddd8;
   --brand-hollow: #26344f;
-  --brand-hood-bright: #fff;
-  --brand-skin: #ffdfc7;
-  --brand-tongue: #f486a3;
-  --brand-ink: #111;
-  --brand-eye: #050505;
 }
 
 body {
@@ -381,6 +376,43 @@ main > .page-loader { animation: none; }
   vertical-align: -0.16em;
 }
 
+.app-spinner--standard {
+  display: inline-grid;
+  place-items: center;
+}
+
+.app-spinner__ring {
+  display: block;
+  width: 50%;
+  height: 50%;
+}
+
+.app-spinner__ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: app-spinner-spin 1.2s linear infinite;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+.app-spinner__ring-track,
+.app-spinner__ring-indicator {
+  fill: none;
+  stroke-width: 5;
+}
+
+.app-spinner__ring-track {
+  stroke: rgba(148, 163, 184, 0.18);
+}
+
+.app-spinner__ring-indicator {
+  stroke: #818cf8;
+  stroke-dasharray: 28 72;
+  stroke-linecap: round;
+}
+
 .app-spinner--compact {
   overflow: hidden;
   border-radius: 3px;
@@ -443,6 +475,9 @@ main > .page-loader { animation: none; }
     animation: money-loader-bob-reduced 2.2s ease-in-out infinite;
   }
 
+  .app-spinner__ring svg {
+    animation-duration: 2.4s;
+  }
 }
 
 .style-lab-page {
@@ -548,7 +583,7 @@ main > .page-loader { animation: none; }
 
 .style-lab-loader-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -774,43 +809,6 @@ main > .page-loader { animation: none; }
   stroke: var(--success);
   stroke-linecap: round;
   stroke-width: 2.1;
-}
-
-.finn-face__hood {
-  fill: var(--brand-hood-bright);
-  stroke: var(--brand-ink);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.8;
-}
-
-.finn-face__skin {
-  fill: var(--brand-skin);
-  stroke: var(--brand-ink);
-  stroke-linejoin: round;
-  stroke-width: 2.8;
-}
-
-.finn-face__eye {
-  fill: var(--brand-eye);
-}
-
-.finn-face__tongue {
-  fill: var(--brand-tongue);
-}
-
-.finn-face__tongue-line {
-  fill: none;
-  stroke: var(--brand-ink);
-  stroke-linecap: butt;
-  stroke-width: 2.35;
-}
-
-.finn-face__smile {
-  fill: none;
-  stroke: var(--brand-ink);
-  stroke-linecap: round;
-  stroke-width: 2.7;
 }
 
 .finn-face-wordmark__face {

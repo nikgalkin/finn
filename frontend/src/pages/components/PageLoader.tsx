@@ -1,8 +1,27 @@
-import type { MouseEventHandler } from 'react';
+import { useLayoutEffect, useRef, type MouseEventHandler } from 'react';
 import bmoMoneyLoader from '../../assets/bmo-money-loader-trail.png';
 import marcelineMoneyLoader from '../../assets/marceline-money-loader-animated.png';
 import { useVisualPreferences } from '../../hooks/useVisualPreferences';
 import type { LoaderChoice } from '../../lib/visualPreferences';
+
+function StandardRing() {
+  const ringRef = useRef<SVGSVGElement>(null);
+
+  useLayoutEffect(() => {
+    for (const animation of ringRef.current?.getAnimations() ?? []) {
+      animation.startTime = 0;
+    }
+  }, []);
+
+  return (
+    <span className="app-spinner__ring" aria-hidden="true">
+      <svg ref={ringRef} viewBox="0 0 50 50">
+        <circle className="app-spinner__ring-track" cx="25" cy="25" r="20" />
+        <circle className="app-spinner__ring-indicator" cx="25" cy="25" r="20" pathLength="100" />
+      </svg>
+    </span>
+  );
+}
 
 type PageLoaderProps = {
   label?: string;
@@ -37,14 +56,18 @@ export function Spinner({ character, label = 'Loading', size = 18 }: SpinnerProp
       aria-label={label}
       style={{ width: size, height: size, fontSize: size }}
     >
-      <span className="app-spinner__scene" aria-hidden="true">
-        <img
-          className="app-spinner__character"
-          src={images[selectedCharacter]}
-          alt=""
-          draggable={false}
-        />
-      </span>
+      {selectedCharacter === 'standard' ? (
+        <StandardRing />
+      ) : (
+        <span className="app-spinner__scene" aria-hidden="true">
+          <img
+            className="app-spinner__character"
+            src={images[selectedCharacter]}
+            alt=""
+            draggable={false}
+          />
+        </span>
+      )}
     </span>
   );
 }
