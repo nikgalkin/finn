@@ -246,6 +246,7 @@ export default function Dashboard() {
     ? (latestBaseYoYDelta / latestYearAgoTotals.totalBase) * 100
     : 0;
 
+  const hasSecondaryCurrency = Boolean(secondaryCurrency && secondaryCurrency !== baseCurrency);
   const hasYoY = Boolean(latestYearAgoTotals && latestYearAgoSnapshot);
   const isYoYStable = Math.abs(latestBaseYoYDelta) < 1;
   const yoyColor = isYoYStable ? undefined : getDeltaColor(latestBaseYoYDelta);
@@ -375,8 +376,8 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-                <div className="dashboard-net-worth-metrics">
-                  {secondaryCurrency && secondaryCurrency !== baseCurrency && (
+                <div className={`dashboard-net-worth-metrics${hasSecondaryCurrency ? '' : ' is-single-currency'}`}>
+                  {hasSecondaryCurrency && (
                     <div className="dashboard-net-worth-secondary">
                       <span className="dashboard-net-worth-label">Secondary</span>
                       <div className="dashboard-net-worth-secondary-slot">
@@ -625,7 +626,7 @@ export default function Dashboard() {
                                 {renderDiff(totals.totalSecondary, prevTotals?.totalSecondary)}
                               </td>
                             )}
-                            <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px', minWidth: '180px' }}>
+                            <td style={{ verticalAlign: 'top', paddingTop: '12px', paddingBottom: '16px', minWidth: '180px' }}>
                               <div className="dashboard-currency-breakdown">
                                 {changedCurrencies.map(renderCurrencyRow)}
                                 {unchangedCurrencies.length > 0 && (

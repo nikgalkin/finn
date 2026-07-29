@@ -19,7 +19,7 @@ import { FlowNetSummary } from './components/FlowNetSummary';
 import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 import { orientExchangeRate } from '../lib/finance';
-import { formatExchangeRate, formatFlowAmount, formatMonth } from '../lib/format';
+import { formatExchangeRate, formatFlowAmount, formatMonth, getDeltaColor } from '../lib/format';
 
 type FlowMovementFilter = 'all' | FlowDirection | 'transfer';
 
@@ -730,10 +730,11 @@ export default function CashFlow() {
                                 const tax = calculateFlowTax(entry);
                                 const netAmount = entry.direction === 'in' ? entry.amount - tax : -entry.amount;
                                 const isTransfer = entry.entryType === 'transfer';
+                                const movementColor = isTransfer ? '#60a5fa' : getDeltaColor(netAmount);
                                 return (
                                   <tr key={entry.id}>
                                     <td>
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: isTransfer ? '#60a5fa' : entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 600, fontSize: '13px' }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: movementColor, fontWeight: 600, fontSize: '13px' }}>
                                         {isTransfer ? <ArrowRightLeft size={15} /> : entry.direction === 'in' ? <ArrowDown size={15} /> : <ArrowUp size={15} />}
                                         {isTransfer ? 'Transfer' : entry.direction === 'in' ? 'Incoming' : 'Outgoing'}
                                       </span>
@@ -752,7 +753,7 @@ export default function CashFlow() {
                                         </button>
                                       </QuickHoverTooltip>
                                     </td>
-                                    <td className="text-right" style={{ whiteSpace: 'nowrap', color: isTransfer ? '#60a5fa' : entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
+                                    <td className="text-right" style={{ whiteSpace: 'nowrap', color: movementColor, fontWeight: 700 }}>
                                       <div>{isTransfer ? `−${formatFlowAmount(entry.amount, entry.currency)} → +${formatFlowAmount(entry.toAmount, entry.toCurrency)}` : `${entry.direction === 'in' ? '+' : '−'}${formatFlowAmount(Math.abs(netAmount), entry.currency)}`}</div>
                                       {isTransfer && formatTransferRate(entry) && <div className="cash-flow-entry-details">Rate: {formatTransferRate(entry)}</div>}
                                       {isTransfer && (entry.tag || entry.toTag) && (

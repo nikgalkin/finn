@@ -224,7 +224,7 @@ export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) 
       title="Growth & Goal Planner"
       subtitle="Project compound growth or solve the monthly contribution required for a target"
       icon={TrendingUp}
-      accent="var(--success)"
+      accent="var(--diff-positive)"
       onClose={onClose}
     >
       <div className="calculator-toolbar">

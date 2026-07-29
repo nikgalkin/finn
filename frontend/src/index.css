@@ -455,6 +455,16 @@ a { color: var(--accent); text-decoration: none; }
 
 .dashboard-net-worth-counters strong { font-size: 13px; font-weight: 740; }
 
+.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters strong { font-size: 20px; }
+
+.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters span { font-size: 12px; }
+
 .dashboard-net-worth-counters span {
   color: var(--text-secondary);
   font-size: 11px;
@@ -553,7 +563,7 @@ a { color: var(--accent); text-decoration: none; }
   padding: 8px 18px;
   grid-template-columns: minmax(150px, 1fr) auto 18px;
   align-items: center;
-  gap: 20px;
+  gap: 10px;
   cursor: pointer;
   list-style: none;
   user-select: none;
@@ -607,10 +617,12 @@ a { color: var(--accent); text-decoration: none; }
 
 .dashboard-year-totals > div {
   display: flex;
-  width: 142px;
+  min-width: 142px;
   align-items: flex-start;
   flex-direction: column;
 }
+
+.dashboard-year-totals .dashboard-value-diff { white-space: nowrap; }
 
 .dashboard-year-totals b {
   display: inline-flex;
@@ -633,7 +645,7 @@ a { color: var(--accent); text-decoration: none; }
 
 .dashboard-history-body { overflow-x: auto; padding: 0 18px 18px; border-top: 1px solid var(--glass-border); }
 
-.dashboard-history-table { min-width: 760px; margin-top: 10px; }
+.dashboard-history-table { min-width: 760px }
 
 .dashboard-history-table th {
   padding-top: 9px;
@@ -2277,10 +2289,10 @@ main > .page-loader { animation: none; }
 .table th { color: var(--text-secondary); font-weight: 500; font-size: 14px; }
 
 .text-right { text-align: right !important; }
-.text-success,
-.cash-flow-net-pill.is-positive i { color: var(--success); }
-.text-danger,
-.cash-flow-net-pill.is-negative i { color: var(--danger); }
+.text-success { color: var(--success); }
+.cash-flow-net-pill.is-positive i { color: var(--diff-positive); }
+.text-danger { color: var(--danger); }
+.cash-flow-net-pill.is-negative i { color: var(--diff-negative); }
 .text-secondary,
 .cash-flow-comment-button.has-comment,
 .cash-flow-table-comment.has-comment,
@@ -2651,7 +2663,16 @@ main > .page-loader { animation: none; }
 
 .cash-flow-account-control { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 6px; align-items: end; }
 
-.cash-flow-period-row .app-select-trigger { padding-right: 6px; padding-left: 6px; gap: 4px; }
+.cash-flow-period-row .app-select-trigger {
+  padding-right: 6px;
+  padding-left: 6px;
+  gap: 4px;
+  background: transparent;
+}
+
+.cash-flow-period-row .app-select-trigger:hover:not(:disabled) { background: rgba(255, 255, 255, 0.035); }
+
+.cash-flow-period-row .app-select-trigger.is-open { background: rgba(30, 41, 59, 0.9); }
 
 .cash-flow-period-row .app-select-trigger-copy { gap: 5px; }
 
@@ -4796,9 +4817,9 @@ main > .page-loader { animation: none; }
 
 .calculator-result.is-primary strong { font-size: 24px; }
 
-.calculator-result.is-positive strong { color: var(--success); }
+.calculator-result.is-positive strong { color: var(--diff-positive); }
 
-.calculator-result.is-negative strong { color: var(--danger); }
+.calculator-result.is-negative strong { color: var(--diff-negative); }
 
 .calculator-result.is-accent { border-color: rgba(var(--accent-rgb), 0.24); background: rgba(var(--accent-rgb), 0.055); }
 
