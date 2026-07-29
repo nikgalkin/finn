@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AppSelect } from './AppSelect';
+import { MonthSelect } from './MonthSelect';
 
 const QUICK_PERIODS = [
   ['2', '2M'],
@@ -75,7 +76,7 @@ export function TimeframeControl({ availableMonths, startMonth, endMonth, onChan
         height="28px"
         textAlign="center"
       />
-      <AppSelect
+      <MonthSelect
         ariaLabel="Timeframe start month"
         value={startMonth}
         onChange={value => {
@@ -84,15 +85,9 @@ export function TimeframeControl({ availableMonths, startMonth, endMonth, onChan
         }}
         options={startMonthOptions}
         placeholder="Start"
-        searchable
-        searchPlaceholder="Find month…"
-        width="100px"
-        dropdownWidth={156}
-        height="28px"
-        textAlign="center"
       />
       <span className="timeframe-control-arrow">➔</span>
-      <AppSelect
+      <MonthSelect
         ariaLabel="Timeframe end month"
         value={endMonth}
         onChange={value => {
@@ -101,12 +96,6 @@ export function TimeframeControl({ availableMonths, startMonth, endMonth, onChan
         }}
         options={endMonthOptions}
         placeholder="End"
-        searchable
-        searchPlaceholder="Find month…"
-        width="100px"
-        dropdownWidth={156}
-        height="28px"
-        textAlign="center"
       />
     </div>
   );

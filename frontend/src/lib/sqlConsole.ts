@@ -1,6 +1,6 @@
 import { API_URL } from '../types';
 
-export type SqlColumn = {
+type SqlColumn = {
   name: string;
   type: string;
   notNull: boolean;
@@ -33,7 +33,7 @@ export type SqlStatementResult = {
   durationMs: number;
 };
 
-export type SqlBackupTarget = {
+type SqlBackupTarget = {
   name: string;
   path: string;
   status: 'current' | 'created' | 'created_with_warning' | 'failed';
@@ -55,7 +55,7 @@ export type SqlExecResponse = {
   backup?: SqlBackupReport;
 };
 
-export type SqlExecError = {
+type SqlExecError = {
   message: string;
   statementIndex?: number;
   sql?: string;

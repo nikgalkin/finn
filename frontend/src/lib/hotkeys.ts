@@ -5,7 +5,7 @@ export const isTextInputTarget = (target: EventTarget | null) => {
   return element.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'reset'].includes((element as HTMLInputElement).type);
 };
 
-export type NavigationHotkey = {
+type NavigationHotkey = {
   code: string;
   shiftKey?: boolean;
   label: string;

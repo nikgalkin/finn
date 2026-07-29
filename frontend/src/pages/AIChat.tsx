@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import { API_URL } from '../types';
 import type { AIResponseStyle, LocalAIContextFilter, LocalAIContextPreview, LocalAIStatus } from '../types';
 import { AppSelect } from './components/AppSelect';
+import { MonthSelect } from './components/MonthSelect';
 import { StickyPageHeader } from './components/StickyPageHeader';
 import { AIContextPreviewModal } from './components/AIContextPreviewModal';
 import { Spinner } from './components/PageLoader';
@@ -540,33 +541,21 @@ export default function AIChat() {
                 textAlign="center"
                 disabled={generating || statusLoading}
               />
-              <AppSelect
+              <MonthSelect
                 ariaLabel="AI context start month"
                 value={selectedStartMonth}
                 onChange={value => updateCustomRange(value, selectedEndMonth)}
                 options={startMonthOptions}
                 placeholder="Start"
-                searchable
-                searchPlaceholder="Find month…"
-                width="100px"
-                dropdownWidth={156}
-                height="28px"
-                textAlign="center"
                 disabled={generating || statusLoading}
               />
               <span className="ai-timeframe-arrow">➔</span>
-              <AppSelect
+              <MonthSelect
                 ariaLabel="AI context end month"
                 value={selectedEndMonth}
                 onChange={value => updateCustomRange(selectedStartMonth, value)}
                 options={endMonthOptions}
                 placeholder="End"
-                searchable
-                searchPlaceholder="Find month…"
-                width="100px"
-                dropdownWidth={156}
-                height="28px"
-                textAlign="center"
                 disabled={generating || statusLoading}
               />
             </div>

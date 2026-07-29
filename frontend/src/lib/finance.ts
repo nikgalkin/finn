@@ -1,7 +1,7 @@
 import type { Balance, FlowEntry, ParsedSnapshot, Organization } from '../types';
 import { toNumber } from './number.ts';
 
-export type SnapshotTotals = {
+type SnapshotTotals = {
   totalBase: number;
   totalSecondary: number;
 };
@@ -11,7 +11,7 @@ export type FlowDecomposition = {
   fxImpactDelta: number;
 };
 
-export type EstimatedCapitalReturn = {
+type EstimatedCapitalReturn = {
   externalFlow: number;
   result: number;
   ratePercent: number | null;
@@ -19,7 +19,7 @@ export type EstimatedCapitalReturn = {
 
 export type TaggedReturnKind = 'yield' | 'spending' | 'unknown';
 
-export type TaggedCapitalReturn = {
+type TaggedCapitalReturn = {
   tag: string;
   kind: TaggedReturnKind;
   openingCapital: number;
@@ -29,7 +29,7 @@ export type TaggedCapitalReturn = {
   ratePercent: number | null;
 };
 
-export type TaggedCapitalReturnBreakdown = {
+type TaggedCapitalReturnBreakdown = {
   returns: TaggedCapitalReturn[];
   assignedExternalEntries: number;
   totalExternalEntries: number;
@@ -58,7 +58,7 @@ export const inferRateReferenceCurrency = (
   return reference?.[0] || fallback;
 };
 
-export const getRateToReference = (
+const getRateToReference = (
   currency: string,
   rates: Record<string, number | string>,
   referenceCurrency = inferRateReferenceCurrency(rates)

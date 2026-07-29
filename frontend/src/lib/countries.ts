@@ -267,18 +267,6 @@ export const getCountryDisplayName = (country: Country) => (
   country.name.replace(/\s+\(the\)(?=\s*(?:\[|$))/gi, '').trim()
 );
 
-export const resolveCountry = (value: string) => {
-  const normalized = value.trim().toLocaleLowerCase();
-  if (!normalized) return undefined;
-  return COUNTRIES.find(country => (
-    country.alpha3.toLocaleLowerCase() === normalized
-    || country.alpha2.toLocaleLowerCase() === normalized
-    || country.name.toLocaleLowerCase() === normalized
-    || getCountryDisplayName(country).toLocaleLowerCase() === normalized
-    || `${country.name} — ${country.alpha3}`.toLocaleLowerCase() === normalized
-  ));
-};
-
 export const isValidCountryCode = (value: string | undefined) => (
   !value?.trim() || countriesByAlpha3.has(value.trim().toUpperCase())
 );

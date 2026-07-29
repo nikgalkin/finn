@@ -2,7 +2,7 @@ import type { Balance, ParsedSnapshot } from '../types';
 
 export type DiffStatus = 'new' | 'deleted' | 'up' | 'down' | 'stable';
 
-export type DiffBalanceNode = {
+type DiffBalanceNode = {
   currency: string;
   currentTags: string[];
   previousTags: string[];
@@ -15,7 +15,7 @@ export type DiffBalanceNode = {
   status: DiffStatus;
 };
 
-export type DiffOrgNode = {
+type DiffOrgNode = {
   orgName: string;
   comment?: string;
   balances: DiffBalanceNode[];
@@ -28,11 +28,11 @@ type AggregatedBalance = {
   comments: string[];
 };
 
-export const normalizeTags = (tags?: string[]) => {
+const normalizeTags = (tags?: string[]) => {
   return (tags && tags.length > 0 ? tags : ['untagged']).filter(Boolean);
 };
 
-export const areTagsEqual = (left: string[], right: string[]) => {
+const areTagsEqual = (left: string[], right: string[]) => {
   if (left.length !== right.length) return false;
   const leftSorted = [...left].sort();
   const rightSorted = [...right].sort();

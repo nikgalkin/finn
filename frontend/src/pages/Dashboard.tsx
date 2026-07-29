@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock, Plus, Building2 } from 'lucide-react';
+import { TrendingUp, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock, Plus } from 'lucide-react';
 import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
@@ -246,6 +246,12 @@ export default function Dashboard() {
     ? (latestBaseYoYDelta / latestYearAgoTotals.totalBase) * 100
     : 0;
 
+  const hasYoY = Boolean(latestYearAgoTotals && latestYearAgoSnapshot);
+  const isYoYStable = Math.abs(latestBaseYoYDelta) < 1;
+  const yoyColor = isYoYStable ? undefined : getDeltaColor(latestBaseYoYDelta);
+  const yoyAmount = isYoYStable ? 'Stable' : formatSigned(latestBaseYoYDelta);
+  const yoyPercent = isYoYStable ? '' : formatPercent(latestBaseYoYPercent, 1);
+
   const pieData = useMemo(() => {
     if (!latestSnapshot) return [];
     return latestSnapshot.data.organizations.map(org => {
@@ -356,41 +362,40 @@ export default function Dashboard() {
             <section className="glass-panel dashboard-net-worth-panel">
               <div className="dashboard-net-worth-body">
                 <div className="dashboard-net-worth-main">
-                  <div className="dashboard-net-worth-heading">
-                    <h3>Total Net Worth</h3>
-                  </div>
+                  <h3 className="dashboard-net-worth-label">Total Net Worth</h3>
                   <div className="dashboard-net-worth-value">
                     {formatNumber(latestTotals.totalBase)}
                     <small>{baseCurrency}</small>
                   </div>
-                  {latestYearAgoTotals && latestYearAgoSnapshot && (
-                    Math.abs(latestBaseYoYDelta) >= 1 ? (
-                      <div className="dashboard-net-worth-comparison" style={{ color: getDeltaColor(latestBaseYoYDelta) }}>
-                        <strong>{formatSigned(latestBaseYoYDelta)}</strong>
-                        <span>{formatPercent(latestBaseYoYPercent, 1)} YoY</span>
-                      </div>
-                    ) : (
-                      <div className="dashboard-net-worth-comparison">
-                        <strong>Stable</strong>
-                        <span>YoY</span>
-                      </div>
-                    )
+                  {hasYoY && (
+                    <div className="dashboard-net-worth-yoy">
+                      <strong style={{ color: yoyColor }}>{yoyAmount}</strong>
+                      {yoyPercent && <em>{yoyPercent}</em>}
+                      <span>YoY</span>
+                    </div>
                   )}
                 </div>
                 <div className="dashboard-net-worth-metrics">
                   {secondaryCurrency && secondaryCurrency !== baseCurrency && (
                     <div className="dashboard-net-worth-secondary">
-                      <span><DollarSign size={13} /> Secondary</span>
-                      <strong>{formatNumber(latestTotals.totalSecondary)} <small>{secondaryCurrency}</small></strong>
+                      <span className="dashboard-net-worth-label">Secondary</span>
+                      <div className="dashboard-net-worth-secondary-slot">
+                        <div className="dashboard-net-worth-secondary-value">
+                          {formatNumber(latestTotals.totalSecondary)}
+                          <small>{secondaryCurrency}</small>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  <div>
-                    <span><Building2 className="dashboard-organizations-icon" /> Organizations</span>
-                    <strong>{pieData.length} <small>active</small></strong>
-                  </div>
-                  <div>
-                    <span><Clock size={13} /> Snapshots</span>
-                    <strong>{snapshots.length} <small>total</small></strong>
+                  <div className="dashboard-net-worth-counters">
+                    <div>
+                      <strong>{pieData.length}</strong>
+                      <span>Organizations</span>
+                    </div>
+                    <div>
+                      <strong>{snapshots.length}</strong>
+                      <span>Snapshots</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -401,7 +406,7 @@ export default function Dashboard() {
                 <div className="dashboard-pie-chart">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={33} outerRadius={49} paddingAngle={3} dataKey="value">
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={32} outerRadius={47} paddingAngle={3} dataKey="value">
                         {pieData.map((_entry, idx) => (
                           <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
                         ))}

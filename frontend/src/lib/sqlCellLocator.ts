@@ -22,7 +22,7 @@ export type SqlCellLocator = {
   rowKey: SqlRowKeyPart[] | null;
 };
 
-export type RelocatedSqlCell = {
+type RelocatedSqlCell = {
   statement: SqlStatementResult;
   rowIndex: number;
   cellIndex: number;

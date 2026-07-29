@@ -2,7 +2,7 @@ export const DELTA_POSITIVE_COLOR = 'var(--diff-positive, hsl(142, 45%, 55%))';
 export const DELTA_NEGATIVE_COLOR = 'var(--diff-negative, hsl(0, 45%, 60%))';
 export const DELTA_NEUTRAL_COLOR = 'var(--text-secondary)';
 
-export const normalizeDisplayNumber = (value: number, precision = 0.005) => Math.abs(value) < precision ? 0 : value;
+const normalizeDisplayNumber = (value: number, precision = 0.005) => Math.abs(value) < precision ? 0 : value;
 
 export const getDeltaColor = (value: number) => {
   if (value > 0) return DELTA_POSITIVE_COLOR;
@@ -35,7 +35,7 @@ export const formatFlowNumber = (value: number) => flowNumberFormat.format(value
 
 export const formatFlowAmount = (value: number, currency: string) => `${formatFlowNumber(value)} ${currency}`;
 
-export const EXCHANGE_RATE_FRACTION_DIGITS = 1;
+const EXCHANGE_RATE_FRACTION_DIGITS = 1;
 
 export const formatExchangeRate = (value: number, useGrouping = true) => (
   new Intl.NumberFormat('en-US', {

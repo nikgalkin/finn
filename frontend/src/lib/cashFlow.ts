@@ -2,7 +2,7 @@ import type { FlowEntry } from '../types';
 
 export type FlowPeriodSeed = Omit<FlowEntry, 'id' | 'month'>;
 
-export type FlowCurrencySummary = {
+type FlowCurrencySummary = {
   incoming: number;
   incomingNet: number;
   outgoing: number;

@@ -47,7 +47,6 @@ a { color: var(--accent); text-decoration: none; }
 
 /* Single-line truncation, shared by every label that can overflow its column. */
 .snapshot-drafts-details > strong,
-.dashboard-net-worth-metrics strong,
 .dashboard-pie-legend-name,
 .app-select-trigger-copy strong,
 .app-select-option-copy strong,
@@ -287,14 +286,13 @@ a { color: var(--accent); text-decoration: none; }
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 140px;
+  min-height: 136px;
   padding: 3px 18px;
   flex-direction: column;
   overflow: hidden;
   background: var(--glass-bg);
 }
 
-.dashboard-net-worth-heading,
 .dashboard-panel-heading,
 .dashboard-section-heading {
   display: flex;
@@ -304,20 +302,25 @@ a { color: var(--accent); text-decoration: none; }
   gap: 14px;
 }
 
-.dashboard-net-worth-heading {
-  position: absolute;
-  top: 8px;
-  left: 18px;
-  z-index: 1;
-}
-
-.dashboard-net-worth-heading h3,
 .dashboard-panel-heading h3,
 .dashboard-section-heading h3 { margin: 3px 0 0; font-size: 16px; font-weight: 740; }
 
-.dashboard-net-worth-heading h3,
 .dashboard-pie-panel .dashboard-panel-heading h3,
 .dashboard-trend-panel .dashboard-panel-heading h3 { margin-top: 0; }
+
+.dashboard-net-worth-label {
+  display: inline-flex;
+  min-width: 0;
+  margin: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.035em;
+  line-height: 1;
+  text-transform: uppercase;
+}
 
 .dashboard-eyebrow {
   color: var(--text-secondary);
@@ -346,67 +349,35 @@ a { color: var(--accent); text-decoration: none; }
 .dashboard-net-worth-value {
   display: flex;
   min-width: 0;
-  margin-top: 4px;
+  margin-top: 9px;
   align-items: baseline;
   gap: 9px;
-  font-size: clamp(25px, 2.6vw, 34px);
-  font-weight: 820;
-  letter-spacing: -0.045em;
+  font-size: clamp(24px, 2.3vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
   line-height: 1;
   white-space: nowrap;
 }
 
 .dashboard-net-worth-value small {
   color: var(--text-secondary);
-  font-size: 14px;
-  font-weight: 850;
-  letter-spacing: 0.08em;
+  font-size: 13px;
+  font-weight: 720;
+  letter-spacing: 0.06em;
 }
 
-.dashboard-net-worth-comparison {
-  display: inline-flex;
-  min-height: 22px;
-  margin-top: 4px;
-  align-items: center;
-  flex-direction: row;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: 10px;
-}
-
-.dashboard-net-worth-comparison > strong {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: 15px;
-  font-weight: 780;
-}
-
-.dashboard-net-worth-comparison > span { color: currentColor; font-size: 13px; opacity: 0.72; }
-
-.dashboard-net-worth-metrics {
-  display: grid;
-  min-width: 0;
-  padding-left: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: center;
-  gap: 9px 14px;
-  border-left: 1px solid rgba(var(--muted-rgb), 0.13);
-}
-
-.dashboard-net-worth-metrics > div {
+.dashboard-net-worth-yoy {
   display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
+  margin-top: 10px;
+  padding-top: 8px;
+  align-items: baseline;
+  gap: 7px;
+  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
+  font-size: 13px;
+  line-height: 1;
 }
 
-.dashboard-net-worth-secondary { grid-column: 1 / -1; }
-
-.dashboard-net-worth-metrics span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.dashboard-net-worth-yoy > span {
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 720;
@@ -414,33 +385,101 @@ a { color: var(--accent); text-decoration: none; }
   text-transform: uppercase;
 }
 
-.dashboard-organizations-icon { width: 14px; height: 14px; flex: 0 0 14px; }.dashboard-net-worth-metrics strong { font-size: 17px; font-weight: 740; }
+.dashboard-net-worth-yoy > strong { font-weight: 740; }
 
-.dashboard-net-worth-metrics strong small {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 760;
-  letter-spacing: 0.04em;
+.dashboard-net-worth-yoy > em { color: var(--text-secondary); font-style: normal; }
+
+.dashboard-net-worth-metrics {
+  display: flex;
+  min-width: 0;
+  padding-left: 18px;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid rgba(var(--muted-rgb), 0.13);
 }
 
-.dashboard-net-worth-secondary strong { font-size: 21px; }
+.dashboard-net-worth-secondary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
 
-.dashboard-net-worth-secondary strong small { font-size: 12px; }
+.dashboard-net-worth-secondary-slot {
+  display: flex;
+  min-height: clamp(24px, 2.3vw, 30px);
+  margin-top: 9px;
+  align-items: flex-end;
+}
+
+.dashboard-net-worth-secondary-value {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dashboard-net-worth-secondary-value small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: 0.06em;
+}
+
+.dashboard-net-worth-counters {
+  display: flex;
+  margin-top: 10px;
+  padding-top: 8px;
+  align-items: baseline;
+  gap: 16px;
+  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
+  line-height: 1;
+}
+
+.dashboard-net-worth-counters:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dashboard-net-worth-counters > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.dashboard-net-worth-counters strong { font-size: 13px; font-weight: 740; }
+
+.dashboard-net-worth-counters span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 720;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
 
 .dashboard-pie-panel {
   display: flex;
   min-width: 0;
-  min-height: 140px;
+  min-height: 136px;
   padding: 2px 24px;
   flex-direction: column;
 }
 
 .dashboard-pie-content {
+  --dashboard-pie-rows-height: 101px;
+
   display: grid;
   min-height: 0;
   flex: 1;
   grid-template-columns: minmax(140px, 0.9fr) 28px minmax(165px, 1.1fr);
   align-items: center;
+  align-content: center;
   gap: 7px;
 }
 
@@ -455,12 +494,12 @@ a { color: var(--accent); text-decoration: none; }
 
 .dashboard-pie-chart .recharts-pie { transform: scale(1.2); transform-box: fill-box; transform-origin: center; }
 
-.dashboard-pie-content > .scroll-for-more { height: 100%; grid-column: 2; }
+.dashboard-pie-content > .scroll-for-more { height: 110px; grid-column: 2; }
 
 .dashboard-pie-legend {
   display: flex;
   height: auto;
-  max-height: 101px;
+  max-height: var(--dashboard-pie-rows-height);
   min-width: 0;
   grid-column: 3;
   flex-direction: column;
@@ -471,7 +510,7 @@ a { color: var(--accent); text-decoration: none; }
 .dashboard-pie-legend-scroll {
   display: flex;
   min-height: 0;
-  max-height: 101px;
+  max-height: var(--dashboard-pie-rows-height);
   flex: 1;
   flex-direction: column;
   gap: 1px;
@@ -635,10 +674,8 @@ a { color: var(--accent); text-decoration: none; }
   .dashboard-net-worth-body { grid-template-columns: 1fr; gap: 12px; }
 
   .dashboard-net-worth-metrics {
-    display: grid;
     padding-top: 11px;
     padding-left: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     border-top: 1px solid rgba(var(--muted-rgb), 0.13);
     border-left: 0;
   }
@@ -2818,7 +2855,6 @@ main > .page-loader { animation: none; }
 
 .scroll-for-more.is-vertical {
   width: 28px;
-  height: 140px;
   flex: 0 0 28px;
   flex-direction: column;
   padding: 3px;
