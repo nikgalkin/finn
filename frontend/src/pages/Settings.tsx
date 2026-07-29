@@ -732,7 +732,7 @@ export default function Settings() {
                 <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>Duplicate</span>
               )}
               <CountrySelect id={`organization-country-${index}`} value={organization.country} onChange={value => updateOrganization(index, 'country', value)} />
-              <button className="btn" style={{ ...iconButtonStyle, color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.3)' }} onClick={() => requestArchiveOrganization(index)} title={`Archive ${organization.name || 'organization'}`}>
+              <button className="btn" style={{ ...iconButtonStyle, color: '#fbbf24', borderColor: 'rgba(var(--warning-rgb), 0.3)' }} onClick={() => requestArchiveOrganization(index)} title={`Archive ${organization.name || 'organization'}`}>
                 <Archive size={16} />
               </button>
             </div>
@@ -750,7 +750,7 @@ export default function Settings() {
           </summary>
           <div id="settings-archived-organizations-scroll" style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px`, overflowY: 'auto', paddingRight: '4px' }}>
             {archivedOrganizations.map(({ organization, index }) => (
-              <div key={index} className="flex items-center gap-2" style={{ minHeight: '36px', padding: '5px 8px 5px 12px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.38)', border: '1px solid var(--glass-border)' }}>
+              <div key={index} className="flex items-center gap-2" style={{ minHeight: '36px', padding: '5px 8px 5px 12px', borderRadius: '8px', background: 'rgba(var(--surface-rgb), 0.38)', border: '1px solid var(--glass-border)' }}>
                 <span style={{ flex: 1, fontSize: '13px' }}>{organization.name}</span>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em' }}>{organization.country || '—'}</span>
                 <button className="btn" style={compactButtonStyle} onClick={() => restoreOrganization(index)} title={`Restore ${organization.name}`}>

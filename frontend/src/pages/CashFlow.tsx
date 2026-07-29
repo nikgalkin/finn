@@ -19,7 +19,7 @@ import { FlowNetSummary } from './components/FlowNetSummary';
 import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 import { orientExchangeRate } from '../lib/finance';
-import { formatExchangeRate, formatMonth } from '../lib/format';
+import { formatExchangeRate, formatFlowAmount, formatMonth } from '../lib/format';
 
 type FlowMovementFilter = 'all' | FlowDirection | 'transfer';
 
@@ -47,14 +47,6 @@ const matchesCategory = (entry: FlowEntry, category: string) => (
 
 const matchesCounterparty = (entry: FlowEntry, counterparty: string) => (
   counterparty === 'all' || (entry.entryType !== 'transfer' && entry.counterparty === counterparty)
-);
-
-const formatAmount = (amount: number, currency: string) => (
-  `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount)} ${currency}`
-);
-
-const formatTaxAmount = (amount: number, currency: string) => (
-  `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount)} ${currency}`
 );
 
 const formatTransferRate = (entry: FlowEntry) => {
@@ -461,8 +453,8 @@ export default function CashFlow() {
 
   const deleteEntry = async (entry: FlowEntry) => {
     const description = entry.entryType === 'transfer'
-      ? `transfer ${formatAmount(entry.amount, entry.currency)} from ${entry.account} to ${entry.toAccount}`
-      : `${entry.direction === 'in' ? 'incoming' : 'outgoing'} ${formatAmount(entry.amount, entry.currency)} ${entry.direction === 'in' ? 'from' : 'to'} ${entry.counterparty}`;
+      ? `transfer ${formatFlowAmount(entry.amount, entry.currency)} from ${entry.account} to ${entry.toAccount}`
+      : `${entry.direction === 'in' ? 'incoming' : 'outgoing'} ${formatFlowAmount(entry.amount, entry.currency)} ${entry.direction === 'in' ? 'from' : 'to'} ${entry.counterparty}`;
     if (!window.confirm(`Delete ${description}?`)) return;
     setError('');
     try {
@@ -576,10 +568,10 @@ export default function CashFlow() {
       </div>
 
       {error && !periodEditor && (
-        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.35)' }}>{error}</div>
+        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--danger)', borderColor: 'rgba(var(--danger-rgb), 0.35)' }}>{error}</div>
       )}
       {csvImportNotice && (
-        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--success)', borderColor: 'rgba(34, 197, 94, 0.3)' }}>{csvImportNotice}</div>
+        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--success)', borderColor: 'rgba(var(--success-rgb), 0.3)' }}>{csvImportNotice}</div>
       )}
 
       <div className="glass-panel mb-4" style={{ padding: '14px 18px' }}>
@@ -761,7 +753,7 @@ export default function CashFlow() {
                                       </QuickHoverTooltip>
                                     </td>
                                     <td className="text-right" style={{ whiteSpace: 'nowrap', color: isTransfer ? '#60a5fa' : entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
-                                      <div>{isTransfer ? `−${formatAmount(entry.amount, entry.currency)} → +${formatAmount(entry.toAmount, entry.toCurrency)}` : `${entry.direction === 'in' ? '+' : '−'}${formatAmount(Math.abs(netAmount), entry.currency)}`}</div>
+                                      <div>{isTransfer ? `−${formatFlowAmount(entry.amount, entry.currency)} → +${formatFlowAmount(entry.toAmount, entry.toCurrency)}` : `${entry.direction === 'in' ? '+' : '−'}${formatFlowAmount(Math.abs(netAmount), entry.currency)}`}</div>
                                       {isTransfer && formatTransferRate(entry) && <div className="cash-flow-entry-details">Rate: {formatTransferRate(entry)}</div>}
                                       {isTransfer && (entry.tag || entry.toTag) && (
                                         <div className="cash-flow-entry-details cash-flow-entry-tags">
@@ -779,8 +771,8 @@ export default function CashFlow() {
                                       )}
                                       {!isTransfer && tax > 0 && (
                                         <div className="cash-flow-entry-details">
-                                          Gross +{formatAmount(entry.amount, entry.currency)}
-                                          <span> · Tax −{formatTaxAmount(tax, entry.currency)}</span>
+                                          Gross +{formatFlowAmount(entry.amount, entry.currency)}
+                                          <span> · Tax −{formatFlowAmount(tax, entry.currency)}</span>
                                         </div>
                                       )}
                                     </td>

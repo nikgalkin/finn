@@ -66,7 +66,7 @@ const HIGHLIGHT_RULES = {
 };
 
 const HIGHLIGHT_BADGE_COLOR = '#f59e0b';
-const HIGHLIGHT_BADGE_BORDER = 'rgba(245, 158, 11, 0.35)';
+const HIGHLIGHT_BADGE_BORDER = 'rgba(var(--warning-rgb), 0.35)';
 
 const getOrgColor = (orgName: string) => {
   if (!orgName) return 'hsl(0, 0%, 50%)';
@@ -104,10 +104,10 @@ const getToneColor = (tone: FeedItemTone) => {
 };
 
 const getToneBorderColor = (tone: FeedItemTone) => {
-  if (tone === 'comment') return 'rgba(59, 130, 246, 0.3)';
+  if (tone === 'comment') return 'rgba(var(--accent-rgb), 0.3)';
   if (tone === 'positive') return 'rgba(18, 192, 82, 0.3)';
   if (tone === 'negative') return 'rgba(214, 60, 60, 0.3)';
-  return 'rgba(148, 163, 184, 0.25)';
+  return 'rgba(var(--muted-rgb), 0.25)';
 };
 
 const getCommentTitle = (comment: CommentItem) => {

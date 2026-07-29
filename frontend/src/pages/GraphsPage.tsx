@@ -553,7 +553,7 @@ export default function GraphsPage() {
             <button
               onClick={() => setHiddenSeries({ currencies: {}, organizations: {}, tags: { untagged: true } })}
               className="btn flex items-center gap-1.5"
-              style={{ padding: '8px 16px', fontSize: '14px', borderColor: 'var(--accent)', color: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)' }}
+              style={{ padding: '8px 16px', fontSize: '14px', borderColor: 'var(--accent)', color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.05)' }}
             >
               <Eye size={14} /> Show Hidden
             </button>

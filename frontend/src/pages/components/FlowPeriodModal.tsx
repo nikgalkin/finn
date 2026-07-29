@@ -12,7 +12,7 @@ import { QuickHoverTooltip } from './QuickHoverTooltip';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { CommentModal } from './SnapshotCommentModal';
-import { formatMonth } from '../../lib/format';
+import { formatFlowNumber, formatMonth } from '../../lib/format';
 
 export type FlowPeriodDraft = {
   clientID: string;
@@ -424,7 +424,7 @@ export function FlowPeriodModal({
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-tax">
-                    <span className="cash-flow-period-tax-label">Tax {draft.direction === 'in' && Number(draft.taxRate) > 0 && Number(draft.amount) > 0 && <small>−{new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(draft.amount) * Number(draft.taxRate) / 100)} {draft.currency}</small>}</span>
+                    <span className="cash-flow-period-tax-label">Tax {draft.direction === 'in' && Number(draft.taxRate) > 0 && Number(draft.amount) > 0 && <small>−{formatFlowNumber(Number(draft.amount) * Number(draft.taxRate) / 100)} {draft.currency}</small>}</span>
                     {draft.direction === 'in' ? <div className="cash-flow-tax-rate-control"><input id={`flow-${draft.clientID}-tax-rate`} name={`flow-${draft.clientID}-tax-rate`} className="input" type="number" min="0" max="100" step="0.01" aria-label={`Movement ${index + 1} tax rate`} value={draft.taxRate} onChange={event => updateDraft(draft.clientID, { taxRate: event.target.value })} /><span>%</span></div> : <div className="cash-flow-tax-disabled">—</div>}
                   </div>
                   <div className="cash-flow-field cash-flow-period-category">

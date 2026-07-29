@@ -15,7 +15,7 @@ import { ScrollForMore } from './components/ScrollForMore';
 import { SnapshotDraftsNotice } from './components/SnapshotDraftsNotice';
 import { isTextInputTarget } from '../lib/hotkeys';
 import { useHistoryEntryState } from '../lib/historyEntryState';
-import { formatCompact, formatPercent, formatSigned, getDeltaColor, getMoneyDeltaColor } from '../lib/format';
+import { formatCompact, formatNumber, formatPercent, formatSigned, getDeltaColor, getMoneyDeltaColor } from '../lib/format';
 import {
   calculateCurrencyTotals,
   calculateFlowDecomposition,
@@ -360,7 +360,7 @@ export default function Dashboard() {
                     <h3>Total Net Worth</h3>
                   </div>
                   <div className="dashboard-net-worth-value">
-                    {Math.round(latestTotals.totalBase).toLocaleString('en-US')}
+                    {formatNumber(latestTotals.totalBase)}
                     <small>{baseCurrency}</small>
                   </div>
                   {latestYearAgoTotals && latestYearAgoSnapshot && (
@@ -381,7 +381,7 @@ export default function Dashboard() {
                   {secondaryCurrency && secondaryCurrency !== baseCurrency && (
                     <div className="dashboard-net-worth-secondary">
                       <span><DollarSign size={13} /> Secondary</span>
-                      <strong>{Math.round(latestTotals.totalSecondary).toLocaleString('en-US')} <small>{secondaryCurrency}</small></strong>
+                      <strong>{formatNumber(latestTotals.totalSecondary)} <small>{secondaryCurrency}</small></strong>
                     </div>
                   )}
                   <div>
@@ -511,12 +511,12 @@ export default function Dashboard() {
                   </div>
                   <div className="dashboard-year-totals">
                     <div>
-                      <b>{Math.round(yearLatestTotals.totalBase).toLocaleString('en-US')} <small>{baseCurrency}</small></b>
+                      <b>{formatNumber(yearLatestTotals.totalBase)} <small>{baseCurrency}</small></b>
                       {renderDiff(yearLatestTotals.totalBase, prevYearTotals?.totalBase)}
                     </div>
                     {secondaryCurrency && secondaryCurrency !== baseCurrency && (
                       <div>
-                        <b>{Math.round(yearLatestTotals.totalSecondary).toLocaleString('en-US')} <small>{secondaryCurrency}</small></b>
+                        <b>{formatNumber(yearLatestTotals.totalSecondary)} <small>{secondaryCurrency}</small></b>
                         {renderDiff(yearLatestTotals.totalSecondary, prevYearTotals?.totalSecondary)}
                       </div>
                     )}
@@ -572,7 +572,7 @@ export default function Dashboard() {
                                 <span style={{ fontSize: '0.75em', color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.03)', padding: '1px 4px', borderRadius: '4px' }}>{percentOfTotal.toFixed(1)}%</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                <span style={{ fontSize: '0.95em', fontWeight: 500, color: amt === 0 ? 'var(--text-secondary)' : 'inherit' }}>{Math.round(amt).toLocaleString('en-US')}</span>
+                                <span style={{ fontSize: '0.95em', fontWeight: 500, color: amt === 0 ? 'var(--text-secondary)' : 'inherit' }}>{formatNumber(amt)}</span>
                                 {Math.abs(diff) >= 1 && (
                                   <span style={{ fontSize: '0.75em', color: getDeltaColor(diff), fontWeight: 500, marginTop: '1px' }}>
                                     {formatSigned(diff)}{prevAmt > 0 && ` (${formatPercent(diffPercent, 1)})`}
@@ -594,7 +594,7 @@ export default function Dashboard() {
                               </div>
                             </td>
                             <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
-                              <div style={{ fontWeight: 500 }}>{Math.round(totals.totalBase).toLocaleString('en-US')}</div>
+                              <div style={{ fontWeight: 500 }}>{formatNumber(totals.totalBase)}</div>
                               {renderDiff(totals.totalBase, prevTotals?.totalBase)}
 
                               {prevSnapshot && (Math.abs(organicBase) > 1 || Math.abs(fxImpactBase) > 1) && (
@@ -616,7 +616,7 @@ export default function Dashboard() {
                             </td>
                             {secondaryCurrency && secondaryCurrency !== baseCurrency && (
                               <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
-                                <div style={{ fontWeight: 500 }}>{Math.round(totals.totalSecondary).toLocaleString('en-US')}</div>
+                                <div style={{ fontWeight: 500 }}>{formatNumber(totals.totalSecondary)}</div>
                                 {renderDiff(totals.totalSecondary, prevTotals?.totalSecondary)}
                               </td>
                             )}

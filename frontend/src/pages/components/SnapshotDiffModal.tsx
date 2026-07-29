@@ -6,7 +6,7 @@ import { ArrowDownUp, ChevronDown, Coins, ExternalLink, Folder, MessageSquare, R
 import { getCurrencyColor, getTagColor } from '../../types';
 import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
-import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR, formatExchangeRate } from '../../lib/format';
+import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR, formatExchangeRate, formatNumber } from '../../lib/format';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
 import { buildTreeDiffData } from '../../lib/snapshotDiff';
 import type { DiffStatus } from '../../lib/snapshotDiff';
@@ -115,7 +115,7 @@ const buildRateDiffData = (
 
 const renderTagPill = (tag: string, changed: boolean, removed = false) => {
   const color = tag === 'untagged' ? 'var(--text-secondary)' : getTagColor(tag);
-  const borderColor = tag === 'untagged' ? 'rgba(148,163,184,0.2)' : `${getTagColor(tag)}55`;
+  const borderColor = tag === 'untagged' ? 'rgba(var(--muted-rgb), 0.2)' : `${getTagColor(tag)}55`;
 
   return (
     <span
@@ -232,9 +232,9 @@ function CommentMarker({ comment, label }: { comment?: string; label?: string })
         position: 'relative',
         cursor: 'help',
         padding: label ? '2px 6px' : 0,
-        border: label ? '1px solid rgba(59, 130, 246, 0.28)' : 'none',
+        border: label ? '1px solid rgba(var(--accent-rgb), 0.28)' : 'none',
         borderRadius: label ? '4px' : 0,
-        background: label ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+        background: label ? 'rgba(var(--accent-rgb), 0.08)' : 'transparent',
         fontSize: '10px',
         fontWeight: 700
       }}
@@ -629,15 +629,15 @@ export function SnapshotDiffModal({
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        from: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{Math.round(balance.previousAmt).toLocaleString('en-US')}</span>
+                        from: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{formatNumber(balance.previousAmt)}</span>
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        to: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{Math.round(balance.currentAmt).toLocaleString('en-US')}</span>
+                        to: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNumber(balance.currentAmt)}</span>
                       </div>
 
                       <div style={{ color: deltaColor, fontWeight: 700, textAlign: 'right' }}>
-                        {deltaSign}{Math.round(balance.delta).toLocaleString('en-US')}
+                        {deltaSign}{formatNumber(balance.delta)}
                         {balance.status !== 'new' && balance.status !== 'deleted' && balance.previousAmt > 0 && (
                           <span style={{ fontSize: '0.85em', marginLeft: '4px', opacity: 0.8, fontWeight: 500 }}>
                             ({deltaSign}{balance.deltaPercent.toFixed(1)}%)

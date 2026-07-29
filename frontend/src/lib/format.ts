@@ -29,6 +29,12 @@ export const formatPercent = (value: number, fractionDigits = 2) => {
   return `${normalized > 0 ? '+' : ''}${normalized.toFixed(fractionDigits)}%`;
 };
 
+const flowNumberFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+
+export const formatFlowNumber = (value: number) => flowNumberFormat.format(value);
+
+export const formatFlowAmount = (value: number, currency: string) => `${formatFlowNumber(value)} ${currency}`;
+
 export const EXCHANGE_RATE_FRACTION_DIGITS = 1;
 
 export const formatExchangeRate = (value: number, useGrouping = true) => (

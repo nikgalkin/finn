@@ -6,7 +6,7 @@ type DraftRestoreBannerProps = {
 
 export function DraftRestoreBanner({ draftTimestamp, onRestore, onDiscard }: DraftRestoreBannerProps) {
   return (
-    <div className="glass-panel flex justify-between items-center" style={{ borderColor: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)', marginBottom: '32px' }}>
+    <div className="glass-panel flex justify-between items-center" style={{ borderColor: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.05)', marginBottom: '32px' }}>
       <div>
         <h4 style={{ margin: 0, color: 'var(--accent)' }}>Unsaved Draft Detected</h4>
         <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>

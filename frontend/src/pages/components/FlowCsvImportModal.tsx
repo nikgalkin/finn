@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { AlertTriangle, FileUp, X } from 'lucide-react';
 import type { FlowCsvPreview } from '../../lib/flowCsv';
+import { formatFlowNumber } from '../../lib/format';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { Spinner } from './PageLoader';
 
@@ -14,8 +15,6 @@ type FlowCsvImportModalProps = {
   onClose: () => void;
   onImport: () => void;
 };
-
-const formatAmount = (amount: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount);
 
 export function FlowCsvImportModal({ preview, importing, error, importDuplicates, onImportDuplicatesChange, onClose, onImport }: FlowCsvImportModalProps) {
   useBodyScrollLock();
@@ -99,9 +98,9 @@ export function FlowCsvImportModal({ preview, importing, error, importDuplicates
                           <td>{entry.entryType === 'transfer' ? `${entry.account} → ${entry.toAccount}` : entry.counterparty}</td>
                           <td>{entry.entryType === 'transfer' ? '—' : entry.account || '—'}</td>
                           <td>{entry.entryType === 'transfer'
-                            ? `${formatAmount(entry.amount)} ${entry.currency} → ${formatAmount(entry.toAmount)} ${entry.toCurrency}`
-                            : `${formatAmount(entry.amount)} ${entry.currency}`}</td>
-                          <td>{entry.entryType !== 'transfer' && entry.taxRate ? `${formatAmount(entry.taxRate)}%` : '—'}</td>
+                            ? `${formatFlowNumber(entry.amount)} ${entry.currency} → ${formatFlowNumber(entry.toAmount)} ${entry.toCurrency}`
+                            : `${formatFlowNumber(entry.amount)} ${entry.currency}`}</td>
+                          <td>{entry.entryType !== 'transfer' && entry.taxRate ? `${formatFlowNumber(entry.taxRate)}%` : '—'}</td>
                           <td>{entry.entryType !== 'transfer' ? entry.category || '—' : '—'}</td>
                           <td className="cash-flow-import-comment">{entry.comment || '—'}</td>
                         </tr>
