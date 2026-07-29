@@ -172,7 +172,7 @@ export const buildWhereClause = (clause: WhereClause): string | null => {
   return renderComparison(quoteIdentifier(column), clause);
 };
 
-export type UpdateStatementInput = {
+type UpdateStatementInput = {
   table: string;
   /** Right-hand side of the assignment, already rendered. */
   assignment: string;
@@ -199,7 +199,7 @@ export const buildColumnAssignment = (column: string, text: string): string =>
 export const buildJsonAssignment = (column: string, path: string, text: string): string =>
   `${quoteIdentifier(column)} = json_set(${quoteIdentifier(column)}, '${path}', ${toJsonValueLiteral(text)})`;
 
-export type MatchedElementAssignment = {
+type MatchedElementAssignment = {
   column: string;
   /** Array being rewritten, e.g. `$.organizations`. */
   arrayPath: string;

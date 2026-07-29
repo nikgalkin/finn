@@ -9,7 +9,7 @@ type HotkeysHelpModalProps = {
 const panelStyle = { width: '660px', maxWidth: '92vw', maxHeight: '86vh', overflowY: 'auto' as const, padding: '22px 24px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const sectionsStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '18px 28px', alignItems: 'start' };
 const rowStyle = { display: 'grid', gridTemplateColumns: '72px 1fr', alignItems: 'center', gap: '12px', padding: '7px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' };
-const keyStyle = { justifySelf: 'start', minWidth: '32px', textAlign: 'center' as const, padding: '3px 8px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'rgba(15, 23, 42, 0.8)', fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)' };
+const keyStyle = { justifySelf: 'start', minWidth: '32px', textAlign: 'center' as const, padding: '3px 8px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'rgba(var(--surface-rgb), 0.8)', fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)' };
 
 const sections = [
   {

@@ -71,6 +71,8 @@ export function CommentModal({
         </div>
 
         <textarea
+          id="snapshot-comment"
+          name="snapshot-comment"
           className="input w-full flex-1"
           style={{ resize: 'none', paddingTop: '12px', minHeight: '150px' }}
           placeholder={placeholder}

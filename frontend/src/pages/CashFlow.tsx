@@ -19,7 +19,7 @@ import { FlowNetSummary } from './components/FlowNetSummary';
 import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 import { orientExchangeRate } from '../lib/finance';
-import { formatMonth } from '../lib/format';
+import { formatExchangeRate, formatFlowAmount, formatMonth, getDeltaColor } from '../lib/format';
 
 type FlowMovementFilter = 'all' | FlowDirection | 'transfer';
 
@@ -49,20 +49,11 @@ const matchesCounterparty = (entry: FlowEntry, counterparty: string) => (
   counterparty === 'all' || (entry.entryType !== 'transfer' && entry.counterparty === counterparty)
 );
 
-const formatAmount = (amount: number, currency: string) => (
-  `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount)} ${currency}`
-);
-
-const formatTaxAmount = (amount: number, currency: string) => (
-  `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(amount)} ${currency}`
-);
-
 const formatTransferRate = (entry: FlowEntry) => {
   if (entry.currency === entry.toCurrency || entry.amount === 0 || entry.toAmount === 0) return '';
   const directRate = entry.toAmount / entry.amount;
-  const formatRate = (rate: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(rate);
   const displayRate = orientExchangeRate(entry.currency, entry.toCurrency, directRate);
-  return `1 ${displayRate.fromCurrency} = ${formatRate(displayRate.rate)} ${displayRate.toCurrency}`;
+  return `1 ${displayRate.fromCurrency} = ${formatExchangeRate(displayRate.rate)} ${displayRate.toCurrency}`;
 };
 
 const nextMonth = (month: string) => {
@@ -100,7 +91,7 @@ const fetchFlowEntries = async () => {
 
 export default function CashFlow() {
   const { settings, loading: settingsLoading } = useSettings();
-  const { snapshots } = useSnapshots({ sort: 'desc' });
+  const { snapshots } = useSnapshots({ sort: 'desc', baseCurrency: settings.baseCurrency || 'RUB' });
   const [searchParams] = useSearchParams();
   const [entries, setEntries] = useState<FlowEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -462,8 +453,8 @@ export default function CashFlow() {
 
   const deleteEntry = async (entry: FlowEntry) => {
     const description = entry.entryType === 'transfer'
-      ? `transfer ${formatAmount(entry.amount, entry.currency)} from ${entry.account} to ${entry.toAccount}`
-      : `${entry.direction === 'in' ? 'incoming' : 'outgoing'} ${formatAmount(entry.amount, entry.currency)} ${entry.direction === 'in' ? 'from' : 'to'} ${entry.counterparty}`;
+      ? `transfer ${formatFlowAmount(entry.amount, entry.currency)} from ${entry.account} to ${entry.toAccount}`
+      : `${entry.direction === 'in' ? 'incoming' : 'outgoing'} ${formatFlowAmount(entry.amount, entry.currency)} ${entry.direction === 'in' ? 'from' : 'to'} ${entry.counterparty}`;
     if (!window.confirm(`Delete ${description}?`)) return;
     setError('');
     try {
@@ -559,6 +550,8 @@ export default function CashFlow() {
         </div>
         <div className="flex items-center gap-2">
           <input
+            id="cash-flow-csv-file"
+            name="cash-flow-csv-file"
             ref={csvFileInputRef}
             type="file"
             accept=".csv,text/csv"
@@ -575,10 +568,10 @@ export default function CashFlow() {
       </div>
 
       {error && !periodEditor && (
-        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.35)' }}>{error}</div>
+        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--danger)', borderColor: 'rgba(var(--danger-rgb), 0.35)' }}>{error}</div>
       )}
       {csvImportNotice && (
-        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--success)', borderColor: 'rgba(34, 197, 94, 0.3)' }}>{csvImportNotice}</div>
+        <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--success)', borderColor: 'rgba(var(--success-rgb), 0.3)' }}>{csvImportNotice}</div>
       )}
 
       <div className="glass-panel mb-4" style={{ padding: '14px 18px' }}>
@@ -593,17 +586,17 @@ export default function CashFlow() {
                 setEndMonth(end);
               }}
             />
-            <select className="input" aria-label="Movement type" value={directionFilter} onChange={event => setDirectionFilter(event.target.value as FlowMovementFilter)} style={{ width: 'auto', minWidth: '150px' }}>
+            <select id="cash-flow-movement-type-filter" name="cash-flow-movement-type-filter" className="input" aria-label="Movement type" value={directionFilter} onChange={event => setDirectionFilter(event.target.value as FlowMovementFilter)} style={{ width: 'auto', minWidth: '150px' }}>
               <option value="all">All movements</option>
               <option value="in" disabled={!timeframeDirections.has('in')}>Incoming</option>
               <option value="out" disabled={!timeframeDirections.has('out')}>Outgoing</option>
               <option value="transfer" disabled={!timeframeDirections.has('transfer')}>Transfers</option>
             </select>
-            <select className="input" aria-label={counterpartyAriaLabel} value={counterpartyFilter} onChange={event => setCounterpartyFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
+            <select id="cash-flow-counterparty-filter" name="cash-flow-counterparty-filter" className="input" aria-label={counterpartyAriaLabel} value={counterpartyFilter} onChange={event => setCounterpartyFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
               <option value="all">{counterpartyAllLabel}</option>
               {counterparties.map(counterparty => <option key={counterparty} value={counterparty}>{counterparty}</option>)}
             </select>
-            <select className="input" aria-label="Category" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
+            <select id="cash-flow-category-filter" name="cash-flow-category-filter" className="input" aria-label="Category" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
               <option value="all">All categories</option>
               {hasUncategorizedEntries && <option value="none">No category</option>}
               {categories.map(category => <option key={category} value={category}>{category}</option>)}
@@ -737,10 +730,11 @@ export default function CashFlow() {
                                 const tax = calculateFlowTax(entry);
                                 const netAmount = entry.direction === 'in' ? entry.amount - tax : -entry.amount;
                                 const isTransfer = entry.entryType === 'transfer';
+                                const movementColor = isTransfer ? '#60a5fa' : getDeltaColor(netAmount);
                                 return (
                                   <tr key={entry.id}>
                                     <td>
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: isTransfer ? '#60a5fa' : entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 600, fontSize: '13px' }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: movementColor, fontWeight: 600, fontSize: '13px' }}>
                                         {isTransfer ? <ArrowRightLeft size={15} /> : entry.direction === 'in' ? <ArrowDown size={15} /> : <ArrowUp size={15} />}
                                         {isTransfer ? 'Transfer' : entry.direction === 'in' ? 'Incoming' : 'Outgoing'}
                                       </span>
@@ -759,8 +753,8 @@ export default function CashFlow() {
                                         </button>
                                       </QuickHoverTooltip>
                                     </td>
-                                    <td className="text-right" style={{ whiteSpace: 'nowrap', color: isTransfer ? '#60a5fa' : entry.direction === 'in' ? 'var(--success)' : 'var(--danger)', fontWeight: 700 }}>
-                                      <div>{isTransfer ? `−${formatAmount(entry.amount, entry.currency)} → +${formatAmount(entry.toAmount, entry.toCurrency)}` : `${entry.direction === 'in' ? '+' : '−'}${formatAmount(Math.abs(netAmount), entry.currency)}`}</div>
+                                    <td className="text-right" style={{ whiteSpace: 'nowrap', color: movementColor, fontWeight: 700 }}>
+                                      <div>{isTransfer ? `−${formatFlowAmount(entry.amount, entry.currency)} → +${formatFlowAmount(entry.toAmount, entry.toCurrency)}` : `${entry.direction === 'in' ? '+' : '−'}${formatFlowAmount(Math.abs(netAmount), entry.currency)}`}</div>
                                       {isTransfer && formatTransferRate(entry) && <div className="cash-flow-entry-details">Rate: {formatTransferRate(entry)}</div>}
                                       {isTransfer && (entry.tag || entry.toTag) && (
                                         <div className="cash-flow-entry-details cash-flow-entry-tags">
@@ -778,8 +772,8 @@ export default function CashFlow() {
                                       )}
                                       {!isTransfer && tax > 0 && (
                                         <div className="cash-flow-entry-details">
-                                          Gross +{formatAmount(entry.amount, entry.currency)}
-                                          <span> · Tax −{formatTaxAmount(tax, entry.currency)}</span>
+                                          Gross +{formatFlowAmount(entry.amount, entry.currency)}
+                                          <span> · Tax −{formatFlowAmount(tax, entry.currency)}</span>
                                         </div>
                                       )}
                                     </td>

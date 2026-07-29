@@ -12,6 +12,7 @@ import { SETTINGS_UPDATED_EVENT, useSettings } from '../hooks/useSettings';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { ConfirmLeaveModal } from './components/ConfirmLeaveModal';
 import { ArchiveOrganizationModal } from './components/ArchiveOrganizationModal';
+import { AppSelect, type AppSelectOption } from './components/AppSelect';
 import { CountrySelect } from './components/CountrySelect';
 import { HelpTooltip } from './components/HelpTooltip';
 import { PageLoader, Spinner } from './components/PageLoader';
@@ -142,25 +143,44 @@ type CurrencyFieldProps = {
   allowNone?: boolean; currencies: string[]; description: string; label: string; onChange: (value: string) => void; role: 'base' | 'secondary'; value: string;
 };
 
-const CurrencyField = ({ allowNone, currencies, description, label, onChange, role, value }: CurrencyFieldProps) => (
-  <div className={`currency-framework-field is-${role}`}>
-    <div className="currency-framework-field-heading">
-      <span>{role === 'base' ? '1' : '2'}</span>
-      <div>
-        <strong>{label}</strong>
-        <small>{role === 'base' ? 'Portfolio standard' : 'Optional comparison'}</small>
+const CurrencyField = ({ allowNone, currencies, description, label, onChange, role, value }: CurrencyFieldProps) => {
+  const options: AppSelectOption[] = [
+    ...(allowNone ? [{ value: '', label: 'None', description: 'Disable the comparison currency' }] : []),
+    ...currencies.map(currency => ({ value: currency, color: getCurrencyColor(currency) }))
+  ];
+
+  return (
+    <div className={`currency-framework-field is-${role}`}>
+      <div className="currency-framework-field-heading">
+        <span>{role === 'base' ? '1' : '2'}</span>
+        <div>
+          <strong>{label}</strong>
+          <small>{role === 'base' ? 'Portfolio standard' : 'Optional comparison'}</small>
+        </div>
       </div>
+      <div className="currency-framework-select">
+        <AppSelect
+          id={`settings-${role}-currency`}
+          name={`settings-${role}-currency`}
+          ariaLabel={label}
+          value={value}
+          onChange={onChange}
+          options={options}
+          placeholder="Select currency"
+          searchable={currencies.length > 8}
+          searchPlaceholder="Find currency…"
+          width="100%"
+          dropdownWidth={220}
+          dropdownMatchTriggerWidth
+          dropdownAlign="left"
+          height="36px"
+          textAlign="left"
+        />
+      </div>
+      <span className="currency-framework-field-description">{description}</span>
     </div>
-    <div className="currency-framework-select">
-      <i style={{ background: value ? getCurrencyColor(value) : 'var(--text-secondary)' }} />
-      <select className="input" value={value} onChange={event => onChange(event.target.value)}>
-        {allowNone && <option value="">— None —</option>}
-        {currencies.map(currency => <option key={currency} value={currency}>{currency}</option>)}
-      </select>
-    </div>
-    <span className="currency-framework-field-description">{description}</span>
-  </div>
-);
+  );
+};
 
 export default function Settings() {
   const { settings, setSettings, loading } = useSettings();
@@ -636,6 +656,8 @@ export default function Settings() {
                 />
               )}
               <input
+                id={`settings-${list}-${i}`}
+                name={`settings-${list}-${i}`}
                 className="input"
                 aria-label={`${title} item ${i + 1}`}
                 value={item}
@@ -696,6 +718,8 @@ export default function Settings() {
           return (
             <div key={index} className="flex gap-2 items-center">
               <input
+                id={`settings-organization-${index}-name`}
+                name={`settings-organization-${index}-name`}
                 className="input"
                 value={organization.name}
                 placeholder="Organization name"
@@ -708,7 +732,7 @@ export default function Settings() {
                 <span style={{ color: 'var(--danger)', fontSize: '11px', fontWeight: 600 }}>Duplicate</span>
               )}
               <CountrySelect id={`organization-country-${index}`} value={organization.country} onChange={value => updateOrganization(index, 'country', value)} />
-              <button className="btn" style={{ ...iconButtonStyle, color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.3)' }} onClick={() => requestArchiveOrganization(index)} title={`Archive ${organization.name || 'organization'}`}>
+              <button className="btn" style={{ ...iconButtonStyle, color: '#fbbf24', borderColor: 'rgba(var(--warning-rgb), 0.3)' }} onClick={() => requestArchiveOrganization(index)} title={`Archive ${organization.name || 'organization'}`}>
                 <Archive size={16} />
               </button>
             </div>
@@ -726,7 +750,7 @@ export default function Settings() {
           </summary>
           <div id="settings-archived-organizations-scroll" style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px', maxHeight: `${settingsListHeight(SETTINGS_LIST_VISIBLE_ROWS)}px`, overflowY: 'auto', paddingRight: '4px' }}>
             {archivedOrganizations.map(({ organization, index }) => (
-              <div key={index} className="flex items-center gap-2" style={{ minHeight: '36px', padding: '5px 8px 5px 12px', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.38)', border: '1px solid var(--glass-border)' }}>
+              <div key={index} className="flex items-center gap-2" style={{ minHeight: '36px', padding: '5px 8px 5px 12px', borderRadius: '8px', background: 'rgba(var(--surface-rgb), 0.38)', border: '1px solid var(--glass-border)' }}>
                 <span style={{ flex: 1, fontSize: '13px' }}>{organization.name}</span>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em' }}>{organization.country || '—'}</span>
                 <button className="btn" style={compactButtonStyle} onClick={() => restoreOrganization(index)} title={`Restore ${organization.name}`}>
@@ -832,6 +856,8 @@ export default function Settings() {
                   return (
                     <div key={index} className="cash-flow-source-setting-row">
                       <input
+                        id={`settings-cash-flow-source-${index}`}
+                        name={`settings-cash-flow-source-${index}`}
                         className="input" value={source} disabled={!settings.cashFlow?.enabled}
                         onChange={event => updateFlowSource(index, event.target.value)}
                         placeholder="e.g. Employer or landlord"
@@ -839,6 +865,8 @@ export default function Settings() {
                       />
                       <div className="cash-flow-tax-rate-setting">
                         <input
+                          id={`settings-cash-flow-source-${index}-tax-rate`}
+                          name={`settings-cash-flow-source-${index}-tax-rate`}
                           className="input" type="number" min="0" max="100" step="0.01"
                           aria-label={`${source || `Source ${index + 1}`} default tax rate`}
                           value={settings.cashFlow?.taxRates?.[source] ?? 0}
@@ -879,6 +907,8 @@ export default function Settings() {
                   return (
                     <div key={index} className="cash-flow-simple-setting-row">
                       <input
+                        id={`settings-cash-flow-category-${index}`}
+                        name={`settings-cash-flow-category-${index}`}
                         className="input" value={category} disabled={!settings.cashFlow?.enabled}
                         onChange={event => updateFlowCategory(index, event.target.value)}
                         placeholder="e.g. Debt repayment"
@@ -910,6 +940,8 @@ export default function Settings() {
               <div className="cash-flow-field">
                 <label>Provider</label>
                 <select
+                  id="settings-local-ai-provider"
+                  name="settings-local-ai-provider"
                   className="input" value={settings.localAI?.provider || 'lmstudio'} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ provider: event.target.value as LocalAISettings['provider'] })}
                 >
@@ -920,6 +952,8 @@ export default function Settings() {
               <div className="cash-flow-field">
                 <label>Server URL</label>
                 <input
+                  id="settings-local-ai-server-url"
+                  name="settings-local-ai-server-url"
                   className="input" value={settings.localAI?.baseUrl || 'http://127.0.0.1:1234/v1'} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ baseUrl: event.target.value })}
                   placeholder="http://127.0.0.1:1234/v1"
@@ -928,6 +962,8 @@ export default function Settings() {
               <div className="cash-flow-field">
                 <label>Chat model</label>
                 <select
+                  id="settings-local-ai-model"
+                  name="settings-local-ai-model"
                   className="input" value={settings.localAI?.model || ''} disabled={!settings.localAI?.enabled}
                   onChange={event => updateLocalAI({ model: event.target.value })}
                 >

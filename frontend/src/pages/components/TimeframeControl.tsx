@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { SearchableSelect } from './graphs/SearchableSelect';
+import { useMemo, useState } from 'react';
+import { AppSelect } from './AppSelect';
+import { MonthSelect } from './MonthSelect';
 
 const QUICK_PERIODS = [
   ['2', '2M'],
@@ -12,6 +13,7 @@ const QUICK_PERIODS = [
 ] as const;
 
 const QUICK_PERIOD_LABELS = QUICK_PERIODS.map(([, label]) => label);
+const QUICK_PERIOD_OPTIONS = QUICK_PERIOD_LABELS.map(value => ({ value }));
 
 type TimeframeControlProps = {
   availableMonths: string[];
@@ -22,6 +24,18 @@ type TimeframeControlProps = {
 
 export function TimeframeControl({ availableMonths, startMonth, endMonth, onChange }: TimeframeControlProps) {
   const [quickPeriod, setQuickPeriod] = useState('all');
+  const startMonthOptions = useMemo(
+    () => availableMonths
+      .filter(month => !endMonth || month <= endMonth)
+      .map(value => ({ value })),
+    [availableMonths, endMonth]
+  );
+  const endMonthOptions = useMemo(
+    () => availableMonths
+      .filter(month => !startMonth || month >= startMonth)
+      .map(value => ({ value })),
+    [availableMonths, startMonth]
+  );
 
   const handleQuickPeriod = (period: string) => {
     if (availableMonths.length === 0) return;
@@ -48,42 +62,40 @@ export function TimeframeControl({ availableMonths, startMonth, endMonth, onChan
   return (
     <div className="timeframe-control">
       <span>Timeframe:</span>
-      <SearchableSelect
+      <AppSelect
+        ariaLabel="Quick timeframe"
         value={selectedQuickPeriodLabel}
         onChange={label => {
           const period = QUICK_PERIODS.find(([, periodLabel]) => periodLabel === label)?.[0];
           if (period) handleQuickPeriod(period);
         }}
-        options={QUICK_PERIOD_LABELS}
+        options={QUICK_PERIOD_OPTIONS}
         placeholder="Period"
-        showSearch={false}
         width="84px"
-        dropdownWidth="96px"
-        portal
-        portalZIndex={200000}
+        dropdownWidth={112}
+        height="28px"
+        textAlign="center"
       />
-      <SearchableSelect
+      <MonthSelect
+        ariaLabel="Timeframe start month"
         value={startMonth}
         onChange={value => {
           setQuickPeriod('custom');
           onChange(value, endMonth && endMonth < value ? value : endMonth);
         }}
-        options={availableMonths}
+        options={startMonthOptions}
         placeholder="Start"
-        portal
-        portalZIndex={200000}
       />
       <span className="timeframe-control-arrow">➔</span>
-      <SearchableSelect
+      <MonthSelect
+        ariaLabel="Timeframe end month"
         value={endMonth}
         onChange={value => {
           setQuickPeriod('custom');
           onChange(startMonth, value);
         }}
-        options={availableMonths.filter(month => !startMonth || month >= startMonth)}
+        options={endMonthOptions}
         placeholder="End"
-        portal
-        portalZIndex={200000}
       />
     </div>
   );

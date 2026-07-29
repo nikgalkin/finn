@@ -12,9 +12,10 @@ import (
 )
 
 type appOptions struct {
-	noOpen    bool
-	demo      bool
-	forceDemo bool
+	noOpen     bool
+	demo       bool
+	forceDemo  bool
+	configPath string
 }
 
 type outputColors struct {
@@ -63,11 +64,12 @@ func newRootCommand() *cobra.Command {
 	rootCmd.Version = fmt.Sprintf("%s (%s/%s)", version, runtime.GOOS, runtime.GOARCH)
 	rootCmd.CompletionOptions.DisableDefaultCmd = true
 
+	rootCmd.PersistentFlags().StringVarP(&appOpts.configPath, "config", "c", "", "Path to a config file (default: ~/.finn/config.yaml, then ./config.yaml)")
 	rootCmd.Flags().BoolVarP(&appOpts.noOpen, "no-open", "n", false, "Disable automatic browser opening")
 	rootCmd.Flags().BoolVarP(&appOpts.demo, "demo", "d", false, "Run with an isolated sample database")
 	rootCmd.Flags().BoolVar(&appOpts.forceDemo, "demo-force", false, "Replace the demo database with fresh sample data")
 
-	rootCmd.AddCommand(newVersionCommand(), newBackupCommand())
+	rootCmd.AddCommand(newVersionCommand(), newBackupCommand(&appOpts))
 	return rootCmd
 }
 
@@ -82,7 +84,7 @@ func newVersionCommand() *cobra.Command {
 	}
 }
 
-func newBackupCommand() *cobra.Command {
+func newBackupCommand(appOpts *appOptions) *cobra.Command {
 	backupCmd := &cobra.Command{
 		Use:   "backup",
 		Short: "Manage backups",
@@ -94,7 +96,7 @@ func newBackupCommand() *cobra.Command {
 			Short:   "List configured backup targets and files",
 			Args:    cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
-				return printConfiguredBackups(cmd.OutOrStdout(), LoadConfig())
+				return printConfiguredBackups(cmd.OutOrStdout(), LoadConfig(appOpts.configPath))
 			},
 		},
 		newGenerateBackupKeyCommand(),
@@ -103,7 +105,7 @@ func newBackupCommand() *cobra.Command {
 			Short: "Restore an encrypted or raw backup file",
 			Args:  cobra.ExactArgs(1),
 			Run: func(_ *cobra.Command, args []string) {
-				RunRestoreJob(LoadConfig(), args[0])
+				RunRestoreJob(LoadConfig(appOpts.configPath), args[0])
 			},
 		},
 	)

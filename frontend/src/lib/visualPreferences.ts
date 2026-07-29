@@ -13,7 +13,7 @@ export type LogoChoice = (typeof logoChoices)[number];
 
 export type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
-export type VisualPreferences = {
+type VisualPreferences = {
   loader: LoaderChoice;
   logo: LogoChoice;
   logoGradient: boolean;

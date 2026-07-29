@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { FocusEvent, KeyboardEvent, MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
@@ -6,7 +6,7 @@ import { ArrowDownUp, ChevronDown, Coins, ExternalLink, Folder, MessageSquare, R
 import { getCurrencyColor, getTagColor } from '../../types';
 import type { FlowEntry, ParsedSnapshot } from '../../types';
 import { summarizeFlowEntries } from '../../lib/cashFlow';
-import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR } from '../../lib/format';
+import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR, formatExchangeRate, formatNumber } from '../../lib/format';
 import { convertAmount, inferRateReferenceCurrency, orientExchangeRate } from '../../lib/finance';
 import { buildTreeDiffData } from '../../lib/snapshotDiff';
 import type { DiffStatus } from '../../lib/snapshotDiff';
@@ -14,7 +14,7 @@ import { isTextInputTarget } from '../../lib/hotkeys';
 import { FlowNetSummary } from './FlowNetSummary';
 import { HelpTooltip } from './HelpTooltip';
 import { ModalPortal } from './ModalPortal';
-import { SearchableSelect } from './graphs/SearchableSelect';
+import { AppSelect } from './AppSelect';
 
 type DiffRateNode = {
   key: string;
@@ -35,11 +35,15 @@ type SnapshotDiffModalProps = {
   flowEntries: FlowEntry[];
   onlyChanges: boolean;
   onOnlyChangesChange: (value: boolean) => void;
+  scrollTop: number;
+  onScrollTopChange: (value: number) => void;
+  onPeriodChange: (currentMonth: string, previousMonth: string) => void;
   onClose: () => void;
 };
 
 const panelStyle = { width: '860px', maxWidth: '95vw', maxHeight: '85vh', overflow: 'visible' as const, padding: '16px 20px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' };
 const balanceRowStyle = { display: 'grid', gridTemplateColumns: '68px minmax(130px, 1fr) 1fr 1fr 150px', alignItems: 'center', position: 'relative' as const, fontSize: '13px', padding: '6px 8px', borderBottom: '1px solid rgba(255,255,255,0.02)', columnGap: '2px' };
+const SCROLL_SAVE_THROTTLE_MS = 500;
 
 const getStatusDeltaColor = (status: DiffStatus) => {
   if (status === 'up' || status === 'new') return DELTA_POSITIVE_COLOR;
@@ -47,13 +51,7 @@ const getStatusDeltaColor = (status: DiffStatus) => {
   return DELTA_NEUTRAL_COLOR;
 };
 
-const formatRate = (value: number | null) => {
-  if (value === null) return '—';
-  return value.toLocaleString('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: Math.abs(value) < 0.01 ? 6 : 4
-  });
-};
+const formatRate = (value: number | null) => value === null ? '—' : formatExchangeRate(value);
 
 const buildRateDiffData = (
   current: ParsedSnapshot,
@@ -117,7 +115,7 @@ const buildRateDiffData = (
 
 const renderTagPill = (tag: string, changed: boolean, removed = false) => {
   const color = tag === 'untagged' ? 'var(--text-secondary)' : getTagColor(tag);
-  const borderColor = tag === 'untagged' ? 'rgba(148,163,184,0.2)' : `${getTagColor(tag)}55`;
+  const borderColor = tag === 'untagged' ? 'rgba(var(--muted-rgb), 0.2)' : `${getTagColor(tag)}55`;
 
   return (
     <span
@@ -234,9 +232,9 @@ function CommentMarker({ comment, label }: { comment?: string; label?: string })
         position: 'relative',
         cursor: 'help',
         padding: label ? '2px 6px' : 0,
-        border: label ? '1px solid rgba(59, 130, 246, 0.28)' : 'none',
+        border: label ? '1px solid rgba(var(--accent-rgb), 0.28)' : 'none',
         borderRadius: label ? '4px' : 0,
-        background: label ? 'rgba(59, 130, 246, 0.08)' : 'transparent',
+        background: label ? 'rgba(var(--accent-rgb), 0.08)' : 'transparent',
         fontSize: '10px',
         fontWeight: 700
       }}
@@ -283,15 +281,34 @@ export function SnapshotDiffModal({
   flowEntries,
   onlyChanges,
   onOnlyChangesChange,
+  scrollTop,
+  onScrollTopChange,
+  onPeriodChange,
   onClose
 }: SnapshotDiffModalProps) {
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(current.month);
   const [previousMonth, setPreviousMonth] = useState(previous?.month || '');
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const onScrollTopChangeRef = useRef(onScrollTopChange);
+  const pendingScrollTopRef = useRef<number | null>(null);
+  const scrollSaveTimeoutRef = useRef(0);
+  onScrollTopChangeRef.current = onScrollTopChange;
   const selectedCurrent = snapshots.find(snapshot => snapshot.month === currentMonth) || current;
   const selectedPrevious = snapshots.find(snapshot => snapshot.month === previousMonth) || null;
-  const availableMonths = snapshots.map(snapshot => snapshot.month);
-  const toOptions = availableMonths.filter(month => !selectedPrevious || month >= selectedPrevious.month);
+  const availableMonths = useMemo(() => snapshots.map(snapshot => snapshot.month), [snapshots]);
+  const availableMonthOptions = useMemo(
+    () => availableMonths.map(value => ({ value })),
+    [availableMonths]
+  );
+  const toOptions = useMemo(
+    () => availableMonths.filter(month => !selectedPrevious || month >= selectedPrevious.month),
+    [availableMonths, selectedPrevious]
+  );
+  const toMonthOptions = useMemo(
+    () => toOptions.map(value => ({ value })),
+    [toOptions]
+  );
 
   const treeDiffData = useMemo(
     () => buildTreeDiffData(selectedCurrent, selectedPrevious, onlyChanges),
@@ -315,8 +332,41 @@ export function SnapshotDiffModal({
     setPreviousMonth(month);
     if (selectedCurrent.month < month) {
       setCurrentMonth(month);
+      onPeriodChange(month, month);
+      return;
     }
+    onPeriodChange(selectedCurrent.month, month);
   };
+
+  const handleCurrentMonthChange = (month: string) => {
+    setCurrentMonth(month);
+    onPeriodChange(month, selectedPrevious?.month || '');
+  };
+
+  const flushScrollTop = useCallback(() => {
+    window.clearTimeout(scrollSaveTimeoutRef.current);
+    scrollSaveTimeoutRef.current = 0;
+    if (pendingScrollTopRef.current === null) return;
+    onScrollTopChangeRef.current(pendingScrollTopRef.current);
+    pendingScrollTopRef.current = null;
+  }, []);
+
+  const queueScrollTopSave = useCallback((value: number) => {
+    pendingScrollTopRef.current = value;
+    if (!scrollSaveTimeoutRef.current) {
+      scrollSaveTimeoutRef.current = window.setTimeout(flushScrollTop, SCROLL_SAVE_THROTTLE_MS);
+    }
+  }, [flushScrollTop]);
+
+  useLayoutEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollTop;
+    }
+  }, [scrollTop]);
+
+  useEffect(() => () => {
+    flushScrollTop();
+  }, [flushScrollTop]);
 
   useEffect(() => {
     const handleEditHotkey = (event: globalThis.KeyboardEvent) => {
@@ -324,13 +374,12 @@ export function SnapshotDiffModal({
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      onClose();
       navigate(`/snapshot/${selectedCurrent.month}`);
     };
 
     window.addEventListener('keydown', handleEditHotkey, true);
     return () => window.removeEventListener('keydown', handleEditHotkey, true);
-  }, [navigate, onClose, selectedCurrent.month]);
+  }, [navigate, selectedCurrent.month]);
 
   return (
     <ModalPortal className="snapshot-diff-modal-backdrop" zIndex={10_000} onClose={onClose}>
@@ -342,27 +391,33 @@ export function SnapshotDiffModal({
         <div className="snapshot-diff-header mb-3">
           <div className="snapshot-diff-period-picker">
             <span>From</span>
-            <SearchableSelect
+            <AppSelect
               ariaLabel="Diff start month"
               value={selectedPrevious?.month || ''}
               onChange={handlePreviousMonthChange}
-              options={availableMonths}
+              options={availableMonthOptions}
               placeholder="Select"
+              searchable
+              searchPlaceholder="Find month…"
               width="104px"
-              dropdownWidth="132px"
+              dropdownWidth={156}
               height="24px"
+              textAlign="center"
             />
             <span aria-hidden="true" className="snapshot-diff-period-arrow">→</span>
             <span>To</span>
-            <SearchableSelect
+            <AppSelect
               ariaLabel="Diff end month"
               value={selectedCurrent.month}
-              onChange={setCurrentMonth}
-              options={toOptions}
+              onChange={handleCurrentMonthChange}
+              options={toMonthOptions}
               placeholder="Select"
+              searchable
+              searchPlaceholder="Find month…"
               width="104px"
-              dropdownWidth="132px"
+              dropdownWidth={156}
               height="24px"
+              textAlign="center"
             />
           </div>
           <h3>Snapshot Diff</h3>
@@ -371,12 +426,13 @@ export function SnapshotDiffModal({
               to={`/snapshot/${selectedCurrent.month}`}
               className="btn snapshot-diff-edit-link"
               title={`Edit snapshot ${selectedCurrent.month}`}
-              onClick={onClose}
             >
               <ExternalLink size={14} /> Edit <kbd>E</kbd>
             </Link>
             <label className="snapshot-diff-only-changes" title="Toggle changes only (D)">
               <input
+                id="snapshot-diff-only-changes"
+                name="snapshot-diff-only-changes"
                 type="checkbox"
                 checked={onlyChanges}
                 onChange={event => onOnlyChangesChange(event.target.checked)}
@@ -392,7 +448,9 @@ export function SnapshotDiffModal({
         </div>
 
         <div
+          ref={scrollContainerRef}
           style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: '2px' }}
+          onScroll={event => queueScrollTopSave(event.currentTarget.scrollTop)}
         >
           <div
             key={`${selectedPrevious?.month || 'none'}:${selectedCurrent.month}:${onlyChanges}`}
@@ -433,7 +491,7 @@ export function SnapshotDiffModal({
                   />
                 </div>
                 <FlowNetSummary totals={selectedMonthFlowTotals} compact label="" />
-                <Link to={`/flow?month=${selectedCurrent.month}`} className="btn" onClick={onClose}>
+                <Link to={`/flow?month=${selectedCurrent.month}`} className="btn">
                   Open month <ExternalLink size={14} />
                 </Link>
               </div>
@@ -571,15 +629,15 @@ export function SnapshotDiffModal({
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        from: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{Math.round(balance.previousAmt).toLocaleString('en-US')}</span>
+                        from: <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>{formatNumber(balance.previousAmt)}</span>
                       </div>
 
                       <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
-                        to: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{Math.round(balance.currentAmt).toLocaleString('en-US')}</span>
+                        to: <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{formatNumber(balance.currentAmt)}</span>
                       </div>
 
                       <div style={{ color: deltaColor, fontWeight: 700, textAlign: 'right' }}>
-                        {deltaSign}{Math.round(balance.delta).toLocaleString('en-US')}
+                        {deltaSign}{formatNumber(balance.delta)}
                         {balance.status !== 'new' && balance.status !== 'deleted' && balance.previousAmt > 0 && (
                           <span style={{ fontSize: '0.85em', marginLeft: '4px', opacity: 0.8, fontWeight: 500 }}>
                             ({deltaSign}{balance.deltaPercent.toFixed(1)}%)

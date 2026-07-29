@@ -1,22 +1,6 @@
 import type { FlowDirection, FlowEntry, FlowEntryType } from '../types';
 
-export type FlowCsvEntry = {
-  month: string;
-  entryType: FlowEntryType;
-  direction: FlowDirection;
-  counterparty: string;
-  account: string;
-  tag: string;
-  amount: number;
-  currency: string;
-  taxRate: number;
-  category: string;
-  comment: string;
-  toAccount: string;
-  toTag: string;
-  toCurrency: string;
-  toAmount: number;
-};
+type FlowCsvEntry = Omit<FlowEntry, 'id'>;
 
 export type FlowCsvPreview = {
   fileName: string;
@@ -25,7 +9,7 @@ export type FlowCsvPreview = {
   duplicates: FlowCsvDuplicate[];
 };
 
-export type FlowCsvDuplicate = {
+type FlowCsvDuplicate = {
   entryIndex: number;
   reason: 'existing' | 'file';
 };

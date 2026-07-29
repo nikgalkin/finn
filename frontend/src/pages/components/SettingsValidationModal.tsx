@@ -50,9 +50,9 @@ export function SettingsValidationModal({ issues, onClose }: SettingsValidationM
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '52vh', overflowY: 'auto', padding: '14px 20px' }}>
           {issues.map((issue, index) => (
-            <div key={`${issue.section}-${issue.value}-${index}`} style={{ padding: '12px 13px', borderRadius: '10px', background: 'rgba(15, 23, 42, 0.52)', border: '1px solid rgba(239, 68, 68, 0.22)' }}>
+            <div key={`${issue.section}-${issue.value}-${index}`} style={{ padding: '12px 13px', borderRadius: '10px', background: 'rgba(var(--surface-rgb), 0.52)', border: '1px solid rgba(var(--danger-rgb), 0.22)' }}>
               <div className="flex items-center gap-2" style={{ marginBottom: '5px' }}>
-                <span style={{ padding: '2px 7px', borderRadius: '999px', color: '#fda4af', background: 'rgba(239, 68, 68, 0.12)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.035em', textTransform: 'uppercase' }}>
+                <span style={{ padding: '2px 7px', borderRadius: '999px', color: '#fda4af', background: 'rgba(var(--danger-rgb), 0.12)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.035em', textTransform: 'uppercase' }}>
                   {issue.section}
                 </span>
                 <strong style={{ minWidth: 0, overflow: 'hidden', color: 'var(--text-primary)', fontSize: '13px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -64,7 +64,7 @@ export function SettingsValidationModal({ issues, onClose }: SettingsValidationM
           ))}
         </div>
 
-        <div className="flex justify-between items-center gap-3" style={{ padding: '14px 20px 18px', borderTop: '1px solid var(--glass-border)', background: 'rgba(15, 23, 42, 0.28)' }}>
+        <div className="flex justify-between items-center gap-3" style={{ padding: '14px 20px 18px', borderTop: '1px solid var(--glass-border)', background: 'rgba(var(--surface-rgb), 0.28)' }}>
           <span style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>Nothing has been saved yet.</span>
           <button className="btn btn-primary" onClick={onClose} autoFocus>Review settings</button>
         </div>

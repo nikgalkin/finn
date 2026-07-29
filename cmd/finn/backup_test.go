@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,6 +23,189 @@ func TestGenerateBackupCipherKey(t *testing.T) {
 	}
 	if len(decoded) != 32 {
 		t.Fatalf("generated key contains %d bytes, want 32", len(decoded))
+	}
+}
+
+func TestEncryptDataRoundTripsWithAPassphrase(t *testing.T) {
+	payload := []byte("sqlite payload")
+	encrypted, err := encryptData(payload, "correct horse battery staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header, _, err := parseBackupHeader(encrypted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if header.kdf != backupKDFArgon2id {
+		t.Fatalf("kdf = %d, want %d", header.kdf, backupKDFArgon2id)
+	}
+	if len(header.salt) != backupSaltLength {
+		t.Fatalf("salt length = %d, want %d", len(header.salt), backupSaltLength)
+	}
+
+	decrypted, err := decryptData(encrypted, "correct horse battery staple")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decrypted) != string(payload) {
+		t.Fatalf("decrypted = %q, want %q", decrypted, payload)
+	}
+
+	if _, err := decryptData(encrypted, "wrong passphrase"); err == nil {
+		t.Fatal("decryption succeeded with the wrong passphrase")
+	}
+}
+
+func TestEncryptDataUsesAGeneratedKeyDirectly(t *testing.T) {
+	key, err := generateBackupCipherKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encrypted, err := encryptData([]byte("sqlite payload"), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	header, _, err := parseBackupHeader(encrypted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if header.kdf != backupKDFRaw {
+		t.Fatalf("kdf = %d, want %d", header.kdf, backupKDFRaw)
+	}
+	if len(header.salt) != 0 {
+		t.Fatalf("raw key backup carries a %d byte salt, want none", len(header.salt))
+	}
+
+	decrypted, err := decryptData(encrypted, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(decrypted) != "sqlite payload" {
+		t.Fatalf("decrypted = %q, want %q", decrypted, "sqlite payload")
+	}
+}
+
+func TestEncryptDataSaltsEveryBackup(t *testing.T) {
+	first, err := encryptData([]byte("sqlite payload"), "passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := encryptData([]byte("sqlite payload"), "passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	firstHeader, _, err := parseBackupHeader(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondHeader, _, err := parseBackupHeader(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if string(firstHeader.salt) == string(secondHeader.salt) {
+		t.Fatal("two backups reused the same salt")
+	}
+}
+
+func TestDecryptDataRejectsATamperedHeader(t *testing.T) {
+	encrypted, err := encryptData([]byte("sqlite payload"), "passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tampered := append([]byte(nil), encrypted...)
+	tampered[backupHeaderPrefix] ^= 0xff
+
+	if _, err := decryptData(tampered, "passphrase"); err == nil {
+		t.Fatal("decryption succeeded after the salt was changed")
+	}
+}
+
+func TestBackupHeaderRejectsUnsafeArgon2Parameters(t *testing.T) {
+	valid := backupHeader{
+		kdf:         backupKDFArgon2id,
+		time:        argon2Time,
+		memory:      argon2MemoryKiB,
+		parallelism: argon2Parallelism,
+		salt:        make([]byte, backupSaltLength),
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*backupHeader)
+	}{
+		{name: "excessive time", mutate: func(header *backupHeader) { header.time = argon2MaxTime + 1 }},
+		{name: "excessive memory", mutate: func(header *backupHeader) { header.memory = argon2MaxMemoryKiB + 1 }},
+		{name: "excessive parallelism", mutate: func(header *backupHeader) { header.parallelism = argon2MaxParallelism + 1 }},
+		{name: "short salt", mutate: func(header *backupHeader) { header.salt = make([]byte, backupSaltLength-1) }},
+		{name: "long salt", mutate: func(header *backupHeader) { header.salt = make([]byte, backupSaltMaxLength+1) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := valid
+			tt.mutate(&header)
+			if err := header.validate(); err == nil {
+				t.Fatal("unsafe Argon2id parameters were accepted")
+			}
+		})
+	}
+}
+
+func TestDecryptDataRejectsUnsafeArgon2ParametersBeforeDerivingAKey(t *testing.T) {
+	encrypted, err := encryptData([]byte("sqlite payload"), "passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tampered := append([]byte(nil), encrypted...)
+	timeOffset := len(backupMagic) + 2
+	binary.BigEndian.PutUint32(tampered[timeOffset:], argon2MaxTime+1)
+
+	if _, err := decryptData(tampered, "passphrase"); err == nil || !strings.Contains(err.Error(), "time cost") {
+		t.Fatalf("decryptData error = %v, want an Argon2id time-cost validation error", err)
+	}
+}
+
+func TestDecryptDataRejectsAFileWithoutTheFinnHeader(t *testing.T) {
+	_, err := decryptData([]byte("legacy nonce and ciphertext without a header"), "passphrase")
+	if err == nil {
+		t.Fatal("decryption succeeded on a file with no header")
+	}
+	if !strings.Contains(err.Error(), "restore it with the version that created it") {
+		t.Fatalf("error = %q, want it to name the version mismatch", err)
+	}
+}
+
+func TestRawBackupKeyOnlyAcceptsGeneratedKeys(t *testing.T) {
+	generated, err := generateBackupCipherKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		key  string
+		want bool
+	}{
+		{name: "generated key", key: generated, want: true},
+		{name: "generated key with whitespace", key: " " + generated + "\n", want: true},
+		{name: "passphrase", key: "correct horse battery staple", want: false},
+		{name: "short base64", key: base64.StdEncoding.EncodeToString([]byte("too short")), want: false},
+		{name: "empty", key: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, got := rawBackupKey(tt.key); got != tt.want {
+				t.Fatalf("rawBackupKey(%q) = %v, want %v", tt.key, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -67,6 +251,59 @@ func newBackupTestDB(t *testing.T) *sql.DB {
 	}
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+func TestRunBackupJobWritesARestorableEncryptedFile(t *testing.T) {
+	for _, tt := range []struct{ name, key string }{
+		{name: "passphrase", key: "correct horse battery staple"},
+		{name: "generated key", key: mustGenerateBackupCipherKey(t)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			db := newBackupTestDB(t)
+			targetDir := t.TempDir()
+			cfg := &Config{Backup: BackupConfig{
+				Enabled:   true,
+				CipherKey: tt.key,
+				Targets:   []BackupTarget{{Name: "test", Path: targetDir, Retention: 10}},
+			}}
+
+			if report := RunBackupJob(cfg, db); report.Status != backupStatusSuccess {
+				t.Fatalf("backup status = %q, want success: %+v", report.Status, report)
+			}
+
+			files, err := os.ReadDir(targetDir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(files) != 1 {
+				t.Fatalf("target holds %d files, want 1", len(files))
+			}
+			if filepath.Ext(files[0].Name()) != "."+extEncrypted {
+				t.Fatalf("backup extension = %q, want .%s", filepath.Ext(files[0].Name()), extEncrypted)
+			}
+
+			payload, err := os.ReadFile(filepath.Join(targetDir, files[0].Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			restored, err := decryptData(payload, tt.key)
+			if err != nil {
+				t.Fatalf("stored backup could not be decrypted: %v", err)
+			}
+			if !strings.HasPrefix(string(restored), "SQLite format 3") {
+				t.Fatal("decrypted backup is not a SQLite database")
+			}
+		})
+	}
+}
+
+func mustGenerateBackupCipherKey(t *testing.T) string {
+	t.Helper()
+	key, err := generateBackupCipherKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return key
 }
 
 func TestRunBackupJobDetectsFlowOnlyChanges(t *testing.T) {

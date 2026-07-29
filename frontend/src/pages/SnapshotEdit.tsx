@@ -17,6 +17,7 @@ import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { copyFlowPeriodEntries } from '../lib/cashFlow';
+import { normalizeRates } from '../lib/finance';
 import { normalizeSnapshotAmounts } from '../lib/snapshotAmounts';
 import { removeSnapshotDraft } from '../lib/snapshotDraftStorage';
 import {
@@ -68,7 +69,7 @@ export default function SnapshotEdit() {
   const [cashFlowError, setCashFlowError] = useState('');
 
   const orgRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const addOrganizationScrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addOrganizationFocusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [initialDataHash, setInitialDataHash] = useState('');
   const [draftBaseline, setDraftBaseline] = useState<{ data: SnapshotDraftData; currentMonth: string } | null>(null);
   const draftKey = isCopy ? `finn_draft_copy_${sourceMonth}` : `finn_draft_${month || 'new'}`;
@@ -147,7 +148,7 @@ export default function SnapshotEdit() {
   }, []);
 
   useEffect(() => () => {
-    if (addOrganizationScrollTimer.current) clearTimeout(addOrganizationScrollTimer.current);
+    if (addOrganizationFocusTimer.current) clearTimeout(addOrganizationFocusTimer.current);
   }, []);
 
   const handleRestoreDraft = () => {
@@ -373,14 +374,13 @@ export default function SnapshotEdit() {
     });
 
     const baseCur = settings.baseCurrency || 'RUB';
+    const normalizedRates = normalizeRates(data.rates, baseCur);
     const missingRates: string[] = [];
 
     usedCurrencies.forEach(curr => {
-      if (curr !== baseCur) {
-        const rate = Number(data.rates[curr]);
-        if (isNaN(rate) || rate <= 0) {
-          missingRates.push(curr);
-        }
+      const rate = normalizedRates[curr];
+      if (!Number.isFinite(rate) || rate <= 0) {
+        missingRates.push(curr);
       }
     });
 
@@ -393,6 +393,7 @@ export default function SnapshotEdit() {
 
     const snapshotData: SnapshotData = {
       ...data,
+      rates: normalizedRates,
       organizations: normalizedOrganizations.map(org => {
         if (org.country) return org;
         const configured = settings.organizations.find(organization => (
@@ -487,17 +488,17 @@ export default function SnapshotEdit() {
       const newRates = { ...prev.rates };
 
       Object.keys(newRates).forEach(currency => {
-        if (!autoFetchList.has(currency.toUpperCase())) return;
+        if (currency.toUpperCase() === base || !autoFetchList.has(currency.toUpperCase())) return;
 
         const sourceCurrency = currency === 'USDT' && !normalizedRates.USDT ? 'USD' : currency;
         const fetchedRate = normalizedRates[sourceCurrency];
 
-        if (currency === base) {
-          newRates[currency] = 1;
-        } else if (Number.isFinite(fetchedRate) && fetchedRate > 0) {
+        if (Number.isFinite(fetchedRate) && fetchedRate > 0) {
           newRates[currency] = 1 / fetchedRate;
         }
       });
+
+      newRates[base] = 1;
 
       return { ...prev, rates: newRates };
     });
@@ -630,12 +631,13 @@ export default function SnapshotEdit() {
     }));
     setRecentlyAddedOrgId(id);
 
-    if (addOrganizationScrollTimer.current) clearTimeout(addOrganizationScrollTimer.current);
-    addOrganizationScrollTimer.current = setTimeout(() => {
+    if (addOrganizationFocusTimer.current) clearTimeout(addOrganizationFocusTimer.current);
+    addOrganizationFocusTimer.current = setTimeout(() => {
       const card = orgRefs.current[id];
-      card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card?.querySelector('select')?.focus({ preventScroll: true });
-      addOrganizationScrollTimer.current = null;
+      card
+        ?.querySelector<HTMLButtonElement>('.snapshot-organization-select .app-select-trigger')
+        ?.focus({ preventScroll: true });
+      addOrganizationFocusTimer.current = null;
     }, 350);
   };
 
@@ -764,7 +766,7 @@ export default function SnapshotEdit() {
   }
 
   return (
-    <div data-unsaved-changes={isDirty ? 'true' : undefined}>
+    <div className="snapshot-editor-page" data-unsaved-changes={isDirty ? 'true' : undefined}>
       {draftToRestore && (
         <DraftRestoreBanner
           draftTimestamp={draftToRestore.timestamp}
@@ -784,9 +786,17 @@ export default function SnapshotEdit() {
       `}</style>
 
       <SnapshotEditorHeader
-        title={isNew ? 'New Snapshot' : isCopy ? `New Snapshot (copy of ${sourceMonth})` : `Edit Snapshot ${month}`}
+        title={isNew || isCopy ? 'New Snapshot' : `Edit Snapshot ${month}`}
+        subtitle={isNew
+          ? 'Create a monthly portfolio checkpoint'
+          : isCopy
+            ? 'Review the copied balances before saving'
+            : 'Update balances, exchange rates and notes'}
+        copySourceMonth={isCopy ? sourceMonth : undefined}
+        cleanStateLabel={isNew || isCopy ? 'Ready' : 'Up to date'}
         durationSeconds={durationSeconds}
         hasMonthlyComment={!!data.comment}
+        isDirty={isDirty}
         cashFlowEnabled={!!settings.cashFlow?.enabled}
         cashFlowLoading={cashFlowLoading}
         onOpenMonthlyComment={() => setActiveComment({ type: 'month', text: data.comment || '', initialText: data.comment || '', title: 'Monthly Note' })}

@@ -9,6 +9,7 @@ type ScrollForMoreProps = {
   scrollContainerId: string;
   total: number;
   visible?: number;
+  rowGap?: number;
   rowHeight?: number;
 };
 
@@ -20,6 +21,7 @@ export function ScrollForMore({
   scrollContainerId,
   total,
   visible,
+  rowGap = 0,
   rowHeight
 }: ScrollForMoreProps) {
   const [measuredVisible, setMeasuredVisible] = useState<number | null>(null);
@@ -32,13 +34,15 @@ export function ScrollForMore({
     const element = document.getElementById(scrollContainerId);
     if (!element) return;
 
-    const measure = () => setMeasuredVisible(Math.max(1, Math.floor(element.clientHeight / rowHeight)));
+    const measure = () => setMeasuredVisible(
+      Math.max(1, Math.floor((element.clientHeight + rowGap) / (rowHeight + rowGap)))
+    );
     measure();
 
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [rowHeight, scrollContainerId, total]);
+  }, [rowGap, rowHeight, scrollContainerId, total]);
 
   useEffect(() => {
     if (remaining === 0) {

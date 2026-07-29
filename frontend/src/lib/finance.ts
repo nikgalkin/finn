@@ -1,7 +1,7 @@
 import type { Balance, FlowEntry, ParsedSnapshot, Organization } from '../types';
 import { toNumber } from './number.ts';
 
-export type SnapshotTotals = {
+type SnapshotTotals = {
   totalBase: number;
   totalSecondary: number;
 };
@@ -11,7 +11,7 @@ export type FlowDecomposition = {
   fxImpactDelta: number;
 };
 
-export type EstimatedCapitalReturn = {
+type EstimatedCapitalReturn = {
   externalFlow: number;
   result: number;
   ratePercent: number | null;
@@ -19,7 +19,7 @@ export type EstimatedCapitalReturn = {
 
 export type TaggedReturnKind = 'yield' | 'spending' | 'unknown';
 
-export type TaggedCapitalReturn = {
+type TaggedCapitalReturn = {
   tag: string;
   kind: TaggedReturnKind;
   openingCapital: number;
@@ -29,7 +29,7 @@ export type TaggedCapitalReturn = {
   ratePercent: number | null;
 };
 
-export type TaggedCapitalReturnBreakdown = {
+type TaggedCapitalReturnBreakdown = {
   returns: TaggedCapitalReturn[];
   assignedExternalEntries: number;
   totalExternalEntries: number;
@@ -58,7 +58,7 @@ export const inferRateReferenceCurrency = (
   return reference?.[0] || fallback;
 };
 
-export const getRateToReference = (
+const getRateToReference = (
   currency: string,
   rates: Record<string, number | string>,
   referenceCurrency = inferRateReferenceCurrency(rates)
@@ -66,6 +66,40 @@ export const getRateToReference = (
   if (currency === referenceCurrency) return 1;
   return toNumber(rates[currency]);
 };
+
+export const monthsBetween = (fromMonth: string, toMonth: string) => {
+  const [fromYear, fromMonthNumber] = fromMonth.split('-').map(Number);
+  const [toYear, toMonthNumber] = toMonth.split('-').map(Number);
+  if (![fromYear, fromMonthNumber, toYear, toMonthNumber].every(Number.isFinite)) return 0;
+
+  return (toYear - fromYear) * 12 + (toMonthNumber - fromMonthNumber);
+};
+
+export const normalizeRates = (
+  rates: Record<string, number | string>,
+  baseCurrency: string
+): Record<string, number> => {
+  const numericRates: Record<string, number> = {};
+  Object.entries(rates || {}).forEach(([currency, rate]) => {
+    numericRates[currency] = toNumber(rate);
+  });
+
+  const baseRate = numericRates[baseCurrency];
+  if (!(baseRate > 0)) return { ...numericRates, [baseCurrency]: 1 };
+  if (baseRate === 1) return numericRates;
+
+  return Object.fromEntries(Object.entries(numericRates).map(
+    ([currency, rate]) => [currency, rate / baseRate]
+  ));
+};
+
+export const normalizeSnapshotRates = <T extends { data: { rates: Record<string, number | string> } }>(
+  snapshot: T,
+  baseCurrency: string
+): T => ({
+  ...snapshot,
+  data: { ...snapshot.data, rates: normalizeRates(snapshot.data.rates, baseCurrency) }
+});
 
 export const convertAmount = (
   amount: number,

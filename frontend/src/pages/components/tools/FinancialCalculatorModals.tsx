@@ -33,8 +33,8 @@ import { parseNumberExpression } from '../../../lib/numberExpression';
 import { useFlowEntries } from '../../../hooks/useFlowEntries';
 import { useSettings } from '../../../hooks/useSettings';
 import { useSnapshots } from '../../../hooks/useSnapshots';
+import { AppSelect } from '../AppSelect';
 import { AmountInput } from '../AmountInput';
-import { SearchableSelect } from '../graphs/SearchableSelect';
 import { SegmentedControl } from '../SegmentedControl';
 import { ToolModal } from './ToolModal';
 
@@ -83,23 +83,27 @@ function CurrencyField({
   options: string[];
   disabled?: boolean;
 }) {
+  const selectOptions = useMemo(
+    () => options.map((option, index) => ({ value: option, primary: index === 0 })),
+    [options]
+  );
+
   return (
     <label className="calculator-field calculator-currency-field">
       <span>{label}</span>
-      <SearchableSelect
+      <AppSelect
         ariaLabel={label}
         value={value}
         onChange={onChange}
-        options={options}
+        options={selectOptions}
         placeholder="Currency"
+        searchable
+        searchPlaceholder="Find currency…"
         width="100%"
-        dropdownWidth="180px"
+        dropdownWidth={180}
         height="34px"
         textAlign="left"
         disabled={disabled}
-        primaryOptions={options.slice(0, 1)}
-        portal
-        portalZIndex={100010}
       />
     </label>
   );
@@ -107,8 +111,8 @@ function CurrencyField({
 
 function useCalculatorCurrencies() {
   const { settings, loading: settingsLoading } = useSettings();
-  const { snapshots, loading: snapshotsLoading } = useSnapshots({ sort: 'desc' });
   const baseCurrency = settings.baseCurrency || settings.currencies[0] || 'RUB';
+  const { snapshots, loading: snapshotsLoading } = useSnapshots({ sort: 'desc', baseCurrency });
   const currencies = useMemo(() => Array.from(new Set([
     baseCurrency,
     ...settings.currencies.map(currency => currency.trim()).filter(Boolean)
@@ -220,7 +224,7 @@ export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) 
       title="Growth & Goal Planner"
       subtitle="Project compound growth or solve the monthly contribution required for a target"
       icon={TrendingUp}
-      accent="var(--success)"
+      accent="var(--diff-positive)"
       onClose={onClose}
     >
       <div className="calculator-toolbar">
@@ -451,7 +455,7 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
         />
         <CalculatorField label="New cash to invest" value={additionalCash} onChange={setAdditionalCash} suffix={currency} />
         <label className="calculator-checkbox">
-          <input type="checkbox" checked={buyOnly} onChange={event => setBuyOnly(event.target.checked)} />
+          <input id="rebalance-buy-only" name="rebalance-buy-only" type="checkbox" checked={buyOnly} onChange={event => setBuyOnly(event.target.checked)} />
           <span><b>Buy only</b><small>Do not recommend sales</small></span>
         </label>
         <SnapshotSourceButton
@@ -501,6 +505,8 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
         {rows.map(row => (
           <div className="rebalance-edit-row" key={row.id}>
             <input
+              id={`rebalance-${row.id}-label`}
+              name={`rebalance-${row.id}-label`}
               type="text"
               className="input"
               value={row.label}
@@ -667,6 +673,8 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
         {flows.map(flow => (
           <div className="return-flow-row" key={flow.id}>
             <input
+              id={`return-flow-${flow.id}-date`}
+              name={`return-flow-${flow.id}-date`}
               type="date"
               className="input"
               value={flow.date}
@@ -832,6 +840,10 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
   const effectiveRateUnit = usesCostQuote
     ? `${fromCurrency} per 1 ${toCurrency}`
     : `${toCurrency} per 1 ${fromCurrency}`;
+  const rateHint = (override: NumericValue | null) => {
+    if (!snapshotQuote) return undefined;
+    return override === null ? `Rate from ${latestSnapshot?.month}` : 'Custom rate';
+  };
 
   return (
     <ToolModal
@@ -871,6 +883,16 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
           options={currencies}
           disabled={currenciesLoading}
         />
+        {amountMode === 'spend'
+          ? <CalculatorField label="You spend" value={budget} onChange={setBudget} suffix={fromCurrency} />
+          : (
+            <CalculatorField
+              label="You receive"
+              value={targetReceive}
+              onChange={setTargetReceiveOverride}
+              suffix={toCurrency}
+            />
+          )}
         <div className="calculator-field fx-amount-mode">
           <span>Calculate by</span>
           <SegmentedControl
@@ -890,16 +912,6 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
             ]}
           />
         </div>
-        {amountMode === 'spend'
-          ? <CalculatorField label="You spend" value={budget} onChange={setBudget} suffix={fromCurrency} />
-          : (
-            <CalculatorField
-              label="You receive"
-              value={targetReceive}
-              onChange={setTargetReceiveOverride}
-              suffix={toCurrency}
-            />
-          )}
       </div>
 
       <div className="fx-rate-guide">
@@ -939,9 +951,7 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
               value={rateA}
               onChange={setRateAOverride}
               suffix={usesCostQuote ? fromCurrency : toCurrency}
-              hint={rateAOverride === null && snapshotQuote
-                ? `Rate from ${latestSnapshot?.month}`
-                : undefined}
+              hint={rateHint(rateAOverride)}
             />
             <CalculatorField label="Fee" value={feeA} onChange={setFeeA} suffix="%" />
           </div>
@@ -978,9 +988,7 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
               value={rateB}
               onChange={setRateBOverride}
               suffix={usesCostQuote ? fromCurrency : toCurrency}
-              hint={rateBOverride === null && snapshotQuote
-                ? `Rate from ${latestSnapshot?.month}`
-                : undefined}
+              hint={rateHint(rateBOverride)}
             />
             <CalculatorField label="Fee" value={feeB} onChange={setFeeB} suffix="%" />
           </div>

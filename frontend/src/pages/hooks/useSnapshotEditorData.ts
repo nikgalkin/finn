@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { API_URL, type AppSettings, type Snapshot, type SnapshotDraftData } from '../../types';
 import { useSettings } from '../../hooks/useSettings';
+import { normalizeRates } from '../../lib/finance';
+import { monthAfterLatestSnapshot } from '../../lib/snapshotMonth';
 
-const initialSnapshotData: SnapshotDraftData = { comment: '', rates: { USD: 90, EUR: 100 }, organizations: [] };
+const initialSnapshotData: SnapshotDraftData = { comment: '', rates: {}, organizations: [] };
 
 type UseSnapshotEditorDataProps = { isCopy: boolean; isNew: boolean; month?: string; sourceMonth?: string };
 
@@ -28,6 +30,7 @@ const withNormalizedSnapshotData = (
   excludeArchived = false
 ): SnapshotDraftData => ({
   ...snapshotData,
+  rates: normalizeRates(snapshotData.rates || {}, settings.baseCurrency || 'RUB'),
   organizations: (snapshotData.organizations || [])
     .filter(org => {
       if (!excludeArchived) return true;
@@ -80,10 +83,13 @@ export function useSnapshotEditorData({ isCopy, isNew, month, sourceMonth }: Use
           setOriginalMonth('');
 
           if (sourceMonth) {
-            const snapshot: Snapshot = await fetch(`${API_URL}/snapshots/${sourceMonth}`).then(res => res.json());
+            const [snapshot, snapshots]: [Snapshot, Snapshot[]] = await Promise.all([
+              fetch(`${API_URL}/snapshots/${sourceMonth}`).then(res => res.json()),
+              fetch(`${API_URL}/snapshots`).then(res => res.json())
+            ]);
             if (!cancelled && snapshot.data) {
               setData(stripCommentsFromSnapshot(parseSnapshotData(snapshot, settings, true, true)));
-              setCurrentMonth(targetMonth);
+              setCurrentMonth(monthAfterLatestSnapshot(snapshots, sourceMonth) || targetMonth);
             }
           } else {
             setData(initialSnapshotData);

@@ -24,7 +24,7 @@ export type DataHealthReport = {
   issues: DataHealthIssue[];
 };
 
-export type BackupInspectorFile = {
+type BackupInspectorFile = {
   name: string;
   size: number;
   modifiedAt: string;
@@ -34,7 +34,7 @@ export type BackupInspectorFile = {
   current: boolean;
 };
 
-export type BackupInspectorTarget = {
+type BackupInspectorTarget = {
   name: string;
   path: string;
   retention: number;

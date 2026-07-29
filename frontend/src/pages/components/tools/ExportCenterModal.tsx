@@ -161,6 +161,8 @@ export function ExportCenterModal({ onClose }: ExportCenterModalProps) {
               <label>
                 <span>From</span>
                 <input
+                  id="export-from-month"
+                  name="export-from-month"
                   className="input"
                   type="month"
                   value={request.fromMonth}
@@ -173,6 +175,8 @@ export function ExportCenterModal({ onClose }: ExportCenterModalProps) {
               <label>
                 <span>Through</span>
                 <input
+                  id="export-through-month"
+                  name="export-through-month"
                   className="input"
                   type="month"
                   value={request.toMonth}
@@ -204,6 +208,8 @@ export function ExportCenterModal({ onClose }: ExportCenterModalProps) {
             <div className="export-content-grid">
               <label>
                 <input
+                  id="export-include-snapshots"
+                  name="export-include-snapshots"
                   type="checkbox"
                   checked={request.includeSnapshots}
                   onChange={event => change('includeSnapshots', event.target.checked)}
@@ -213,6 +219,8 @@ export function ExportCenterModal({ onClose }: ExportCenterModalProps) {
               </label>
               <label>
                 <input
+                  id="export-include-cash-flow"
+                  name="export-include-cash-flow"
                   type="checkbox"
                   checked={request.includeCashFlow}
                   onChange={event => change('includeCashFlow', event.target.checked)}
@@ -222,6 +230,8 @@ export function ExportCenterModal({ onClose }: ExportCenterModalProps) {
               </label>
               <label>
                 <input
+                  id="export-include-settings"
+                  name="export-include-settings"
                   type="checkbox"
                   checked={request.includeSettings}
                   onChange={event => change('includeSettings', event.target.checked)}

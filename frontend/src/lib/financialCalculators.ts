@@ -1,4 +1,4 @@
-export type GrowthProjectionInput = {
+type GrowthProjectionInput = {
   startingCapital: number;
   monthlyContribution: number;
   annualReturnPercent: number;
@@ -6,7 +6,7 @@ export type GrowthProjectionInput = {
   years: number;
 };
 
-export type GrowthProjection = {
+type GrowthProjection = {
   futureValue: number;
   realFutureValue: number;
   totalContributions: number;
@@ -72,11 +72,11 @@ export const calculateGrowthProjection = ({
   };
 };
 
-export type GoalContributionInput = Omit<GrowthProjectionInput, 'monthlyContribution'> & {
+type GoalContributionInput = Omit<GrowthProjectionInput, 'monthlyContribution'> & {
   targetAmount: number;
 };
 
-export type GoalContribution = GrowthProjection & {
+type GoalContribution = GrowthProjection & {
   targetAmount: number;
   requiredMonthlyContribution: number;
   shortfallWithoutContributions: number;
@@ -127,13 +127,13 @@ export type RebalanceItem = {
   targetPercent: number;
 };
 
-export type RebalanceSuggestion = RebalanceItem & {
+type RebalanceSuggestion = RebalanceItem & {
   currentPercent: number;
   targetAmount: number;
   difference: number;
 };
 
-export type RebalanceResult = {
+type RebalanceResult = {
   suggestions: RebalanceSuggestion[];
   currentTotal: number;
   portfolioTotal: number;
@@ -193,12 +193,12 @@ export const calculateRebalance = (
   };
 };
 
-export type DatedCashFlow = {
+type DatedCashFlow = {
   date: string;
   amount: number;
 };
 
-export type ReturnCalculation = {
+type ReturnCalculation = {
   annualizedReturnPercent: number | null;
   netProfit: number;
   totalInvested: number;
@@ -263,7 +263,7 @@ export const calculateXirr = (cashFlows: DatedCashFlow[]): ReturnCalculation => 
   return result;
 };
 
-export type FxDealInput = {
+type FxDealInput = {
   budget: number;
   rate: number;
   feePercent?: number;
@@ -273,7 +273,7 @@ export type FxDealInput = {
 
 export type FxQuoteDirection = 'spend-per-buy' | 'buy-per-spend';
 
-export type FxDealResult = {
+type FxDealResult = {
   receivedAmount: number;
   effectiveRate: number;
 };
@@ -305,7 +305,7 @@ export const calculateFxDeal = ({
   };
 };
 
-export type FxComparison = {
+type FxComparison = {
   dealA: FxDealResult;
   dealB: FxDealResult;
   difference: number;
@@ -335,11 +335,11 @@ export const compareFxDeals = (dealA: FxDealInput, dealB: FxDealInput): FxCompar
   };
 };
 
-export type FxTargetDealInput = Omit<FxDealInput, 'budget'> & {
+type FxTargetDealInput = Omit<FxDealInput, 'budget'> & {
   targetAmount: number;
 };
 
-export type FxTargetDealResult = {
+type FxTargetDealResult = {
   spendAmount: number;
   effectiveRate: number;
 };
@@ -376,7 +376,7 @@ export const calculateFxSpendForTarget = ({
   };
 };
 
-export type FxTargetComparison = {
+type FxTargetComparison = {
   dealA: FxTargetDealResult;
   dealB: FxTargetDealResult;
   difference: number;

@@ -5,7 +5,7 @@ import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
-import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount, type TaggedReturnKind } from '../lib/finance';
+import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount, monthsBetween, type TaggedReturnKind } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
 import { useFlowEntries } from '../hooks/useFlowEntries';
 import { GraphsAnalyticsSections, type HiddenLegendSeries, type LegendGroup } from './components/graphs/GraphsAnalyticsSections';
@@ -13,6 +13,7 @@ import { PageLoader } from './components/PageLoader';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { StickyPageHeader } from './components/StickyPageHeader';
 import { TimeframeControl } from './components/TimeframeControl';
+import { useSnapshotDiffHistory } from './hooks/useSnapshotDiffHistory';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#eab308', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444'];
 const LEGEND_DOUBLE_CLICK_WINDOW_MS = 700;
@@ -91,12 +92,12 @@ const buildBreakdownSeries = (
 
 export default function GraphsPage() {
   const { settings } = useSettings();
-  const { snapshots, loading } = useSnapshots({ sort: 'asc' });
+  const baseCurrency = settings.baseCurrency || 'RUB';
+  const { snapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
   const cashFlowEnabled = Boolean(settings.cashFlow?.enabled);
   const { entries: flowEntries, error: flowError, loading: flowLoading } = useFlowEntries(cashFlowEnabled);
-  const baseCurrency = settings.baseCurrency || 'RUB';
-  const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
-  const [onlyChanges, setOnlyChanges] = useState(true);
+  const diffHistory = useSnapshotDiffHistory('graphs-diff', snapshots);
+  const diffModalData = diffHistory.data;
   useEscapeToDashboard({ blocked: Boolean(diffModalData) });
 
   const [hiddenSeries, setHiddenSeries] = useState<HiddenLegendSeries>({
@@ -117,16 +118,16 @@ export default function GraphsPage() {
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        setDiffModalData(null);
+        diffHistory.close();
       } else if (event.code === 'KeyD') {
         event.preventDefault();
-        setOnlyChanges(previous => !previous);
+        diffHistory.toggleOnlyChanges();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [diffModalData]);
+  }, [diffHistory, diffModalData]);
 
   useEffect(() => {
     if (snapshots.length > 0 && !startMonth && !endMonth) {
@@ -197,10 +198,10 @@ export default function GraphsPage() {
   const handleOpenSnapshotDiff = (month: string) => {
     const snapshotIndex = snapshots.findIndex(snapshot => snapshot.month === month);
     if (snapshotIndex < 0) return;
-    setDiffModalData({
-      current: snapshots[snapshotIndex],
-      previous: snapshotIndex > 0 ? snapshots[snapshotIndex - 1] : null
-    });
+    diffHistory.open(
+      snapshots[snapshotIndex],
+      snapshotIndex > 0 ? snapshots[snapshotIndex - 1] : null
+    );
   };
 
   const organizationCurrencyBreakdown = useMemo(() => {
@@ -273,7 +274,8 @@ export default function GraphsPage() {
         'FX Impact': fxImpactDelta,
         returnRatePercent: estimated.ratePercent,
         openingCapital: previousCapital,
-        recordedMovements: monthEntries.length
+        recordedMovements: monthEntries.length,
+        elapsedMonths: Math.max(1, monthsBetween(previousSnapshot.month, snapshot.month))
       };
     }
 
@@ -321,6 +323,13 @@ export default function GraphsPage() {
   });
 
   const snapshotsByMonth = new Map(filteredSnapshots.map(snapshot => [snapshot.month, snapshot]));
+  // Analytics is driven by snapshots, so movements recorded for a month that was
+  // never snapshotted silently reach no chart at all.
+  const monthsWithoutSnapshot = Array.from(new Set(flowEntries
+    .filter(entry => entry.entryType !== 'transfer')
+    .filter(entry => (!startMonth || entry.month >= startMonth) && (!effectiveEndMonth || entry.month <= effectiveEndMonth))
+    .filter(entry => !snapshotsByMonth.has(entry.month))
+    .map(entry => entry.month))).sort();
   const cashFlowEventsData = flowEntries.flatMap(entry => {
     if (entry.entryType === 'transfer') return [];
     const snapshot = snapshotsByMonth.get(entry.month);
@@ -366,12 +375,16 @@ export default function GraphsPage() {
       externalFlow: Number(point['External flow'] || 0),
       result: Number(point['Capital earnings'] || 0),
       ratePercent: typeof point.returnRatePercent === 'number' ? point.returnRatePercent : null,
-      recordedMovements: Number(point.recordedMovements || 0)
+      recordedMovements: Number(point.recordedMovements || 0),
+      elapsedMonths: Number(point.elapsedMonths || 1)
     }));
-  const ratedMonths = capitalReturnMonths.filter(month => month.ratePercent !== null).length;
+  const ratedMonths = capitalReturnMonths.filter(month => month.ratePercent !== null);
+  // A snapshot measures the whole gap since the previous one, so a skipped month
+  // must not be annualized as if it were a single month of return.
+  const ratedMonthSpan = ratedMonths.reduce((total, month) => total + month.elapsedMonths, 0);
   const periodRatePercent = (periodReturnMultiplier - 1) * 100;
-  const annualizedRatePercent = ratedMonths >= 2 && ratedMonths !== 12 && periodReturnMultiplier > 0
-    ? (Math.pow(periodReturnMultiplier, 12 / ratedMonths) - 1) * 100
+  const annualizedRatePercent = ratedMonths.length >= 2 && ratedMonthSpan !== 12 && ratedMonthSpan > 0 && periodReturnMultiplier > 0
+    ? (Math.pow(periodReturnMultiplier, 12 / ratedMonthSpan) - 1) * 100
     : null;
   const monthsWithoutRecordedFlow = capitalReturnMonths.filter(month => month.recordedMovements === 0).length;
   const taggedReturnTotals = new Map<string, {
@@ -540,7 +553,7 @@ export default function GraphsPage() {
             <button
               onClick={() => setHiddenSeries({ currencies: {}, organizations: {}, tags: { untagged: true } })}
               className="btn flex items-center gap-1.5"
-              style={{ padding: '8px 16px', fontSize: '14px', borderColor: 'var(--accent)', color: 'var(--accent)', background: 'rgba(59, 130, 246, 0.05)' }}
+              style={{ padding: '8px 16px', fontSize: '14px', borderColor: 'var(--accent)', color: 'var(--accent)', background: 'rgba(var(--accent-rgb), 0.05)' }}
             >
               <Eye size={14} /> Show Hidden
             </button>
@@ -594,7 +607,8 @@ export default function GraphsPage() {
           total: totalExternalEntries,
           proportional: proportionallyAllocatedEntries,
           unattributedFlow,
-          unknownAccounts: Array.from(unknownFlowAccounts)
+          unknownAccounts: Array.from(unknownFlowAccounts),
+          monthsWithoutSnapshot
         }}
         tagReturnStats={tagReturnStats}
         uxMetricsData={uxMetricsData}
@@ -609,9 +623,12 @@ export default function GraphsPage() {
           snapshots={snapshots}
           cashFlowEnabled={cashFlowEnabled}
           flowEntries={flowEntries}
-          onlyChanges={onlyChanges}
-          onOnlyChangesChange={setOnlyChanges}
-          onClose={() => setDiffModalData(null)}
+          onlyChanges={diffHistory.onlyChanges}
+          onOnlyChangesChange={diffHistory.setOnlyChanges}
+          scrollTop={diffHistory.scrollTop}
+          onScrollTopChange={diffHistory.persistScrollTop}
+          onPeriodChange={diffHistory.setPeriod}
+          onClose={diffHistory.close}
         />
       )}
     </div>

@@ -3,6 +3,7 @@ import { Activity, ArrowLeftRight, ArrowRight, BarChart3, Check, ChevronDown, Ch
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import {
   formatCompact,
+  formatExchangeRate,
   formatFriendlyTime,
   formatMoney,
   formatNativeAmount,
@@ -91,7 +92,7 @@ type GraphsAnalyticsSectionsProps = {
   organizationCurrencyMonth?: string;
   summaryStats: SummaryStat[];
   tagDistributionData: ChartDatum[];
-  tagReturnCoverage: { assigned: number; total: number; proportional: number; unattributedFlow: number; unknownAccounts: string[] };
+  tagReturnCoverage: { assigned: number; total: number; proportional: number; unattributedFlow: number; unknownAccounts: string[]; monthsWithoutSnapshot: string[] };
   tagReturnStats: TagReturnStat[];
   uxMetricsData: ChartDatum[];
   handleLegendClickSmart: (group: LegendGroup, event: any, allKeys: string[]) => void;
@@ -720,6 +721,11 @@ export function GraphsAnalyticsSections({
                     Cash Flow uses {tagReturnCoverage.unknownAccounts.length === 1 ? 'an account' : 'accounts'} no snapshot in this period knows: {tagReturnCoverage.unknownAccounts.join(', ')}. Fix the name or set a tag on those movements.
                   </div>
                 )}
+                {tagReturnCoverage.monthsWithoutSnapshot.length > 0 && (
+                  <div className="capital-return-coverage-warning">
+                    {tagReturnCoverage.monthsWithoutSnapshot.length === 1 ? 'A month has' : 'Some months have'} recorded movements but no snapshot: {tagReturnCoverage.monthsWithoutSnapshot.join(', ')}. Those movements are left out of every number here until the {tagReturnCoverage.monthsWithoutSnapshot.length === 1 ? 'snapshot exists' : 'snapshots exist'}.
+                  </div>
+                )}
                 {tagReturnCoverage.total > 0 && tagReturnCoverage.assigned < tagReturnCoverage.total && (
                   <div className="capital-return-coverage-warning">
                     Only {tagReturnCoverage.assigned} of {tagReturnCoverage.total} external movements reach a tag. Give the rest an own account or a tag in Cash Flow to make this breakdown reliable.
@@ -1070,7 +1076,7 @@ export function GraphsAnalyticsSections({
               <Tooltip
                 content={<SimpleGraphTooltip formatter={(value, name, item) => {
                   const isInverted = item.payload[`${name}_isInverted`];
-                  const num = Number(value).toLocaleString('en-US');
+                  const num = formatExchangeRate(Number(value));
                   return [isInverted ? `${num} per ${baseCurrency}` : `${num} ${baseCurrency}`, name];
                 }} />}
               />

@@ -7,14 +7,14 @@ import {
   convertAmount
 } from './finance.ts';
 
-export type SnapshotRebalanceRow = {
+type SnapshotRebalanceRow = {
   id: string;
   label: string;
   currentAmount: number;
   targetPercent: number;
 };
 
-export type SnapshotReturnFlow = {
+type SnapshotReturnFlow = {
   id: string;
   date: string;
   amount: number;

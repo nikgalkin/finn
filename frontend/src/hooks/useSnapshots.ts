@@ -1,17 +1,21 @@
-import { useEffect, useState } from 'react';
 import { API_URL } from '../types';
 import type { ParsedSnapshot, Snapshot } from '../types';
+import { normalizeSnapshotRates } from '../lib/finance';
+import { useAsyncResource } from './useAsyncResource';
 
 type SortDirection = 'asc' | 'desc';
 
 type UseSnapshotsOptions = {
   sort?: SortDirection;
+  baseCurrency: string;
 };
 
-const parseSnapshot = (snapshot: Snapshot): ParsedSnapshot => ({
+const NO_SNAPSHOTS: ParsedSnapshot[] = [];
+
+const parseSnapshot = (snapshot: Snapshot, baseCurrency: string): ParsedSnapshot => normalizeSnapshotRates({
   ...snapshot,
   data: JSON.parse(snapshot.data)
-});
+}, baseCurrency);
 
 const sortSnapshots = (snapshots: ParsedSnapshot[], direction: SortDirection) => {
   return [...snapshots].sort((a, b) => {
@@ -20,34 +24,17 @@ const sortSnapshots = (snapshots: ParsedSnapshot[], direction: SortDirection) =>
   });
 };
 
-export function useSnapshots(options: UseSnapshotsOptions = {}) {
-  const { sort = 'asc' } = options;
-  const [snapshots, setSnapshots] = useState<ParsedSnapshot[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+export function useSnapshots(options: UseSnapshotsOptions) {
+  const { sort = 'asc', baseCurrency } = options;
+  const { data, setData, loading, error } = useAsyncResource(
+    NO_SNAPSHOTS,
+    async () => {
+      const response = await fetch(`${API_URL}/snapshots`);
+      const snapshots = await response.json() as Snapshot[];
+      return sortSnapshots((snapshots || []).map(snapshot => parseSnapshot(snapshot, baseCurrency)), sort);
+    },
+    `${sort}|${baseCurrency}`
+  );
 
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch(`${API_URL}/snapshots`)
-      .then(res => res.json())
-      .then((data: Snapshot[]) => {
-        if (cancelled) return;
-        setSnapshots(sortSnapshots((data || []).map(parseSnapshot), sort));
-      })
-      .catch(err => {
-        if (cancelled) return;
-        console.error(err);
-        setError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sort]);
-
-  return { snapshots, setSnapshots, loading, error };
+  return { snapshots: data, setSnapshots: setData, loading, error };
 }

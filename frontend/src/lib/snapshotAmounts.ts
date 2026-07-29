@@ -1,13 +1,13 @@
 import type { Organization, OrganizationDraft } from '../types';
 import { parseNumberExpression } from './numberExpression.ts';
 
-export type UncalculatedAmount = {
+type UncalculatedAmount = {
   organization: string;
   currency: string;
   value: string;
 };
 
-export type NormalizedSnapshotAmounts = {
+type NormalizedSnapshotAmounts = {
   organizations: Organization[];
   uncalculatedAmounts: UncalculatedAmount[];
 };

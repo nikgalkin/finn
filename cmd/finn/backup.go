@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/argon2"
 )
 
 const (
@@ -29,6 +31,27 @@ const (
 	backupHashLength = 32
 	extEncrypted     = "enc"
 	extRaw           = "db"
+)
+
+// An encrypted backup starts with a header that carries everything needed to
+// derive the key again. The parameters below can change without breaking files
+// already written, because every file states the ones it was made with.
+const (
+	backupMagic         = "FINN"
+	backupFormatVersion = 1
+
+	backupKDFRaw         = 0
+	backupKDFArgon2id    = 1
+	backupKeyLength      = 32
+	backupSaltLength     = 16
+	backupSaltMaxLength  = 64
+	argon2Time           = 3
+	argon2MemoryKiB      = 64 * 1024
+	argon2Parallelism    = 4
+	argon2MaxTime        = 10
+	argon2MaxMemoryKiB   = 256 * 1024
+	argon2MaxParallelism = 16
+	backupHeaderPrefix   = len(backupMagic) + 1 + 1 + 4 + 4 + 1 + 1
 )
 
 const (
@@ -285,16 +308,142 @@ func writeBackupFile(target BackupTarget, timestamp, fingerprint, extension stri
 	}
 }
 
-// encryptData blocks the bytes using AES-256-GCM
-func encryptData(plaintext []byte, passphrase string) ([]byte, error) {
-	key := sha256.Sum256([]byte(passphrase))
+// rawBackupKey reports whether the configured key is a generated 32-byte key.
+// Such a key already carries full entropy, so stretching it would only cost
+// time. Anything else is treated as a human passphrase.
+func rawBackupKey(passphrase string) ([]byte, bool) {
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(passphrase))
+	if err != nil || len(decoded) != backupKeyLength {
+		return nil, false
+	}
+	return decoded, true
+}
 
-	block, err := aes.NewCipher(key[:])
+type backupHeader struct {
+	kdf         byte
+	time        uint32
+	memory      uint32
+	parallelism uint8
+	salt        []byte
+}
+
+func (header backupHeader) bytes() []byte {
+	encoded := make([]byte, 0, backupHeaderPrefix+len(header.salt))
+	encoded = append(encoded, backupMagic...)
+	encoded = append(encoded, backupFormatVersion, header.kdf)
+	encoded = binary.BigEndian.AppendUint32(encoded, header.time)
+	encoded = binary.BigEndian.AppendUint32(encoded, header.memory)
+	encoded = append(encoded, header.parallelism, byte(len(header.salt)))
+	return append(encoded, header.salt...)
+}
+
+func parseBackupHeader(payload []byte) (backupHeader, []byte, error) {
+	if len(payload) < backupHeaderPrefix || string(payload[:len(backupMagic)]) != backupMagic {
+		return backupHeader{}, nil, errors.New("this file was not written by this version of Finn; restore it with the version that created it")
+	}
+
+	cursor := len(backupMagic)
+	if version := payload[cursor]; version != backupFormatVersion {
+		return backupHeader{}, nil, fmt.Errorf("unsupported backup format version %d", version)
+	}
+	cursor++
+
+	header := backupHeader{kdf: payload[cursor]}
+	cursor++
+	header.time = binary.BigEndian.Uint32(payload[cursor:])
+	cursor += 4
+	header.memory = binary.BigEndian.Uint32(payload[cursor:])
+	cursor += 4
+	header.parallelism = payload[cursor]
+	cursor++
+	saltLength := int(payload[cursor])
+	cursor++
+
+	if len(payload) < cursor+saltLength {
+		return backupHeader{}, nil, errors.New("backup header is truncated")
+	}
+	header.salt = payload[cursor : cursor+saltLength]
+
+	return header, payload[cursor+saltLength:], nil
+}
+
+func (header backupHeader) validate() error {
+	switch header.kdf {
+	case backupKDFRaw:
+		if header.time != 0 || header.memory != 0 || header.parallelism != 0 || len(header.salt) != 0 {
+			return errors.New("backup header carries invalid raw-key parameters")
+		}
+	case backupKDFArgon2id:
+		if header.time == 0 || header.time > argon2MaxTime {
+			return fmt.Errorf("backup header carries an unsupported Argon2id time cost %d", header.time)
+		}
+		if header.parallelism == 0 || header.parallelism > argon2MaxParallelism {
+			return fmt.Errorf("backup header carries unsupported Argon2id parallelism %d", header.parallelism)
+		}
+		minimumMemory := 8 * uint32(header.parallelism)
+		if header.memory < minimumMemory || header.memory > argon2MaxMemoryKiB {
+			return fmt.Errorf("backup header carries an unsupported Argon2id memory cost %d KiB", header.memory)
+		}
+		if len(header.salt) < backupSaltLength || len(header.salt) > backupSaltMaxLength {
+			return fmt.Errorf("backup header carries an unsupported Argon2id salt length %d", len(header.salt))
+		}
+	default:
+		return fmt.Errorf("unsupported key derivation %d", header.kdf)
+	}
+	return nil
+}
+
+func (header backupHeader) deriveKey(passphrase string) ([]byte, error) {
+	if err := header.validate(); err != nil {
+		return nil, err
+	}
+
+	switch header.kdf {
+	case backupKDFRaw:
+		key, ok := rawBackupKey(passphrase)
+		if !ok {
+			return nil, errors.New("this backup was written with a generated key, but the configured backup.cipher_key is not one")
+		}
+		return key, nil
+	case backupKDFArgon2id:
+		return argon2.IDKey([]byte(passphrase), header.salt, header.time, header.memory, header.parallelism, backupKeyLength), nil
+	}
+	panic("validated backup header has an unknown key derivation")
+}
+
+func newBackupHeader(passphrase string) (backupHeader, error) {
+	if _, ok := rawBackupKey(passphrase); ok {
+		return backupHeader{kdf: backupKDFRaw}, nil
+	}
+
+	salt := make([]byte, backupSaltLength)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		return backupHeader{}, fmt.Errorf("failed to generate backup salt: %w", err)
+	}
+	return backupHeader{
+		kdf:         backupKDFArgon2id,
+		time:        argon2Time,
+		memory:      argon2MemoryKiB,
+		parallelism: argon2Parallelism,
+		salt:        salt,
+	}, nil
+}
+
+// encryptData seals the bytes with AES-256-GCM. The header is authenticated as
+// additional data, so tampering with the salt or the Argon2id parameters fails
+// the open instead of silently deriving a different key.
+func encryptData(plaintext []byte, passphrase string) ([]byte, error) {
+	header, err := newBackupHeader(passphrase)
 	if err != nil {
 		return nil, err
 	}
 
-	aesGCM, err := cipher.NewGCM(block)
+	key, err := header.deriveKey(passphrase)
+	if err != nil {
+		return nil, err
+	}
+
+	aesGCM, err := newBackupCipher(key)
 	if err != nil {
 		return nil, err
 	}
@@ -304,36 +453,48 @@ func encryptData(plaintext []byte, passphrase string) ([]byte, error) {
 		return nil, err
 	}
 
-	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, nil)
-	return ciphertext, nil
+	encodedHeader := header.bytes()
+	sealed := aesGCM.Seal(nil, nonce, plaintext, encodedHeader)
+	return append(append(encodedHeader, nonce...), sealed...), nil
 }
 
 // decryptData unseals the encrypted bytes using AES-256-GCM
-func decryptData(ciphertext []byte, passphrase string) ([]byte, error) {
-	key := sha256.Sum256([]byte(passphrase))
-
-	block, err := aes.NewCipher(key[:])
+func decryptData(payload []byte, passphrase string) ([]byte, error) {
+	header, body, err := parseBackupHeader(payload)
 	if err != nil {
 		return nil, err
 	}
 
-	aesGCM, err := cipher.NewGCM(block)
+	key, err := header.deriveKey(passphrase)
+	if err != nil {
+		return nil, err
+	}
+
+	aesGCM, err := newBackupCipher(key)
 	if err != nil {
 		return nil, err
 	}
 
 	nonceSize := aesGCM.NonceSize()
-	if len(ciphertext) < nonceSize {
+	if len(body) < nonceSize {
 		return nil, fmt.Errorf("ciphertext too short")
 	}
 
-	nonce, encryptedPayload := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := aesGCM.Open(nil, nonce, encryptedPayload, nil)
+	nonce, encryptedPayload := body[:nonceSize], body[nonceSize:]
+	plaintext, err := aesGCM.Open(nil, nonce, encryptedPayload, header.bytes())
 	if err != nil {
 		return nil, fmt.Errorf("decryption failed (bad key or corrupted data)")
 	}
 
 	return plaintext, nil
+}
+
+func newBackupCipher(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCM(block)
 }
 
 // rotateBackups keeps only the N newest backups in the specified target directory
@@ -520,7 +681,7 @@ func RunBackupJob(cfg *Config, db *sql.DB) BackupReport {
 	var extension string
 
 	if cfg.Backup.CipherKey != "" {
-		log.Println("🔒 Backup: Encrypting dataset via Post-Quantum resilient AES-256-GCM...")
+		log.Println("🔒 Backup: Encrypting dataset with authenticated AES-256-GCM...")
 		encrypted, err := encryptData(dbBytes, cfg.Backup.CipherKey)
 		if err != nil {
 			log.Printf("⚠️  Backup: Encryption failed: %v\n", err)

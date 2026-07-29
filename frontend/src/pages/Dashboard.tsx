@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { TrendingUp, DollarSign, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock } from 'lucide-react';
+import { TrendingUp, Edit, Copy, Trash2, Calendar, MessageSquare, ArrowLeftRight, Clock, Plus } from 'lucide-react';
 import { AreaChart, Area, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { API_URL } from '../types';
 import type { ParsedSnapshot } from '../types';
@@ -14,7 +14,8 @@ import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphToolt
 import { ScrollForMore } from './components/ScrollForMore';
 import { SnapshotDraftsNotice } from './components/SnapshotDraftsNotice';
 import { isTextInputTarget } from '../lib/hotkeys';
-import { formatCompact, formatPercent, formatSigned, getDeltaColor, getMoneyDeltaColor } from '../lib/format';
+import { useHistoryEntryState } from '../lib/historyEntryState';
+import { formatCompact, formatNumber, formatPercent, formatSigned, getDeltaColor, getMoneyDeltaColor } from '../lib/format';
 import {
   calculateCurrencyTotals,
   calculateFlowDecomposition,
@@ -24,7 +25,22 @@ import {
   hasAnyComments
 } from '../lib/finance';
 
-const DASHBOARD_PIE_VISIBLE_ROWS = 7;
+const DASHBOARD_PIE_VISIBLE_ROWS = 6;
+
+type DashboardModalState =
+  | { type: 'notes'; month: string }
+  | { type: 'diff'; currentMonth: string; previousMonth: string; scrollTop: number }
+  | null;
+
+type DashboardViewState = {
+  modal: DashboardModalState;
+  onlyChanges: boolean;
+};
+
+const INITIAL_DASHBOARD_VIEW_STATE: DashboardViewState = {
+  modal: null,
+  onlyChanges: true
+};
 
 const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency }: any) => {
   if (!active || !payload || !payload.length) return null;
@@ -57,13 +73,25 @@ const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency
 
 export default function Dashboard() {
   const { settings } = useSettings();
-  const { snapshots, setSnapshots, loading } = useSnapshots({ sort: 'asc' });
   const baseCurrency = settings.baseCurrency || 'RUB';
+  const { snapshots, setSnapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
   const secondaryCurrency = settings.secondaryCurrency ?? 'USD';
 
-  const [activeViewNotes, setActiveViewNotes] = useState<ParsedSnapshot | null>(null);
-  const [diffModalData, setDiffModalData] = useState<{ current: ParsedSnapshot; previous: ParsedSnapshot | null } | null>(null);
-  const [onlyChanges, setOnlyChanges] = useState(true);
+  const [dashboardView, setDashboardView, persistDashboardView] = useHistoryEntryState(
+    'dashboard',
+    INITIAL_DASHBOARD_VIEW_STATE
+  );
+  const dashboardModal = dashboardView.modal;
+  const activeViewNotes = dashboardModal?.type === 'notes'
+    ? snapshots.find(snapshot => snapshot.month === dashboardModal.month) || null
+    : null;
+  const diffModalData = dashboardModal?.type === 'diff'
+    ? {
+        current: snapshots.find(snapshot => snapshot.month === dashboardModal.currentMonth) || null,
+        previous: snapshots.find(snapshot => snapshot.month === dashboardModal.previousMonth) || null
+      }
+    : null;
+  const onlyChanges = dashboardView.onlyChanges;
   const { entries: flowEntries } = useFlowEntries(Boolean(settings.cashFlow?.enabled && diffModalData));
 
   const navigate = useNavigate();
@@ -76,8 +104,7 @@ export default function Dashboard() {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        setActiveViewNotes(null);
-        setDiffModalData(null);
+        setDashboardView(previous => ({ ...previous, modal: null }));
         return;
       }
 
@@ -89,10 +116,10 @@ export default function Dashboard() {
         return;
       }
 
-      if (diffModalData) {
+      if (dashboardModal?.type === 'diff') {
         if (e.code === 'KeyD') {
           e.preventDefault();
-          setOnlyChanges(prev => !prev);
+          setDashboardView(previous => ({ ...previous, onlyChanges: !previous.onlyChanges }));
         }
         return;
       }
@@ -104,7 +131,7 @@ export default function Dashboard() {
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [activeViewNotes, diffModalData, latestSnapshot, navigate]);
+  }, [activeViewNotes, dashboardModal, latestSnapshot, navigate, setDashboardView]);
 
   const handleDelete = (month: string) => {
     const confirmText = prompt(`To delete this snapshot, type its name: ${month}`);
@@ -186,7 +213,10 @@ export default function Dashboard() {
       const clickedMonth = state.activeLabel;
       const snapshot = snapshots.find(s => s.month === clickedMonth);
       if (snapshot && hasAnyComments(snapshot)) {
-        setActiveViewNotes(snapshot);
+        setDashboardView(previous => ({
+          ...previous,
+          modal: { type: 'notes', month: snapshot.month }
+        }));
       }
     }
   };
@@ -197,6 +227,31 @@ export default function Dashboard() {
     () => latestSnapshot ? calculateTotals(latestSnapshot, baseCurrency, secondaryCurrency) : { totalBase: 0, totalSecondary: 0 },
     [latestSnapshot, baseCurrency, secondaryCurrency]
   );
+  const latestYearAgoMonth = latestSnapshot
+    ? `${Number(latestSnapshot.month.slice(0, 4)) - 1}${latestSnapshot.month.slice(4)}`
+    : null;
+  const latestYearAgoSnapshot = latestYearAgoMonth
+    ? snapshots.find(snapshot => snapshot.month === latestYearAgoMonth) || null
+    : null;
+  const latestYearAgoTotals = useMemo(
+    () => latestYearAgoSnapshot
+      ? calculateTotals(latestYearAgoSnapshot, baseCurrency, secondaryCurrency)
+      : null,
+    [baseCurrency, latestYearAgoSnapshot, secondaryCurrency]
+  );
+  const latestBaseYoYDelta = latestYearAgoTotals
+    ? latestTotals.totalBase - latestYearAgoTotals.totalBase
+    : 0;
+  const latestBaseYoYPercent = latestYearAgoTotals?.totalBase
+    ? (latestBaseYoYDelta / latestYearAgoTotals.totalBase) * 100
+    : 0;
+
+  const hasSecondaryCurrency = Boolean(secondaryCurrency && secondaryCurrency !== baseCurrency);
+  const hasYoY = Boolean(latestYearAgoTotals && latestYearAgoSnapshot);
+  const isYoYStable = Math.abs(latestBaseYoYDelta) < 1;
+  const yoyColor = isYoYStable ? undefined : getDeltaColor(latestBaseYoYDelta);
+  const yoyAmount = isYoYStable ? 'Stable' : formatSigned(latestBaseYoYDelta);
+  const yoyPercent = isYoYStable ? '' : formatPercent(latestBaseYoYPercent, 1);
 
   const pieData = useMemo(() => {
     if (!latestSnapshot) return [];
@@ -215,7 +270,7 @@ export default function Dashboard() {
     const percent = (diff / previous) * 100;
 
     return (
-      <div style={{ color: getDeltaColor(diff), fontSize: '0.85em', marginTop: '2px', fontWeight: 500 }}>
+      <div className="dashboard-value-diff" style={{ color: getDeltaColor(diff) }}>
         {formatSigned(diff)} ({formatPercent(percent, 1)})
       </div>
     );
@@ -253,17 +308,36 @@ export default function Dashboard() {
   const handleOpenDiff = (currentSnapshot: ParsedSnapshot) => {
     const globalIndex = snapshots.findIndex(s => s.month === currentSnapshot.month);
     const previousSnapshot = globalIndex > 0 ? snapshots[globalIndex - 1] : null;
-    setDiffModalData({ current: currentSnapshot, previous: previousSnapshot });
+    setDashboardView(previous => ({
+      ...previous,
+      modal: {
+        type: 'diff',
+        currentMonth: currentSnapshot.month,
+        previousMonth: previousSnapshot?.month || '',
+        scrollTop: 0
+      }
+    }));
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 style={{ fontSize: 24, fontWeight: 'bold', margin: 0 }}>Overview</h2>
+    <div className="dashboard-page">
+      <header className="dashboard-page-header">
+        <div className="dashboard-page-title">
+          <span className="dashboard-page-icon" aria-hidden="true"><TrendingUp size={21} /></span>
+          <div>
+            <div className="dashboard-page-title-row">
+              <h2>Overview</h2>
+              {latestSnapshot && (
+                <span className="dashboard-latest-period"><Calendar size={12} /> {latestSnapshot.month}</span>
+              )}
+            </div>
+            <p>Your portfolio history, allocation and latest recorded position.</p>
+          </div>
+        </div>
         <Link to="/snapshot/new" className="btn btn-primary" title="New Snapshot (N)">
-          New Snapshot
+          <Plus size={16} /> New Snapshot
         </Link>
-      </div>
+      </header>
 
       <SnapshotDraftsNotice />
 
@@ -285,80 +359,104 @@ export default function Dashboard() {
         </section>
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="glass-panel flex items-center justify-between" style={{ padding: '20px 24px', minHeight: 'auto', flex: 1 }}>
-                <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.95rem' }}>
-                  <TrendingUp size={20} />
-                  <span>Total Net Worth ({baseCurrency})</span>
-                </div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 'bold', lineHeight: '1' }}>
-                  {Math.round(latestTotals.totalBase).toLocaleString('en-US')}
-                </div>
-              </div>
-              {secondaryCurrency && secondaryCurrency !== baseCurrency && (
-                <div className="glass-panel flex items-center justify-between" style={{ padding: '20px 24px', minHeight: 'auto', flex: 1 }}>
-                  <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.95rem' }}>
-                    <DollarSign size={20} />
-                    <span>Total Net Worth ({secondaryCurrency})</span>
+          <div className="dashboard-overview-grid">
+            <section className="glass-panel dashboard-net-worth-panel">
+              <div className="dashboard-net-worth-body">
+                <div className="dashboard-net-worth-main">
+                  <h3 className="dashboard-net-worth-label">Total Net Worth</h3>
+                  <div className="dashboard-net-worth-value">
+                    {formatNumber(latestTotals.totalBase)}
+                    <small>{baseCurrency}</small>
                   </div>
-                  <div style={{ fontSize: '1.6rem', fontWeight: 'bold', lineHeight: '1' }}>
-                    {Math.round(latestTotals.totalSecondary).toLocaleString('en-US')}
-                  </div>
+                  {hasYoY && (
+                    <div className="dashboard-net-worth-yoy">
+                      <strong style={{ color: yoyColor }}>{yoyAmount}</strong>
+                      {yoyPercent && <em>{yoyPercent}</em>}
+                      <span>YoY</span>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-
-            <div className="glass-panel dashboard-pie-panel">
-              <div className="dashboard-pie-chart">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={3} dataKey="value">
-                      {pieData.map((_entry, idx) => (
-                        <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<SimpleGraphTooltip formatter={(value, _name, item) => [
-                      `${Number(value).toLocaleString('en-US')} ${baseCurrency}`,
-                      item.payload.name
-                    ]} />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <ScrollForMore
-                orientation="vertical"
-                scrollContainerId="dashboard-pie-legend-scroll"
-                total={pieData.length}
-                visible={DASHBOARD_PIE_VISIBLE_ROWS}
-              />
-
-              <div className="dashboard-pie-legend">
-                <div
-                  id="dashboard-pie-legend-scroll"
-                  className="dashboard-pie-legend-scroll"
-                  tabIndex={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 0 : undefined}
-                  aria-label={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 'Organization allocation. Scroll for more organizations.' : 'Organization allocation'}
-                >
-                  {pieData.map((entry, idx) => {
-                    const percent = latestTotals.totalBase > 0 ? (entry.value / latestTotals.totalBase) * 100 : 0;
-                    return (
-                      <div key={entry.name} className="dashboard-pie-legend-row">
-                        <span className="dashboard-pie-legend-marker" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
-                        <span className="dashboard-pie-legend-name" title={entry.name}>{entry.name}:</span>
-                        <span className="dashboard-pie-legend-value">{percent.toFixed(1)}%</span>
+                <div className={`dashboard-net-worth-metrics${hasSecondaryCurrency ? '' : ' is-single-currency'}`}>
+                  {hasSecondaryCurrency && (
+                    <div className="dashboard-net-worth-secondary">
+                      <span className="dashboard-net-worth-label">Secondary</span>
+                      <div className="dashboard-net-worth-secondary-slot">
+                        <div className="dashboard-net-worth-secondary-value">
+                          {formatNumber(latestTotals.totalSecondary)}
+                          <small>{secondaryCurrency}</small>
+                        </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
+                  <div className="dashboard-net-worth-counters">
+                    <div>
+                      <strong>{pieData.length}</strong>
+                      <span>Organizations</span>
+                    </div>
+                    <div>
+                      <strong>{snapshots.length}</strong>
+                      <span>Snapshots</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </section>
+
+            <section className="glass-panel dashboard-pie-panel">
+              <div className="dashboard-pie-content">
+                <div className="dashboard-pie-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={32} outerRadius={47} paddingAngle={3} dataKey="value">
+                        {pieData.map((_entry, idx) => (
+                          <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<SimpleGraphTooltip formatter={(value, _name, item) => [
+                        `${Number(value).toLocaleString('en-US')} ${baseCurrency}`,
+                        item.payload.name
+                      ]} />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <ScrollForMore
+                  orientation="vertical"
+                  rowGap={1}
+                  rowHeight={16}
+                  scrollContainerId="dashboard-pie-legend-scroll"
+                  total={pieData.length}
+                />
+
+                <div className="dashboard-pie-legend">
+                  <div
+                    id="dashboard-pie-legend-scroll"
+                    className="dashboard-pie-legend-scroll"
+                    tabIndex={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 0 : undefined}
+                    aria-label={pieData.length > DASHBOARD_PIE_VISIBLE_ROWS ? 'Organization allocation. Scroll for more organizations.' : 'Organization allocation'}
+                  >
+                    {pieData.map((entry, idx) => {
+                      const percent = latestTotals.totalBase > 0 ? (entry.value / latestTotals.totalBase) * 100 : 0;
+                      return (
+                        <div key={entry.name} className="dashboard-pie-legend-row">
+                          <span className="dashboard-pie-legend-marker" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                          <span className="dashboard-pie-legend-name" title={entry.name}>{entry.name}</span>
+                          <span className="dashboard-pie-legend-value">{percent.toFixed(1)}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
 
           {snapshots.length > 0 && (
-            <div className="glass-panel" style={chartStyles.panel}>
-              <h3 className="mb-4" style={chartStyles.title}>Net Worth Trend</h3>
-              <div style={{ flex: 1 }}>
+            <section className="glass-panel dashboard-trend-panel">
+              <div className="dashboard-panel-heading">
+                <h3>Net Worth Trend</h3>
+              </div>
+              <div className="dashboard-trend-chart">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={chartStyles.margin} onClick={handleChartClick}>
                     <defs>
@@ -391,10 +489,14 @@ export default function Dashboard() {
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-            </div>
+            </section>
           )}
 
-          <h3 className="mb-4" style={{ marginTop: 0 }}>History</h3>
+          <div className="dashboard-section-heading">
+            <div>
+              <span className="dashboard-eyebrow">Snapshots</span>
+            </div>
+          </div>
           {sortedYears.map(year => {
             const yearSnaps = groupsByYear[year];
             const yearLatestTotals = calculateTotals(yearSnaps[0], baseCurrency, secondaryCurrency);
@@ -404,27 +506,30 @@ export default function Dashboard() {
             const isDefaultOpen = year === currentYear || year === sortedYears[0];
 
             return (
-              <details key={year} open={isDefaultOpen} className="glass-panel mb-4" style={{ padding: 0, overflow: 'hidden' }}>
-                <summary style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', cursor: 'pointer', userSelect: 'none', listStyle: 'none' }} className="hover:bg-[rgba(255,255,255,0.02)]">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Calendar size={20} style={{ color: 'var(--text-secondary)' }} />
-                    <span style={{ fontSize: '18px', fontWeight: 'bold' }}>{year} Year</span>
+              <details key={year} open={isDefaultOpen} className="glass-panel dashboard-year-group">
+                <summary className="dashboard-year-summary">
+                  <div className="dashboard-year-title">
+                    <span aria-hidden="true"><Calendar size={17} /></span>
+                    <div>
+                      <strong>{year}</strong>
+                      <small>{yearSnaps.length} {yearSnaps.length === 1 ? 'snapshot' : 'snapshots'}</small>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '32px', fontSize: '14px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Total: <b style={{ color: 'var(--text-primary)' }}>{Math.round(yearLatestTotals.totalBase).toLocaleString('en-US')} {baseCurrency}</b></span>
+                  <div className="dashboard-year-totals">
+                    <div>
+                      <b>{formatNumber(yearLatestTotals.totalBase)} <small>{baseCurrency}</small></b>
                       {renderDiff(yearLatestTotals.totalBase, prevYearTotals?.totalBase)}
                     </div>
                     {secondaryCurrency && secondaryCurrency !== baseCurrency && (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}><b style={{ color: 'var(--text-primary)' }}>{Math.round(yearLatestTotals.totalSecondary).toLocaleString('en-US')} {secondaryCurrency}</b></span>
+                      <div>
+                        <b>{formatNumber(yearLatestTotals.totalSecondary)} <small>{secondaryCurrency}</small></b>
                         {renderDiff(yearLatestTotals.totalSecondary, prevYearTotals?.totalSecondary)}
                       </div>
                     )}
                   </div>
                 </summary>
-                <div style={{ padding: '0 24px 24px 24px', borderTop: '1px solid var(--glass-border)' }}>
-                  <table className="table" style={{ marginTop: '12px' }}>
+                <div className="dashboard-history-body">
+                  <table className="table dashboard-history-table">
                     <thead>
                       <tr>
                         <th style={{ width: '15%' }}>Month</th>
@@ -467,13 +572,13 @@ export default function Dashboard() {
                           const diffPercent = prevAmt > 0 ? (diff / prevAmt) * 100 : 0;
 
                           return (
-                            <div key={curr} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }} className="last:border-0 last:pb-0">
+                            <div key={curr} className="dashboard-currency-breakdown-row">
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                 <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.05em' }}>{curr}</span>
                                 <span style={{ fontSize: '0.75em', color: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.03)', padding: '1px 4px', borderRadius: '4px' }}>{percentOfTotal.toFixed(1)}%</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                <span style={{ fontSize: '0.95em', fontWeight: 500, color: amt === 0 ? 'var(--text-secondary)' : 'inherit' }}>{Math.round(amt).toLocaleString('en-US')}</span>
+                                <span style={{ fontSize: '0.95em', fontWeight: 500, color: amt === 0 ? 'var(--text-secondary)' : 'inherit' }}>{formatNumber(amt)}</span>
                                 {Math.abs(diff) >= 1 && (
                                   <span style={{ fontSize: '0.75em', color: getDeltaColor(diff), fontWeight: 500, marginTop: '1px' }}>
                                     {formatSigned(diff)}{prevAmt > 0 && ` (${formatPercent(diffPercent, 1)})`}
@@ -489,13 +594,13 @@ export default function Dashboard() {
                             <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
                               <div style={{ fontWeight: 500, fontSize: '1.05em' }}>{s.month}</div>
                               <div className="flex flex-col gap-1 items-start mt-2">
-                                {hasAnyComments(s) && <button className="btn text-primary hover:underline" style={{ padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85em', color: '#3b82f6' }} onClick={() => setActiveViewNotes(s)}><MessageSquare size={14} /> Notes</button>}
+                                {hasAnyComments(s) && <button className="btn text-primary hover:underline" style={{ padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85em', color: '#3b82f6' }} onClick={() => setDashboardView(previous => ({ ...previous, modal: { type: 'notes', month: s.month } }))}><MessageSquare size={14} /> Notes</button>}
                                 <button className="btn text-primary hover:underline" style={{ padding: 0, background: 'transparent', border: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85em', color: '#10b981' }} onClick={() => handleOpenDiff(s)}><ArrowLeftRight size={14} /> Diff</button>
                                 {s.duration_seconds !== undefined && s.duration_seconds > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75em', color: 'var(--text-secondary)', marginTop: '4px' }}><Clock size={12} /> {formatDuration(s.duration_seconds)}</div>}
                               </div>
                             </td>
                             <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
-                              <div style={{ fontWeight: 500 }}>{Math.round(totals.totalBase).toLocaleString('en-US')}</div>
+                              <div style={{ fontWeight: 500 }}>{formatNumber(totals.totalBase)}</div>
                               {renderDiff(totals.totalBase, prevTotals?.totalBase)}
 
                               {prevSnapshot && (Math.abs(organicBase) > 1 || Math.abs(fxImpactBase) > 1) && (
@@ -517,17 +622,17 @@ export default function Dashboard() {
                             </td>
                             {secondaryCurrency && secondaryCurrency !== baseCurrency && (
                               <td style={{ verticalAlign: 'top', paddingTop: '16px' }}>
-                                <div style={{ fontWeight: 500 }}>{Math.round(totals.totalSecondary).toLocaleString('en-US')}</div>
+                                <div style={{ fontWeight: 500 }}>{formatNumber(totals.totalSecondary)}</div>
                                 {renderDiff(totals.totalSecondary, prevTotals?.totalSecondary)}
                               </td>
                             )}
-                            <td style={{ verticalAlign: 'top', paddingTop: '16px', paddingBottom: '16px', minWidth: '180px' }}>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <td style={{ verticalAlign: 'top', paddingTop: '12px', paddingBottom: '16px', minWidth: '180px' }}>
+                              <div className="dashboard-currency-breakdown">
                                 {changedCurrencies.map(renderCurrencyRow)}
                                 {unchangedCurrencies.length > 0 && (
                                   <details style={{ cursor: 'pointer', marginTop: changedCurrencies.length > 0 ? '8px' : '0' }}>
                                     <summary style={{ fontSize: '0.85em', color: '#6366f1', fontWeight: 500, userSelect: 'none', listStyle: 'none' }}>{changedCurrencies.length > 0 ? 'View unchanged' : 'View Breakdown'}</summary>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>{unchangedCurrencies.map(renderCurrencyRow)}</div>
+                                    <div className="dashboard-currency-breakdown" style={{ marginTop: '12px' }}>{unchangedCurrencies.map(renderCurrencyRow)}</div>
                                   </details>
                                 )}
                               </div>
@@ -554,11 +659,11 @@ export default function Dashboard() {
       {activeViewNotes && (
         <SnapshotNotesModal
           snapshot={activeViewNotes}
-          onClose={() => setActiveViewNotes(null)}
+          onClose={() => setDashboardView(previous => ({ ...previous, modal: null }))}
         />
       )}
 
-      {diffModalData && (
+      {diffModalData?.current && dashboardView.modal?.type === 'diff' && (
         <SnapshotDiffModal
           current={diffModalData.current}
           previous={diffModalData.previous}
@@ -566,8 +671,19 @@ export default function Dashboard() {
           cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
           flowEntries={flowEntries}
           onlyChanges={onlyChanges}
-          onOnlyChangesChange={setOnlyChanges}
-          onClose={() => setDiffModalData(null)}
+          onOnlyChangesChange={value => setDashboardView(previous => ({ ...previous, onlyChanges: value }))}
+          scrollTop={dashboardView.modal.scrollTop}
+          onScrollTopChange={scrollTop => persistDashboardView(previous => (
+            previous.modal?.type === 'diff'
+              ? { ...previous, modal: { ...previous.modal, scrollTop } }
+              : previous
+          ))}
+          onPeriodChange={(currentMonth, previousMonth) => setDashboardView(previous => (
+            previous.modal?.type === 'diff'
+              ? { ...previous, modal: { ...previous.modal, currentMonth, previousMonth } }
+              : previous
+          ))}
+          onClose={() => setDashboardView(previous => ({ ...previous, modal: null }))}
         />
       )}
     </div>
@@ -575,16 +691,6 @@ export default function Dashboard() {
 }
 
 const chartStyles = {
-  panel: {
-    height: '400px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    marginBottom: '16px',
-  },
-  title: {
-    margin: 0,
-    paddingBottom: 16,
-  },
   margin: {
     top: 10,
     right: 10,

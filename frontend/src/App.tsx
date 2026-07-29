@@ -14,6 +14,7 @@ import { useSettings } from './hooks/useSettings';
 import { pruneExpiredSnapshotDrafts } from './lib/snapshotDraftStorage';
 import { requestUnsavedNavigation } from './lib/unsavedNavigation';
 import { useVisualPreferences } from './hooks/useVisualPreferences';
+import { HistoryScrollRestoration } from './lib/historyEntryState';
 
 const loadDeferredRoutes = () => import('./pages/routeChunks/DeferredRoutes');
 const SnapshotEdit = lazy(() => loadDeferredRoutes().then(module => ({ default: module.SnapshotEdit })));
@@ -142,9 +143,9 @@ function App() {
             color: 'var(--danger)',
             fontWeight: 600,
             padding: '10px 14px',
-            border: '1px solid rgba(239, 68, 68, 0.4)',
+            border: '1px solid rgba(var(--danger-rgb), 0.4)',
             borderRadius: '8px',
-            background: 'rgba(239, 68, 68, 0.08)'
+            background: 'rgba(var(--danger-rgb), 0.08)'
           } : undefined}
         >
           {backupSummary(shutdownBackup)}
@@ -153,12 +154,12 @@ function App() {
           <div style={{ marginTop: '20px', display: 'grid', gap: '8px', width: 'min(560px, 90vw)' }}>
             {shutdownBackup.targets.map(target => {
               const presentation = target.status === 'created'
-                ? { color: 'var(--success)', border: 'rgba(34, 197, 94, 0.45)', label: 'Backup created' }
+                ? { color: 'var(--success)', border: 'rgba(var(--success-rgb), 0.45)', label: 'Backup created' }
                 : target.status === 'current'
-                  ? { color: 'var(--accent)', border: 'rgba(59, 130, 246, 0.45)', label: 'Already up to date' }
+                  ? { color: 'var(--accent)', border: 'rgba(var(--accent-rgb), 0.45)', label: 'Already up to date' }
                   : target.status === 'created_with_warning'
-                    ? { color: 'var(--warning)', border: 'rgba(245, 158, 11, 0.5)', label: 'Backup created with warnings' }
-                    : { color: 'var(--danger)', border: 'rgba(239, 68, 68, 0.45)', label: 'Failed' };
+                    ? { color: 'var(--warning)', border: 'rgba(var(--warning-rgb), 0.5)', label: 'Backup created with warnings' }
+                    : { color: 'var(--danger)', border: 'rgba(var(--danger-rgb), 0.45)', label: 'Failed' };
               return (
                 <div
                   key={`${target.name}-${target.path}`}
@@ -191,6 +192,7 @@ function App() {
 
   return (
     <div className="container">
+      <HistoryScrollRestoration />
       <header className="app-header">
         <div className="flex items-center gap-2">
           <Link to="/" className="app-brand flex items-center gap-2" aria-label="Finn Tracker home">

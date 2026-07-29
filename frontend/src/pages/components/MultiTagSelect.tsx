@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
-import { X, Check } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Check, Search } from 'lucide-react';
 // Changed path from '../types' to '../../types'
 import { getTagColor } from '../../types';
 
@@ -18,22 +19,83 @@ export function MultiTagSelect({
   onOpen,
   onClose
 }: MultiTagSelectProps) {
+  const generatedId = useId().replaceAll(':', '');
+  const listboxId = `snapshot-tags-${generatedId}-listbox`;
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hoveredTag, setHoveredTag] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useState('');
+  const [dropdownPosition, setDropdownPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 280,
+    maxHeight: 320
+  });
+
+  const updateDropdownPosition = useCallback(() => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const viewportPadding = 8;
+    const gap = 6;
+    const width = Math.min(340, Math.max(280, rect.width), window.innerWidth - viewportPadding * 2);
+    const left = Math.max(
+      viewportPadding,
+      Math.min(rect.right - width, window.innerWidth - width - viewportPadding)
+    );
+    const availableBelow = window.innerHeight - rect.bottom - viewportPadding - gap;
+    const availableAbove = rect.top - viewportPadding - gap;
+    const openBelow = availableBelow >= 180 || availableBelow >= availableAbove;
+    const maxHeight = Math.max(140, Math.min(320, openBelow ? availableBelow : availableAbove));
+    const top = openBelow
+      ? rect.bottom + gap
+      : Math.max(viewportPadding, rect.top - maxHeight - gap);
+
+    setDropdownPosition({ top, left, width, maxHeight });
+  }, []);
+
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setSearch('');
+    onClose?.();
+  }, [onClose]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        if (isOpen) {
-          setIsOpen(false);
-          if (onClose) onClose();
-        }
+      const target = event.target as Node;
+      if (
+        containerRef.current
+        && !containerRef.current.contains(target)
+        && !dropdownRef.current?.contains(target)
+      ) {
+        if (isOpen) close();
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose]);
+  }, [close, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePositionChange = () => updateDropdownPosition();
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    updateDropdownPosition();
+    window.addEventListener('resize', handlePositionChange);
+    window.addEventListener('scroll', handlePositionChange, true);
+    document.addEventListener('keydown', handleKeyDown);
+    if (availableTags.length > 7) {
+      requestAnimationFrame(() => searchInputRef.current?.focus({ preventScroll: true }));
+    }
+    return () => {
+      window.removeEventListener('resize', handlePositionChange);
+      window.removeEventListener('scroll', handlePositionChange, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [availableTags.length, close, isOpen, updateDropdownPosition]);
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) {
@@ -45,16 +107,23 @@ export function MultiTagSelect({
 
   const handleToggleOpen = () => {
     if (isOpen) {
-      setIsOpen(false);
-      if (onClose) onClose();
+      close();
     } else {
+      updateDropdownPosition();
+      setSearch('');
       setIsOpen(true);
       if (onOpen) onOpen();
     }
   };
 
-  const visibleTags = selectedTags.slice(0, 2);
-  const hiddenTagsCount = selectedTags.length - 2;
+  const visibleTags = selectedTags.slice(0, 1);
+  const hiddenTagsCount = selectedTags.length - 1;
+  const filteredTags = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase();
+    return query
+      ? availableTags.filter(tag => tag.toLocaleLowerCase().includes(query))
+      : availableTags;
+  }, [availableTags, search]);
 
   return (
     <div
@@ -65,21 +134,20 @@ export function MultiTagSelect({
         zIndex: isOpen ? 50 : 1
       }}
     >
-      <div
-        className="flex gap-1 items-center cursor-pointer"
+      <button
+        type="button"
+        className={`input snapshot-tags-trigger${isOpen ? ' is-open' : ''}`}
         style={{
-          height: '38px',
-          padding: '0 10px',
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid var(--glass-border)',
-          borderRadius: '6px',
           userSelect: 'none',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
-          display: 'flex',
-          justifyContent: 'space-between'
         }}
         onClick={handleToggleOpen}
+        role="combobox"
+        aria-label="Balance tags"
+        aria-expanded={isOpen}
+        aria-controls={listboxId}
+        aria-haspopup="listbox"
       >
         {selectedTags.length === 0 && (
           <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: '13px' }}>Tags</span>
@@ -107,15 +175,17 @@ export function MultiTagSelect({
                 alignItems: 'center',
                 gap: '4px',
                 whiteSpace: 'nowrap',
-                flexShrink: 0
+                minWidth: 0,
+                maxWidth: '100%',
+                flexShrink: 1
               }}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleTag(tag);
               }}
             >
-              {tag}
-              <X size={11} style={{ opacity: 0.8 }} />
+              <span className="snapshot-tag-chip-label">{tag}</span>
+              <X size={11} style={{ opacity: 0.8, flex: '0 0 auto' }} />
             </span>
           ))}
 
@@ -137,70 +207,78 @@ export function MultiTagSelect({
             </span>
           )}
         </div>
-      </div>
+      </button>
 
-      {isOpen && availableTags.length > 0 && (
+      {isOpen && availableTags.length > 0 && createPortal(
         <div
-          className="absolute mt-1.5 glass-panel"
+          ref={dropdownRef}
+          className="app-select-dropdown snapshot-tag-dropdown"
+          data-escape-guard="true"
           style={{
-            zIndex: 100,
-            minWidth: '280px',
-            width: 'max-content',
-            maxWidth: '340px',
-            maxHeight: '320px',
-            overflowY: 'auto',
-            boxShadow: '0 20px 40px -5px rgba(0,0,0,0.85), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-            padding: '4px',
-            background: '#161a23',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: '8px',
-            right: 0
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+            maxHeight: dropdownPosition.maxHeight
           }}
         >
-          {availableTags.map((tag, index) => {
-            const isSelected = selectedTags.includes(tag);
-            const isHovered = hoveredTag === tag;
+          <div className="snapshot-tag-dropdown-heading">
+            <strong>Balance tags</strong>
+            <span>{selectedTags.length} selected</span>
+          </div>
+          {availableTags.length > 7 && (
+            <label className="app-select-search">
+              <Search size={14} aria-hidden="true" />
+              <input
+                ref={searchInputRef}
+                id={`snapshot-tags-${generatedId}-search`}
+                name={`snapshot-tags-${generatedId}-search`}
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Find tag…"
+                aria-label="Search balance tags"
+                aria-controls={listboxId}
+              />
+            </label>
+          )}
+          <div
+            id={listboxId}
+            className="app-select-options"
+            role="listbox"
+            aria-label="Available tags"
+            aria-multiselectable="true"
+          >
+            {filteredTags.map(tag => {
+              const isSelected = selectedTags.includes(tag);
 
-            return (
-              <div
-                key={tag}
-                className="flex items-center justify-between px-4 py-3 rounded-md cursor-pointer"
-                style={{
-                  fontSize: '15.5px',
-                  letterSpacing: '0.2px',
-                  marginBottom: index === availableTags.length - 1 ? '0' : '2px',
-                  userSelect: 'none',
-                  backgroundColor: isHovered ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
-                  transition: 'none'
-                }}
-                onMouseEnter={() => setHoveredTag(tag)}
-                onMouseLeave={() => setHoveredTag(null)}
-                onClick={() => toggleTag(tag)}
-              >
-                <div className="flex items-center gap-3">
-                  <span style={{
-                    display: 'inline-block',
-                    width: '12.5px',
-                    height: '12.5px',
-                    borderRadius: '50%',
-                    backgroundColor: getTagColor(tag),
-                    boxShadow: '0 0 4px rgba(0,0,0,0.4)'
-                  }} />
-                  <span style={{
-                    fontWeight: isSelected ? 600 : 400,
-                    color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.85)'
-                  }}>{tag}</span>
-                </div>
-                {isSelected && (
-                  <Check
-                    size={18}
-                    style={{ color: 'var(--accent, #38bdf8)' }}
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`app-select-option snapshot-tag-option${isSelected ? ' is-selected' : ''}`}
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => toggleTag(tag)}
+                >
+                  <span
+                    className="snapshot-tag-option-color"
+                    style={{ backgroundColor: getTagColor(tag) }}
+                    aria-hidden="true"
                   />
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  <span className="app-select-option-copy">
+                    <strong>{tag}</strong>
+                  </span>
+                  <span className="app-select-option-check" aria-hidden="true">
+                    {isSelected && <Check size={15} />}
+                  </span>
+                </button>
+              );
+            })}
+            {filteredTags.length === 0 && (
+              <div className="app-select-empty">No matching tags</div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

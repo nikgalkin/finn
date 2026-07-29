@@ -31,7 +31,7 @@ export function ArchiveOrganizationModal({
     <ModalPortal onClose={onCancel} closeOnEscape>
       <div className="glass-panel" role="dialog" aria-modal="true" aria-labelledby="archive-organization-title" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div style={{ display: 'grid', gridTemplateColumns: '38px minmax(0, 1fr) auto', alignItems: 'start', gap: '14px', padding: '20px', borderBottom: '1px solid var(--glass-border)' }}>
-          <div style={{ display: 'grid', placeItems: 'center', width: '38px', height: '38px', flex: '0 0 38px', borderRadius: '12px', color: '#f59e0b', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.22)' }}>
+          <div style={{ display: 'grid', placeItems: 'center', width: '38px', height: '38px', flex: '0 0 38px', borderRadius: '12px', color: '#f59e0b', background: 'rgba(var(--warning-rgb), 0.12)', border: '1px solid rgba(var(--warning-rgb), 0.22)' }}>
             <Archive size={19} />
           </div>
           <div style={{ minWidth: 0 }}>
@@ -47,11 +47,11 @@ export function ArchiveOrganizationModal({
           {loading ? (
             <div style={{ display: 'grid', minHeight: '80px', placeItems: 'center' }}><Spinner label="Checking organization history" size={26} /></div>
           ) : error ? (
-            <div className="flex items-start gap-2" style={{ padding: '12px', color: '#fda4af', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '10px', fontSize: '12px', lineHeight: 1.45 }}>
+            <div className="flex items-start gap-2" style={{ padding: '12px', color: '#fda4af', background: 'rgba(var(--danger-rgb), 0.1)', border: '1px solid rgba(var(--danger-rgb), 0.2)', borderRadius: '10px', fontSize: '12px', lineHeight: 1.45 }}>
               <AlertTriangle size={17} style={{ flex: '0 0 auto' }} /> {error}
             </div>
           ) : latestNonZeroBalances.length > 0 ? (
-            <div style={{ padding: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.22)', borderRadius: '10px' }}>
+            <div style={{ padding: '12px', background: 'rgba(var(--warning-rgb), 0.1)', border: '1px solid rgba(var(--warning-rgb), 0.22)', borderRadius: '10px' }}>
               <div className="flex items-center gap-2" style={{ color: '#fbbf24', fontSize: '13px', fontWeight: 700 }}>
                 <AlertTriangle size={17} /> Latest balance is not zero
               </div>
@@ -66,9 +66,9 @@ export function ArchiveOrganizationModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-2" style={{ padding: '14px 20px 18px', borderTop: '1px solid var(--glass-border)', background: 'rgba(15, 23, 42, 0.28)' }}>
+        <div className="flex justify-end gap-2" style={{ padding: '14px 20px 18px', borderTop: '1px solid var(--glass-border)', background: 'rgba(var(--surface-rgb), 0.28)' }}>
           <button className="btn" onClick={onCancel}>{isBlocked ? 'Close' : 'Cancel'}</button>
-          {!isBlocked && <button className="btn" style={{ color: '#fbbf24', borderColor: 'rgba(245, 158, 11, 0.35)' }} onClick={onConfirm}>Archive</button>}
+          {!isBlocked && <button className="btn" style={{ color: '#fbbf24', borderColor: 'rgba(var(--warning-rgb), 0.35)' }} onClick={onConfirm}>Archive</button>}
         </div>
       </div>
     </ModalPortal>

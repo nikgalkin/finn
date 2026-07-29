@@ -265,6 +265,8 @@ export function CellInspector({
               <label className="cell-inspector-field">
                 <span className="cell-inspector-label">Set to</span>
                 <input
+                  id="cell-inspector-new-value"
+                  name="cell-inspector-new-value"
                   className="input"
                   value={newValue}
                   onChange={event => setNewValue(event.target.value)}
@@ -280,6 +282,8 @@ export function CellInspector({
                     : `Needs a condition scanning ${setSplit.arrayPath} — set Where to JSON path and tick "Match any element"`}
                 >
                   <input
+                    id="cell-inspector-update-every-match"
+                    name="cell-inspector-update-every-match"
                     type="checkbox"
                     checked={everyMatch && canUpdateEveryMatch}
                     disabled={!canUpdateEveryMatch}
@@ -319,6 +323,8 @@ export function CellInspector({
                 <>
                   <div className="cell-inspector-where">
                     <input
+                      id="cell-inspector-json-path"
+                      name="cell-inspector-json-path"
                       className="input"
                       value={where.jsonPath}
                       placeholder="$.organizations[0].id"
@@ -326,6 +332,8 @@ export function CellInspector({
                       spellCheck={false}
                     />
                     <select
+                      id="cell-inspector-json-operator"
+                      name="cell-inspector-json-operator"
                       className="input"
                       value={where.operator}
                       onChange={event => updateWhere({ operator: event.target.value as WhereOperator })}
@@ -354,6 +362,8 @@ export function CellInspector({
                       : 'The path has no array index to scan'}
                   >
                     <input
+                      id="cell-inspector-match-any-element"
+                      name="cell-inspector-match-any-element"
                       type="checkbox"
                       checked={where.anyElement && canScanElements}
                       disabled={!canScanElements}
@@ -365,6 +375,8 @@ export function CellInspector({
               ) : (
                 <div className="cell-inspector-where">
                   <select
+                    id="cell-inspector-column"
+                    name="cell-inspector-column"
                     className="input"
                     value={where.column}
                     onChange={event => updateWhere({ column: event.target.value })}
@@ -376,6 +388,8 @@ export function CellInspector({
                     ))}
                   </select>
                   <select
+                    id="cell-inspector-column-operator"
+                    name="cell-inspector-column-operator"
                     className="input"
                     value={where.operator}
                     onChange={event => updateWhere({ operator: event.target.value as WhereOperator })}
@@ -390,6 +404,8 @@ export function CellInspector({
               {!isUnaryOperator(where.operator) && (
                 <div className="cell-inspector-where">
                   <input
+                    id="cell-inspector-where-value"
+                    name="cell-inspector-where-value"
                     className="input"
                     value={where.value}
                     placeholder={where.operator === 'IN' ? 'a, b, c' : 'value'}
@@ -398,6 +414,8 @@ export function CellInspector({
                   />
                   {where.operator === 'BETWEEN' && (
                     <input
+                      id="cell-inspector-where-second-value"
+                      name="cell-inspector-where-second-value"
                       className="input"
                       value={where.secondValue}
                       placeholder="upper bound"
