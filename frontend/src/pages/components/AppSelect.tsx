@@ -28,6 +28,7 @@ type AppSelectProps = {
   disabled?: boolean;
   width?: string;
   dropdownWidth?: number;
+  dropdownMatchTriggerWidth?: boolean;
   dropdownAlign?: 'left' | 'center' | 'right';
   dropdownClassName?: string;
   height?: string;
@@ -65,6 +66,7 @@ export function AppSelect({
   disabled = false,
   width = '100%',
   dropdownWidth = 300,
+  dropdownMatchTriggerWidth = false,
   dropdownAlign = 'center',
   dropdownClassName,
   height = '38px',
@@ -125,7 +127,10 @@ export function AppSelect({
     if (!rect) return;
 
     const viewportPadding = 8;
-    const width = Math.min(dropdownWidth, window.innerWidth - viewportPadding * 2);
+    const width = Math.min(
+      dropdownMatchTriggerWidth ? rect.width : dropdownWidth,
+      window.innerWidth - viewportPadding * 2
+    );
     const preferredLeft = dropdownAlign === 'left'
       ? rect.left
       : dropdownAlign === 'right'
@@ -143,7 +148,7 @@ export function AppSelect({
     const bottom = openBelow ? undefined : window.innerHeight - rect.top + 8;
 
     setPosition({ top, bottom, left, width, maxHeight });
-  }, [dropdownAlign, dropdownWidth]);
+  }, [dropdownAlign, dropdownMatchTriggerWidth, dropdownWidth]);
 
   const open = useCallback((preferredDirection: 1 | -1 = 1) => {
     if (disabled) return;

@@ -171,6 +171,7 @@ const CurrencyField = ({ allowNone, currencies, description, label, onChange, ro
           searchPlaceholder="Find currency…"
           width="100%"
           dropdownWidth={220}
+          dropdownMatchTriggerWidth
           dropdownAlign="left"
           height="36px"
           textAlign="left"
