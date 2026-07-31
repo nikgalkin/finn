@@ -396,7 +396,21 @@ export function FlowPeriodModal({
                     </div>
                   </div>
                   <div className="cash-flow-field cash-flow-period-received">
-                    <span>Received</span>
+                    <span className="cash-flow-period-received-label">
+                      Received
+                      {!draft.id && (
+                        <button
+                          type="button"
+                          className="cash-flow-transfer-copy-values"
+                          onClick={() => updateDraft(draft.clientID, { toAmount: draft.amount, toCurrency: draft.currency })}
+                          disabled={saving || String(draft.amount).trim() === '' || !draft.currency}
+                          aria-label={`Use sent amount and currency for movement ${index + 1}`}
+                          title="Use sent amount and currency"
+                        >
+                          <Copy size={10} /> Same
+                        </button>
+                      )}
+                    </span>
                     <div className="cash-flow-amount-control">
                       <AmountInput value={draft.toAmount} onChange={toAmount => updateDraft(draft.clientID, { toAmount })} maximumFractionDigits={8} required ariaLabel={`Movement ${index + 1} received amount`} />
                       <AppSelect id={`flow-${draft.clientID}-received-currency`} name={`flow-${draft.clientID}-received-currency`} ariaLabel={`Movement ${index + 1} received currency`} value={draft.toCurrency} onChange={toCurrency => updateDraft(draft.clientID, { toCurrency })} options={currencySelectOptions} placeholder="Currency" searchable={currencyOptions.length > 8} searchPlaceholder="Find currency…" width="100%" dropdownWidth={180} height="36px" textAlign="left" />

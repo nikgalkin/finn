@@ -57,7 +57,6 @@ export function SnapshotNotesModal({ snapshot, onClose }: SnapshotNotesModalProp
                           color: getCurrencyColor(balance.currency), 
                           fontWeight: 700, 
                           minWidth: '50px',
-                          background: 'rgba(255,255,255,0.02)',
                           padding: '1px 4px',
                           borderRadius: '4px',
                           border: `1px solid ${getCurrencyColor(balance.currency)}20`

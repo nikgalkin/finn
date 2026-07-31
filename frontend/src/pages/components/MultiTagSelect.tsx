@@ -12,6 +12,14 @@ interface MultiTagSelectProps {
   onClose?: () => void;
 }
 
+type DropdownPosition = {
+  top?: number;
+  bottom?: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+};
+
 export function MultiTagSelect({
   selectedTags,
   availableTags,
@@ -26,7 +34,7 @@ export function MultiTagSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
-  const [dropdownPosition, setDropdownPosition] = useState({
+  const [dropdownPosition, setDropdownPosition] = useState<DropdownPosition>({
     top: 0,
     left: 0,
     width: 280,
@@ -42,17 +50,16 @@ export function MultiTagSelect({
     const width = Math.min(340, Math.max(280, rect.width), window.innerWidth - viewportPadding * 2);
     const left = Math.max(
       viewportPadding,
-      Math.min(rect.right - width, window.innerWidth - width - viewportPadding)
+      Math.min(rect.left, window.innerWidth - width - viewportPadding)
     );
     const availableBelow = window.innerHeight - rect.bottom - viewportPadding - gap;
     const availableAbove = rect.top - viewportPadding - gap;
     const openBelow = availableBelow >= 180 || availableBelow >= availableAbove;
     const maxHeight = Math.max(140, Math.min(320, openBelow ? availableBelow : availableAbove));
-    const top = openBelow
-      ? rect.bottom + gap
-      : Math.max(viewportPadding, rect.top - maxHeight - gap);
+    const top = openBelow ? rect.bottom + gap : undefined;
+    const bottom = openBelow ? undefined : window.innerHeight - rect.top + gap;
 
-    setDropdownPosition({ top, left, width, maxHeight });
+    setDropdownPosition({ top, bottom, left, width, maxHeight });
   }, []);
 
   const close = useCallback(() => {
@@ -216,6 +223,7 @@ export function MultiTagSelect({
           data-escape-guard="true"
           style={{
             top: dropdownPosition.top,
+            bottom: dropdownPosition.bottom,
             left: dropdownPosition.left,
             width: dropdownPosition.width,
             maxHeight: dropdownPosition.maxHeight

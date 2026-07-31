@@ -624,10 +624,28 @@ export default function SnapshotEdit() {
   };
 
   const addOrganization = () => {
+    const selectedOrganizationNames = new Set(
+      data.organizations.map(organization => organization.name.trim().toLocaleLowerCase()).filter(Boolean)
+    );
+    const nextOrganization = settings.organizations.find((organization, index, organizations) => {
+      const normalizedName = organization.name.trim().toLocaleLowerCase();
+      const isFirstActiveOccurrence = organizations.findIndex(candidate => (
+        !candidate.archivedAt
+        && candidate.name.trim().toLocaleLowerCase() === normalizedName
+      )) === index;
+      return !organization.archivedAt && isFirstActiveOccurrence && !selectedOrganizationNames.has(normalizedName);
+    });
+    if (!nextOrganization) return;
+
     const id = uuidv4();
     setData(prev => ({
       ...prev,
-      organizations: [...prev.organizations, { id, name: '', balances: [] }]
+      organizations: [...prev.organizations, {
+        id,
+        name: nextOrganization.name,
+        country: nextOrganization.country,
+        balances: []
+      }]
     }));
     setRecentlyAddedOrgId(id);
 
@@ -635,7 +653,7 @@ export default function SnapshotEdit() {
     addOrganizationFocusTimer.current = setTimeout(() => {
       const card = orgRefs.current[id];
       card
-        ?.querySelector<HTMLButtonElement>('.snapshot-organization-select .app-select-trigger')
+        ?.querySelector<HTMLButtonElement>('.snapshot-add-balance')
         ?.focus({ preventScroll: true });
       addOrganizationFocusTimer.current = null;
     }, 350);

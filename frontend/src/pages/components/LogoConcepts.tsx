@@ -5,31 +5,7 @@ const finnHatOpeningPath = 'M14.5 14.3C20.2 7.2 31.9 7.3 39.6 13.5c7.3 5.9 9 16 
 
 const faceMarkUrl = '/favicon.svg';
 
-type HatOpening = 'hollow' | 'candle';
-
-function HatCandle() {
-  return (
-    <g>
-      <path className="finn-hat-wordmark__candle-wick" d="M29.3 10.2v5.1m0 14.6v5.1" />
-      <rect
-        className="finn-hat-wordmark__candle-body"
-        x="23.6"
-        y="15.3"
-        width="11.4"
-        height="14.6"
-        rx="2.4"
-      />
-    </g>
-  );
-}
-
-function OrganicFinnHat({
-  className,
-  opening = 'hollow',
-}: {
-  className: string;
-  opening?: HatOpening;
-}) {
+function OrganicFinnHat({ className }: { className: string }) {
   return (
     <svg aria-hidden="true" className={className} viewBox="0 0 50 44">
       <path className="finn-hat-wordmark__cap-hood" d={finnHatHoodPath} />
@@ -38,7 +14,6 @@ function OrganicFinnHat({
         className="finn-hat-wordmark__cap-shade"
         d="M15.5 15.3c5.8-6.1 16.1-5.8 23.1-.1 5 4 7.2 10 6 15.2-1.8-5.3-5.7-10.4-11.2-13.6-5.9-3.5-12.4-4.2-17.9-1.5Z"
       />
-      {opening === 'candle' && <HatCandle />}
       <path
         className="finn-hat-wordmark__cap-seam"
         d="M8.7 36.5c7.4-2.5 14.9-.6 21.7.7 5 1 9.4.9 13.3-.9"
@@ -83,14 +58,6 @@ function FinnSideWordmark({ mark }: { mark: ReactNode }) {
         Finn <span className="finn-hat-wordmark__tracker">Tracker</span>
       </span>
     </span>
-  );
-}
-
-export function FinnCandleWordmark() {
-  return (
-    <FinnSideWordmark
-      mark={<OrganicFinnHat className="finn-side-wordmark__hat" opening="candle" />}
-    />
   );
 }
 

@@ -230,7 +230,7 @@ a { color: var(--accent); text-decoration: none; }
 .dashboard-page-header {
   display: flex;
   min-height: 52px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -277,7 +277,7 @@ a { color: var(--accent); text-decoration: none; }
 .dashboard-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   align-items: stretch;
   gap: 14px;
 }
@@ -291,6 +291,7 @@ a { color: var(--accent); text-decoration: none; }
   flex-direction: column;
   overflow: hidden;
   background: var(--glass-bg);
+  container-type: inline-size;
 }
 
 .dashboard-panel-heading,
@@ -330,147 +331,416 @@ a { color: var(--accent); text-decoration: none; }
   text-transform: uppercase;
 }
 
-.dashboard-net-worth-body {
-  display: grid;
+.dashboard-overview-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+
+.dashboard-net-worth-panel.is-split {
   min-height: 0;
+  padding: 13px 18px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-net-worth-split {
+  display: grid;
+  min-width: 0;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) minmax(185px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(168px, 0.3fr);
   align-items: center;
   gap: 18px;
 }
 
-.dashboard-net-worth-main {
+.dashboard-net-worth-split-main {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  justify-content: center;
+  gap: 10px;
+  container-name: net-worth-head;
+  container-type: inline-size;
 }
 
-.dashboard-net-worth-value {
-  display: flex;
-  min-width: 0;
-  margin-top: 9px;
-  align-items: baseline;
-  gap: 9px;
-  font-size: clamp(24px, 2.3vw, 30px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.dashboard-net-worth-value small {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 720;
-  letter-spacing: 0.06em;
-}
-
-.dashboard-net-worth-yoy {
-  display: flex;
-  margin-top: 10px;
-  padding-top: 8px;
-  align-items: baseline;
-  gap: 7px;
-  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
-  font-size: 13px;
-  line-height: 1;
-}
-
-.dashboard-net-worth-yoy > span {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 720;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
-}
-
-.dashboard-net-worth-yoy > strong { font-weight: 740; }
-
-.dashboard-net-worth-yoy > em { color: var(--text-secondary); font-style: normal; }
-
-.dashboard-net-worth-metrics {
+.dashboard-net-worth-split-legend {
   display: flex;
   min-width: 0;
   padding-left: 18px;
   flex-direction: column;
   justify-content: center;
   border-left: 1px solid rgba(var(--muted-rgb), 0.13);
+  font-size: 0.85rem;
 }
 
-.dashboard-net-worth-secondary {
+.dashboard-net-worth-split-legend-scroll {
   display: flex;
-  min-width: 0;
+  min-height: 0;
+  max-height: 67px;
   flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  padding-right: 4px;
+  outline: none;
+  scroll-behavior: smooth;
 }
 
-.dashboard-net-worth-secondary-slot {
-  display: flex;
-  min-height: clamp(24px, 2.3vw, 30px);
-  margin-top: 9px;
-  align-items: flex-end;
+.dashboard-net-worth-split-legend-scroll:focus-visible { border-radius: 5px; box-shadow: 0 0 0 1px rgba(var(--brand-rgb), 0.5); }
+
+.dashboard-net-worth-split-legend .dashboard-pie-legend-name { max-width: none; }
+
+.dashboard-net-worth-bar-head {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  align-items: end;
+  gap: 7px 16px;
 }
 
-.dashboard-net-worth-secondary-value {
+.dashboard-net-worth-bar-headline {
+  min-width: 0;
+  grid-area: 1 / 1 / span 2 / auto;
+  align-self: center;
+  container-name: net-worth-money;
+  container-type: inline-size;
+}
+
+.quick-hover-anchor.dashboard-net-worth-money-anchor { display: inline-flex; width: auto; min-width: 0; }
+
+.dashboard-net-worth-panel .quick-hover-anchor { cursor: help; }
+
+.dashboard-net-worth-panel.is-split .dashboard-net-worth-money-amount { font-size: clamp(19px, 6.5cqi, 27px); }
+
+.dashboard-net-worth-panel.is-split .dashboard-net-worth-money-divider { font-size: clamp(15px, 5cqi, 22px); }
+
+.dashboard-net-worth-panel.is-split .dashboard-net-worth-money { margin-top: 7px; gap: 5px 8px; }
+
+.dashboard-net-worth-bar-chips {
   display: flex;
   min-width: 0;
-  align-items: baseline;
+  grid-area: 1 / 2;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1;
+  flex-wrap: wrap;
+}
+
+.dashboard-net-worth-bar-facts {
+  min-width: 0;
+  grid-area: 2 / 2;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
   white-space: nowrap;
 }
 
-.dashboard-net-worth-secondary-value small {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 720;
-  letter-spacing: 0.06em;
+@container net-worth-head (max-width: 560px) {
+  .dashboard-net-worth-bar-head { grid-template-columns: minmax(0, 1fr); }
+
+  .dashboard-net-worth-bar-headline,
+  .dashboard-net-worth-bar-chips { grid-area: auto; }
+
+  .dashboard-net-worth-bar-chips { justify-content: flex-start; }
+
+  .dashboard-net-worth-bar-facts { grid-area: auto; text-align: left; white-space: normal; }
 }
 
-.dashboard-net-worth-counters {
+.dashboard-net-worth-bar-track {
   display: flex;
-  margin-top: 10px;
-  padding-top: 8px;
-  align-items: baseline;
-  gap: 16px;
-  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
-  line-height: 1;
+  height: 17px;
+  min-width: 0;
+  gap: 3px;
+  overflow: hidden;
+  border-radius: 7px;
 }
 
-.dashboard-net-worth-counters:first-child {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
-.dashboard-net-worth-counters > div {
+.dashboard-net-worth-bar-segment,
+.quick-hover-anchor.dashboard-net-worth-bar-segment {
   display: flex;
+  min-width: 4px;
+  padding: 0 9px;
+  flex-basis: 0;
+  align-items: center;
+  overflow: hidden;
+  color: rgb(var(--shadow-rgb));
+  container-type: inline-size;
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+
+.dashboard-net-worth-bar-segment-label {
+  display: none;
   min-width: 0;
   align-items: baseline;
   gap: 6px;
+  font-size: 12px;
+  line-height: 1;
+  transform: translateY(1px);
 }
 
-.dashboard-net-worth-counters strong { font-size: 13px; font-weight: 740; }
+.dashboard-net-worth-bar-segment-label strong { font-weight: 780; }
 
-.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters {
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 12px;
+.dashboard-net-worth-bar-segment-name { display: none; }
+
+@container (min-width: 34px) {
+  .dashboard-net-worth-bar-segment-label { display: flex; }
 }
 
-.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters strong { font-size: 20px; }
+@container (min-width: 98px) {
+  .dashboard-net-worth-bar-segment-name {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 660;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
 
-.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters span { font-size: 12px; }
+.dashboard-net-worth-strip { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 
-.dashboard-net-worth-counters span {
+.dashboard-net-worth-strip-caption {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
   color: var(--text-secondary);
   font-size: 11px;
-  font-weight: 720;
-  letter-spacing: 0.035em;
+  line-height: 1;
+}
+
+.dashboard-net-worth-strip-caption.is-muted { color: rgba(var(--muted-rgb), 0.7); }
+
+.dashboard-net-worth-strip-caption strong { color: var(--text-primary); font-weight: 740; }
+
+.dashboard-net-worth-strip-caption-end { margin-left: auto; text-align: right; }
+
+.dashboard-net-worth-history { display: flex; height: 26px; min-width: 0; align-items: stretch; gap: 3px; }
+
+.quick-hover-anchor.dashboard-net-worth-history-anchor { display: flex; width: auto; min-width: 3px; flex: 1; align-items: flex-end; }
+
+.dashboard-net-worth-history-bar { width: 100%; border-radius: 3px; }
+
+.dashboard-net-worth-history-bar.is-positive { background: rgba(var(--success-rgb), 0.55); }
+
+.dashboard-net-worth-history-bar.is-negative { background: rgba(var(--danger-rgb), 0.5); }
+
+.dashboard-net-worth-history-bar:last-child.is-positive { background: rgb(var(--success-rgb)); }
+
+.dashboard-net-worth-history-bar:last-child.is-negative { background: rgb(var(--danger-rgb)); }
+
+.dashboard-net-worth-goal-track {
+  height: 10px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(var(--muted-rgb), 0.16);
+}
+
+.dashboard-net-worth-goal-fill { display: block; height: 100%; border-radius: 999px; background: rgb(var(--success-rgb)); }
+
+.dashboard-net-worth-panel.is-classic { padding: 18px 20px; justify-content: center; }
+
+.dashboard-net-worth-chip {
+  display: inline-flex;
+  padding: 4px 10px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.dashboard-net-worth-chip.is-positive { background: rgba(var(--success-rgb), 0.13); color: var(--diff-positive); }
+
+.dashboard-net-worth-chip.is-negative { background: rgba(var(--danger-rgb), 0.13); color: var(--diff-negative); }
+
+.dashboard-net-worth-chip.is-flat { background: rgba(var(--muted-rgb), 0.1); color: var(--text-secondary); }
+
+.dashboard-net-worth-chip strong { font-weight: 740; }
+
+.dashboard-net-worth-chip em { font-style: normal; font-weight: 600; }
+
+.dashboard-net-worth-chip > span {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.dashboard-net-worth-money {
+  display: grid;
+  min-width: 0;
+  margin-top: 9px;
+  grid-template-columns: max-content max-content;
+  align-items: baseline;
+  justify-content: start;
+  gap: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-net-worth-money-amount {
+  font-size: clamp(20px, 2.3vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dashboard-net-worth-money-approx {
+  margin-right: 5px;
+  color: rgba(var(--muted-rgb), 0.6);
+  font-weight: 620;
+}
+
+.dashboard-net-worth-money-amount.is-secondary { color: var(--text-secondary); letter-spacing: -0.02em; }
+
+.dashboard-net-worth-money:not(.is-inline) .dashboard-net-worth-money-amount.is-secondary { font-size: 17px; }
+
+.dashboard-net-worth-money small { color: var(--text-secondary); font-size: 13px; font-weight: 720; letter-spacing: 0.06em; }
+
+.dashboard-net-worth-money:not(.is-inline) small.is-secondary { font-size: 11px; }
+
+.dashboard-net-worth-money.is-inline {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 4px 9px;
+  flex-wrap: wrap;
+}
+
+.dashboard-net-worth-money-pair {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dashboard-net-worth-money-divider {
+  color: rgba(var(--muted-rgb), 0.34);
+  font-size: 0.8em;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.dashboard-net-worth-classic {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-net-worth-classic-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+}
+
+.dashboard-net-worth-classic-heading > span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.dashboard-net-worth-panel.is-classic .dashboard-net-worth-money {
+  margin-top: 9px;
+  gap: 5px 9px;
+}
+
+.dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount {
+  font-size: clamp(24px, 2.5vw, 30px);
+}
+
+.dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount.is-secondary {
+  font-size: clamp(20px, 2vw, 24px);
+}
+
+.dashboard-net-worth-classic-meta {
+  display: grid;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-net-worth-classic-metric {
+  display: flex;
+  min-width: 0;
+  padding: 0 10px;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid rgba(var(--muted-rgb), 0.13);
+}
+
+.dashboard-net-worth-classic-metric:first-child { padding-left: 0; border-left: 0; }
+
+.dashboard-net-worth-classic-metric:last-child { padding-right: 0; }
+
+.dashboard-net-worth-classic-metric > span {
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 740;
+  letter-spacing: 0.055em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.dashboard-net-worth-classic-metric > div {
+  display: flex;
+  min-width: 0;
+  margin-top: 6px;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.dashboard-net-worth-classic-metric strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 740;
+  line-height: 1;
+}
+
+.dashboard-net-worth-classic-metric small {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1;
+}
+
+@container (max-width: 300px) {
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money.is-inline {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-pair { gap: 5px; }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount { font-size: 22px; }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount.is-secondary { font-size: 19px; }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money small { font-size: 10px; }
+
+  .dashboard-net-worth-classic-meta {
+    gap: 10px 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-net-worth-classic-metric { padding: 0 8px; }
+
+  .dashboard-net-worth-classic-metric:nth-child(odd) { padding-left: 0; border-left: 0; }
+
+  .dashboard-net-worth-classic-metric:nth-child(even) { padding-right: 0; }
+
+  .dashboard-net-worth-classic-metric:nth-child(n + 3) {
+    padding-top: 10px;
+    border-top: 1px solid rgba(var(--muted-rgb), 0.13);
+  }
 }
 
 .dashboard-pie-panel {
@@ -683,14 +953,25 @@ a { color: var(--accent); text-decoration: none; }
 
   .dashboard-page-title p { display: none; }
 
-  .dashboard-net-worth-body { grid-template-columns: 1fr; gap: 12px; }
+  .dashboard-net-worth-split { grid-template-columns: 1fr; gap: 14px; }
 
-  .dashboard-net-worth-metrics {
-    padding-top: 11px;
+  .dashboard-net-worth-split-legend {
+    padding-top: 12px;
     padding-left: 0;
     border-top: 1px solid rgba(var(--muted-rgb), 0.13);
     border-left: 0;
   }
+
+  .dashboard-net-worth-bar-head { grid-template-columns: minmax(0, 1fr); }
+
+  .dashboard-net-worth-bar-headline,
+  .dashboard-net-worth-bar-chips { grid-area: auto; }
+
+  .dashboard-net-worth-bar-facts { max-width: none; grid-area: auto; }
+
+  .dashboard-net-worth-bar-chips { justify-content: flex-start; }
+
+  .dashboard-net-worth-bar-facts { text-align: left; }
 
   .dashboard-pie-content { grid-template-columns: 28px minmax(0, 1fr); }
 
@@ -1104,176 +1385,6 @@ main > .page-loader { animation: none; }
   to { transform: rotate(360deg); }
 }
 
-.style-lab-page {
-  display: flex;
-  padding-bottom: 48px;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.style-lab-save-status {
-  display: inline-flex;
-  padding: 7px 11px;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid rgba(var(--success-rgb), 0.2);
-  border-radius: 999px;
-  background: rgba(var(--success-rgb), 0.06);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.style-lab-save-status svg { color: var(--success); }
-
-.style-lab-section { display: flex; flex-direction: column; gap: 16px; }
-
-.style-lab-section-heading h3 {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-}
-
-.style-lab-section-heading p { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; }
-
-.style-lab-section-heading--with-control {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.style-lab-gradient-switch {
-  display: inline-flex;
-  padding: 6px 8px 6px 10px;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
-  background: rgba(var(--surface-rgb), 0.42);
-  color: var(--text-secondary);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-  transition: border-color 0.18s ease, color 0.18s ease;
-}
-
-.style-lab-gradient-switch:hover,
-.style-lab-gradient-switch[aria-checked='true'] { border-color: rgba(167, 139, 250, 0.42); color: var(--accent-text-alt); }
-
-.style-lab-gradient-switch__track {
-  display: flex;
-  width: 30px;
-  height: 17px;
-  padding: 2px;
-  align-items: center;
-  border-radius: 999px;
-  background: rgba(100, 116, 139, 0.45);
-  transition: background 0.18s ease;
-}
-
-.style-lab-gradient-switch__track > span {
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #cbd5e1;
-  transition: background 0.18s ease, transform 0.18s ease;
-}
-
-.style-lab-gradient-switch[aria-checked='true'] .style-lab-gradient-switch__track { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
-
-.style-lab-gradient-switch[aria-checked='true'] .style-lab-gradient-switch__track > span { background: #fff; transform: translateX(13px); }
-
-.style-lab-loader-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-
-.style-lab-choice {
-  position: relative;
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  padding: 16px 18px;
-  flex-direction: column;
-  gap: 14px;
-  appearance: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  outline: none;
-  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
-}
-
-.style-lab-choice:hover { border-color: rgba(var(--brand-rgb), 0.46); background: rgba(37, 51, 73, 0.78); }
-
-.style-lab-choice:focus-visible { border-color: rgba(var(--brand-rgb), 0.72); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18), 0 4px 30px rgba(0, 0, 0, 0.1); }
-
-.style-lab-choice.is-selected { border-color: rgba(var(--brand-rgb), 0.72); background: rgba(37, 51, 73, 0.72); box-shadow:
-    0 0 0 2px rgba(var(--brand-rgb), 0.14),
-    0 4px 30px rgba(0, 0, 0, 0.1); }
-
-.style-lab-selected {
-  display: inline-flex;
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 1;
-  padding: 4px 7px;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid rgba(var(--brand-rgb), 0.3);
-  border-radius: 999px;
-  background: rgba(var(--surface-rgb), 0.82);
-  color: var(--accent-text);
-  font-size: 10px;
-  font-weight: 750;
-}
-
-.style-lab-loader-preview,
-.style-lab-brand-preview {
-  display: grid;
-  width: 100%;
-  place-items: center;
-  overflow: hidden;
-  border: 1px solid rgba(var(--muted-rgb), 0.1);
-  border-radius: 10px;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(var(--accent-rgb), 0.12), transparent 64%),
-    rgba(var(--surface-rgb), 0.4);
-}
-
-.style-lab-loader-preview { min-height: 238px; }
-
-.style-lab-brand-preview { min-height: 108px; transition: border-color 0.18s ease, box-shadow 0.18s ease; }
-
-.style-lab-brand-preview > * { transition: filter 0.18s ease, transform 0.18s ease; }
-
-.style-lab-brand-choice:hover .style-lab-brand-preview { border-color: rgba(var(--brand-rgb), 0.36); box-shadow: inset 0 0 28px rgba(var(--accent-rgb), 0.08); }
-
-.style-lab-brand-choice:hover .style-lab-brand-preview > * { filter: drop-shadow(0 5px 12px rgba(var(--accent-rgb), 0.24)); transform: translateY(-1px) scale(1.025); }
-
-.style-lab-choice-copy { display: flex; flex-direction: column; gap: 4px; }
-
-.style-lab-choice-copy strong { color: var(--text-primary); font-size: 14px; }
-
-.style-lab-choice-copy small { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
-
-.style-lab-live-preview {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  padding: 16px 18px;
-  align-items: center;
-  gap: 20px;
-}
-
-.style-lab-live-copy { display: flex; flex-direction: column; gap: 5px; }
-
-.style-lab-live-copy strong { font-size: 14px; }
-
-.style-lab-live-copy span { color: var(--text-secondary); font-size: 12px; }
-
 .compact-loader {
   display: flex;
   align-items: center;
@@ -1282,20 +1393,6 @@ main > .page-loader { animation: none; }
   font-size: 14px;
   font-weight: 650;
 }
-
-.style-lab-live-stage {
-  flex: 0 0 auto;
-  min-width: 210px;
-  padding: 10px 14px;
-  justify-content: center;
-  border: 1px solid rgba(var(--muted-rgb), 0.12);
-  border-radius: 10px;
-  background: rgba(var(--surface-rgb), 0.4);
-}
-
-.style-lab-brand-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-
-.style-lab-brand-choice { padding: 14px 16px; }
 
 :where(.finn-plain-wordmark, .finn-hat-wordmark, .finn-side-wordmark) {
   color: var(--brand-solid);
@@ -1343,15 +1440,6 @@ main > .page-loader { animation: none; }
   stroke: rgba(100, 116, 139, 0.6);
   stroke-linecap: round;
   stroke-width: 0.7;
-}
-
-.finn-hat-wordmark__candle-body { fill: var(--success); stroke: rgba(240, 253, 244, 0.5); stroke-width: 0.9; }
-
-.finn-hat-wordmark__candle-wick {
-  fill: none;
-  stroke: var(--success);
-  stroke-linecap: round;
-  stroke-width: 2.1;
 }
 
 .finn-face-wordmark__face {
@@ -1423,26 +1511,6 @@ main > .page-loader { animation: none; }
   .finn-mark__face,
   .finn-face-wordmark__face
 ) { animation: brand-hat-bob 1.2s ease-in-out infinite; }
-
-@media (max-width: 720px) {
-  .style-lab-page .sticky-page-header { align-items: flex-start; flex-direction: column; gap: 12px; }
-
-  .style-lab-save-status { margin-left: 56px; }
-
-  .style-lab-section-heading--with-control { align-items: flex-start; }
-
-  .style-lab-loader-grid { grid-template-columns: 1fr; }
-
-  .style-lab-live-preview { grid-template-columns: 1fr; align-items: stretch; }
-
-  .style-lab-live-stage { min-width: 0; }
-
-  .style-lab-brand-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 520px) {
-  .style-lab-brand-grid { grid-template-columns: 1fr; }
-}
 
 .app-header {
   display: flex;
@@ -1638,7 +1706,7 @@ main > .page-loader { animation: none; }
     linear-gradient(to bottom, rgba(var(--surface-rgb), 0.14), transparent);
 }
 
-.snapshot-editor-page { padding-bottom: 24px; }
+.snapshot-editor-page { width: 100%; max-width: 1080px; margin: 0 auto; padding-bottom: 24px; }
 
 .snapshot-editor-page .sticky-page-header { padding-top: 12px; padding-bottom: 12px; gap: 20px; }
 
@@ -1835,14 +1903,18 @@ main > .page-loader { animation: none; }
 
 .snapshot-rates-actions { display: flex; flex: 0 0 auto; gap: 7px; }
 
-.snapshot-rates-actions .btn { padding: 6px 9px; font-size: 12px; }
+.snapshot-rates-actions .btn { height: 38px; padding: 6px 9px; font-size: 12px; }
+
+.snapshot-rates-actions .snapshot-rate-add { margin-left: 2px; }
 
 .snapshot-rates-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  max-height: 129px;
   margin-top: 9px;
   align-items: end;
   gap: 9px;
+  overflow-y: auto;
 }
 
 .snapshot-rate-field { min-width: 0; }
@@ -1856,10 +1928,7 @@ main > .page-loader { animation: none; }
   gap: 6px;
 }
 
-.snapshot-rate-field .input,
-.snapshot-rate-add .btn { height: 38px; }
-
-.snapshot-rate-add .snapshot-rate-label { visibility: hidden; }
+.snapshot-rate-field .input { height: 38px; }
 
 .snapshot-organizations-section { display: flex; flex-direction: column; gap: 10px; }
 
@@ -2113,6 +2182,8 @@ main > .page-loader { animation: none; }
 
   .snapshot-rates-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
 
+  .snapshot-rates-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+
   .snapshot-organizations-heading,
   .snapshot-organizations-empty { align-items: flex-start; }
 
@@ -2243,7 +2314,7 @@ main > .page-loader { animation: none; }
   font-size: 14px;
 }
 
-.timeframe-control { min-height: 38px; padding: 8px 16px; }
+.timeframe-control { min-height: 38px; padding: 8px 10px; }
 
 .timeframe-control .app-select-trigger {
   padding: 4px 7px;
@@ -2345,7 +2416,11 @@ main > .page-loader { animation: none; }
 
 .cash-flow-month-input { color-scheme: dark; }
 
-.cash-flow-month-input::-webkit-calendar-picker-indicator { cursor: pointer; filter: invert(86%) sepia(8%) saturate(621%) hue-rotate(176deg) brightness(89%); opacity: 0.9; }
+.cash-flow-month-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: brightness(0) saturate(100%) invert(77%) sepia(15%) saturate(1242%) hue-rotate(179deg) brightness(103%) contrast(98%);
+  opacity: 1;
+}
 
 .cash-flow-direction-switch {
   display: inline-grid;
@@ -2436,7 +2511,7 @@ main > .page-loader { animation: none; }
   overflow: hidden;
 }
 
-.cash-flow-period-modal { width: min(1320px, 96vw); height: min(88vh, 900px); box-shadow: 0 32px 90px rgba(0, 0, 0, 0.55); }
+.cash-flow-period-modal { width: min(1320px, 96vw); height: min(calc(100vh - 48px), 769px); box-shadow: 0 32px 90px rgba(0, 0, 0, 0.55); }
 
 .cash-flow-import-modal { width: min(1080px, 94vw); max-height: min(86vh, 820px); box-shadow: 0 32px 90px rgba(0, 0, 0, 0.55); }
 
@@ -2578,7 +2653,7 @@ main > .page-loader { animation: none; }
   flex: 0 0 auto;
 }
 
-.cash-flow-period-header-month .cash-flow-month-input { width: 155px; }
+.cash-flow-period-header-month .cash-flow-month-input { width: 180px; text-align: center; }
 
 .cash-flow-icon-button { padding: 7px; }
 
@@ -2607,21 +2682,24 @@ main > .page-loader { animation: none; }
 
 .cash-flow-period-list {
   display: flex;
-  flex: 1;
+  flex: 1 1 570px;
   flex-direction: column;
-  gap: 9px;
+  gap: 0;
   min-height: 120px;
-  padding: 14px 16px;
+  max-height: 570px;
+  padding: 14px 16px 0;
   overflow: auto;
 }
 
 .cash-flow-period-row {
   position: relative;
   display: grid;
+  flex: 0 0 82px;
   grid-template-columns: 25px 112px repeat(9, minmax(90px, 1fr)) 38px;
   gap: 8px;
   align-items: end;
   min-width: 1180px;
+  margin-bottom: 9px;
   padding: 11px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
@@ -2649,6 +2727,34 @@ main > .page-loader { animation: none; }
 .cash-flow-period-comment { grid-column: 11; }
 
 .cash-flow-period-row.is-transfer .cash-flow-period-received { grid-column: 9 / span 2; }
+
+.cash-flow-period-received-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cash-flow-transfer-copy-values {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-radius: 4px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cash-flow-transfer-copy-values:hover:not(:disabled) { border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.2); color: #fff; }
+
+.cash-flow-transfer-copy-values:disabled { cursor: not-allowed; opacity: 0.4; }
 
 .cash-flow-period-row.is-focused { border-color: rgba(var(--accent-rgb), 0.75); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.14); }
 
@@ -3112,6 +3218,53 @@ main > .page-loader { animation: none; }
 }
 
 .cash-flow-overview-summary > span { color: var(--text-secondary); font-size: 11px; }
+
+.cash-flow-filter-panel { padding: 14px 18px; }
+
+.cash-flow-filter-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.cash-flow-filter-row > .timeframe-control { height: 46px; }
+
+.cash-flow-filter-selects {
+  display: grid;
+  grid-template-columns: auto 150px 170px 160px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 46px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cash-flow-filter-field {
+  display: flex;
+  min-width: 0;
+}
+
+.cash-flow-filter-group-title {
+  padding-right: 2px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cash-flow-filter-field .app-select-trigger { padding: 4px 7px; font-size: 13px; }
+
+.cash-flow-filter-count {
+  align-self: center;
+  justify-self: end;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
 
 .cash-flow-net-summary {
   display: flex;
@@ -3794,7 +3947,7 @@ main > .page-loader { animation: none; }
 .cash-flow-month-summary {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(155px, auto) minmax(260px, 1fr) auto;
+  grid-template-columns: 220px minmax(260px, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 11px 12px;
@@ -3802,6 +3955,13 @@ main > .page-loader { animation: none; }
   list-style: none;
   background: rgba(30, 41, 59, 0.64);
   user-select: none;
+}
+
+.cash-flow-month-summary > .cash-flow-net-summary { grid-column: 2; }
+
+.cash-flow-month-summary > .cash-flow-period-group-actions {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .cash-flow-month-summary:hover { background: rgba(30, 41, 59, 0.82); }
@@ -3966,7 +4126,8 @@ main > .page-loader { animation: none; }
 .snapshot-diff-recorded-flow .btn { flex: 0 0 auto; padding: 4px 7px; font-size: 10px; }
 
 .cash-flow-period-group-title {
-  display: flex;
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
   align-items: baseline;
   gap: 9px;
   white-space: nowrap;
@@ -3979,6 +4140,31 @@ main > .page-loader { animation: none; }
 .cash-flow-period-group-actions { display: flex; gap: 7px; }
 
 .cash-flow-period-group-actions .btn { padding: 6px 9px; font-size: 12px; }
+
+.cash-flow-period-table { table-layout: fixed; }
+
+.cash-flow-period-table col:nth-child(1) { width: 14%; }
+.cash-flow-period-table col:nth-child(2) { width: 25%; }
+.cash-flow-period-table col:nth-child(3) { width: 13%; }
+.cash-flow-period-table col:nth-child(4) { width: 22%; }
+.cash-flow-period-table col:nth-child(5) { width: 21%; }
+.cash-flow-period-table col:nth-child(6) { width: 5%; }
+
+@media (max-width: 1050px) {
+  .cash-flow-filter-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+
+  .cash-flow-filter-row > .timeframe-control { grid-column: 1; grid-row: 1; justify-self: start; }
+
+  .cash-flow-filter-selects { grid-column: 1 / -1; grid-row: 2; }
+
+  .cash-flow-filter-count { grid-column: 2; grid-row: 1; }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .cash-flow-month-summary { grid-template-columns: 220px minmax(0, 1fr); }
+
+  .cash-flow-month-summary > .cash-flow-period-group-actions { grid-column: 1 / -1; justify-self: end; }
+}
 
 .cash-flow-entry-details {
   margin-top: 3px;
@@ -4473,7 +4659,7 @@ main > .page-loader { animation: none; }
 
   .cash-flow-period-header-info { padding-right: 44px; }
 
-  .cash-flow-period-row { grid-template-columns: 1fr; min-width: 0; padding: 34px 12px 12px; }
+  .cash-flow-period-row { flex-basis: auto; grid-template-columns: 1fr; min-width: 0; padding: 34px 12px 12px; }
 
   .cash-flow-period-row > * { grid-column: 1 !important; }
 
@@ -4500,7 +4686,23 @@ main > .page-loader { animation: none; }
 
   .snapshot-diff-recorded-flow-heading { grid-template-columns: 1fr; gap: 8px; }
 
+  .cash-flow-filter-row { grid-template-columns: 1fr; align-items: stretch; }
+
+  .cash-flow-filter-row > .timeframe-control,
+  .cash-flow-filter-selects,
+  .cash-flow-filter-count { grid-column: 1; grid-row: auto; }
+
+  .cash-flow-filter-row > .timeframe-control,
+  .cash-flow-filter-selects { height: auto; min-height: 46px; }
+
+  .cash-flow-filter-selects { grid-template-columns: 1fr; }
+
+  .cash-flow-filter-count { justify-self: start; }
+
   .cash-flow-month-summary { grid-template-columns: 1fr; gap: 9px; padding: 12px 14px; }
+
+  .cash-flow-month-summary > .cash-flow-net-summary,
+  .cash-flow-month-summary > .cash-flow-period-group-actions { grid-column: 1; justify-self: start; }
 
   .cash-flow-year-summary-actions { width: 100%; justify-content: space-between; flex-wrap: wrap; }
 

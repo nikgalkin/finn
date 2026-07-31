@@ -1,7 +1,6 @@
 import type { ComponentType } from 'react';
 import type { LogoChoice } from '../../lib/visualPreferences';
 import {
-  FinnCandleWordmark,
   FinnFaceWordmark,
   FinnHatWordmark,
   FinnMark,
@@ -13,5 +12,4 @@ export const logoMarks: Record<LogoChoice, ComponentType> = {
   'hat-dot': FinnHatWordmark,
   'mark': FinnMark,
   'face': FinnFaceWordmark,
-  'candle': FinnCandleWordmark,
 };

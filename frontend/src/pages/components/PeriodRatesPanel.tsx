@@ -169,6 +169,9 @@ export function PeriodRatesPanel({
               {fetchingRates === 'periodStart' ? <Spinner label="Fetching rates for period start" size={15} /> : <Calendar size={15} />}
               Fetch on 1st
             </button>
+            <button className="btn snapshot-rate-add" onClick={onAddRate}>
+              <Plus size={16} /> Add
+            </button>
           </div>
         </div>
 
@@ -191,13 +194,6 @@ export function PeriodRatesPanel({
                 />
               </div>
             ))}
-
-          <div className="snapshot-rate-field snapshot-rate-add">
-            <div className="snapshot-rate-label" aria-hidden="true">Action</div>
-            <button className="btn w-full justify-center" onClick={onAddRate}>
-              <Plus size={16} className="mr-1" /> Add
-            </button>
-          </div>
         </div>
       </div>
     </section>
