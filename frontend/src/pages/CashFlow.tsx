@@ -16,6 +16,7 @@ import { CommentModal } from './components/SnapshotCommentModal';
 import { TimeframeControl } from './components/TimeframeControl';
 import { FlowCsvImportModal } from './components/FlowCsvImportModal';
 import { FlowNetSummary } from './components/FlowNetSummary';
+import { AppSelect } from './components/AppSelect';
 import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 import { orientExchangeRate } from '../lib/finance';
@@ -574,35 +575,81 @@ export default function CashFlow() {
         <div className="glass-panel mb-4" style={{ padding: '12px 16px', color: 'var(--success)', borderColor: 'rgba(var(--success-rgb), 0.3)' }}>{csvImportNotice}</div>
       )}
 
-      <div className="glass-panel mb-4" style={{ padding: '14px 18px' }}>
-        <div className="flex justify-between items-center" style={{ gap: '12px', flexWrap: 'wrap' }}>
-          <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-            <TimeframeControl
-              availableMonths={months}
-              startMonth={startMonth}
-              endMonth={effectiveEndMonth}
-              onChange={(start, end) => {
-                setStartMonth(start);
-                setEndMonth(end);
-              }}
-            />
-            <select id="cash-flow-movement-type-filter" name="cash-flow-movement-type-filter" className="input" aria-label="Movement type" value={directionFilter} onChange={event => setDirectionFilter(event.target.value as FlowMovementFilter)} style={{ width: 'auto', minWidth: '150px' }}>
-              <option value="all">All movements</option>
-              <option value="in" disabled={!timeframeDirections.has('in')}>Incoming</option>
-              <option value="out" disabled={!timeframeDirections.has('out')}>Outgoing</option>
-              <option value="transfer" disabled={!timeframeDirections.has('transfer')}>Transfers</option>
-            </select>
-            <select id="cash-flow-counterparty-filter" name="cash-flow-counterparty-filter" className="input" aria-label={counterpartyAriaLabel} value={counterpartyFilter} onChange={event => setCounterpartyFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
-              <option value="all">{counterpartyAllLabel}</option>
-              {counterparties.map(counterparty => <option key={counterparty} value={counterparty}>{counterparty}</option>)}
-            </select>
-            <select id="cash-flow-category-filter" name="cash-flow-category-filter" className="input" aria-label="Category" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)} style={{ width: 'auto', minWidth: '170px' }}>
-              <option value="all">All categories</option>
-              {hasUncategorizedEntries && <option value="none">No category</option>}
-              {categories.map(category => <option key={category} value={category}>{category}</option>)}
-            </select>
+      <div className="glass-panel mb-4 cash-flow-filter-panel">
+        <div className="cash-flow-filter-row">
+          <TimeframeControl
+            availableMonths={months}
+            startMonth={startMonth}
+            endMonth={effectiveEndMonth}
+            onChange={(start, end) => {
+              setStartMonth(start);
+              setEndMonth(end);
+            }}
+          />
+          <div className="cash-flow-filter-selects">
+            <span className="cash-flow-filter-group-title">Filters:</span>
+            <div className="cash-flow-filter-field">
+              <AppSelect
+                id="cash-flow-movement-type-filter"
+                name="cash-flow-movement-type-filter"
+                ariaLabel="Movement type"
+                value={directionFilter}
+                onChange={value => setDirectionFilter(value as FlowMovementFilter)}
+                options={[
+                  { value: 'all', label: 'All movements' },
+                  { value: 'in', label: 'Incoming', disabled: !timeframeDirections.has('in') },
+                  { value: 'out', label: 'Outgoing', disabled: !timeframeDirections.has('out') },
+                  { value: 'transfer', label: 'Transfers', disabled: !timeframeDirections.has('transfer') }
+                ]}
+                placeholder="All movements"
+                dropdownWidth={190}
+                dropdownAlign="left"
+                height="28px"
+              />
+            </div>
+            <div className="cash-flow-filter-field">
+              <AppSelect
+                id="cash-flow-counterparty-filter"
+                name="cash-flow-counterparty-filter"
+                ariaLabel={counterpartyAriaLabel}
+                value={counterpartyFilter}
+                onChange={setCounterpartyFilter}
+                options={[
+                  { value: 'all', label: counterpartyAllLabel },
+                  ...counterparties.map(counterparty => ({ value: counterparty }))
+                ]}
+                placeholder={counterpartyAllLabel}
+                searchable={counterparties.length > 7}
+                searchPlaceholder="Find counterparty…"
+                disabled={directionFilter === 'transfer'}
+                dropdownWidth={240}
+                dropdownAlign="left"
+                height="28px"
+              />
+            </div>
+            <div className="cash-flow-filter-field">
+              <AppSelect
+                id="cash-flow-category-filter"
+                name="cash-flow-category-filter"
+                ariaLabel="Category"
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+                options={[
+                  { value: 'all', label: 'All categories' },
+                  ...(hasUncategorizedEntries ? [{ value: 'none', label: 'No category' }] : []),
+                  ...categories.map(category => ({ value: category }))
+                ]}
+                placeholder="All categories"
+                searchable={categories.length > 7}
+                searchPlaceholder="Find category…"
+                disabled={directionFilter === 'transfer'}
+                dropdownWidth={240}
+                dropdownAlign="left"
+                height="28px"
+              />
+            </div>
           </div>
-          <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{visibleEntries.length} entr{visibleEntries.length === 1 ? 'y' : 'ies'}</span>
+          <span className="cash-flow-filter-count">{visibleEntries.length} entr{visibleEntries.length === 1 ? 'y' : 'ies'}</span>
         </div>
 
         {totals.length > 0 && (
@@ -715,6 +762,14 @@ export default function CashFlow() {
                         </summary>
                         <div className="cash-flow-year-body">
                           <table className="table cash-flow-period-table" style={{ minWidth: '850px' }}>
+                            <colgroup>
+                              <col />
+                              <col />
+                              <col />
+                              <col />
+                              <col />
+                              <col />
+                            </colgroup>
                             <thead>
                               <tr>
                                 <th>Movement</th>
@@ -741,7 +796,7 @@ export default function CashFlow() {
                                     </td>
                                     <td style={{ fontWeight: 600 }}>{isTransfer ? `${entry.account} → ${entry.toAccount}` : entry.counterparty}</td>
                                     <td style={{ color: entry.category && !isTransfer ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{isTransfer ? '—' : entry.category || '—'}</td>
-                                    <td style={{ width: '26%', maxWidth: '300px' }}>
+                                    <td>
                                       <QuickHoverTooltip text={entry.comment}>
                                         <button
                                           className={`cash-flow-table-comment${entry.comment ? ' has-comment' : ''}`}

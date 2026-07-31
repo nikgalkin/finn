@@ -277,7 +277,7 @@ a { color: var(--accent); text-decoration: none; }
 .dashboard-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  margin-bottom: 14px;
+  margin-bottom: 8px;
   align-items: stretch;
   gap: 14px;
 }
@@ -2314,7 +2314,7 @@ main > .page-loader { animation: none; }
   font-size: 14px;
 }
 
-.timeframe-control { min-height: 38px; padding: 8px 16px; }
+.timeframe-control { min-height: 38px; padding: 8px 10px; }
 
 .timeframe-control .app-select-trigger {
   padding: 4px 7px;
@@ -3219,6 +3219,53 @@ main > .page-loader { animation: none; }
 
 .cash-flow-overview-summary > span { color: var(--text-secondary); font-size: 11px; }
 
+.cash-flow-filter-panel { padding: 14px 18px; }
+
+.cash-flow-filter-row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.cash-flow-filter-row > .timeframe-control { height: 46px; }
+
+.cash-flow-filter-selects {
+  display: grid;
+  grid-template-columns: auto 150px 170px 160px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 46px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cash-flow-filter-field {
+  display: flex;
+  min-width: 0;
+}
+
+.cash-flow-filter-group-title {
+  padding-right: 2px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cash-flow-filter-field .app-select-trigger { padding: 4px 7px; font-size: 13px; }
+
+.cash-flow-filter-count {
+  align-self: center;
+  justify-self: end;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .cash-flow-net-summary {
   display: flex;
   align-items: center;
@@ -3900,7 +3947,7 @@ main > .page-loader { animation: none; }
 .cash-flow-month-summary {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(155px, auto) minmax(260px, 1fr) auto;
+  grid-template-columns: 220px minmax(260px, 1fr) auto;
   align-items: center;
   gap: 16px;
   padding: 11px 12px;
@@ -4079,7 +4126,8 @@ main > .page-loader { animation: none; }
 .snapshot-diff-recorded-flow .btn { flex: 0 0 auto; padding: 4px 7px; font-size: 10px; }
 
 .cash-flow-period-group-title {
-  display: flex;
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
   align-items: baseline;
   gap: 9px;
   white-space: nowrap;
@@ -4092,6 +4140,31 @@ main > .page-loader { animation: none; }
 .cash-flow-period-group-actions { display: flex; gap: 7px; }
 
 .cash-flow-period-group-actions .btn { padding: 6px 9px; font-size: 12px; }
+
+.cash-flow-period-table { table-layout: fixed; }
+
+.cash-flow-period-table col:nth-child(1) { width: 14%; }
+.cash-flow-period-table col:nth-child(2) { width: 25%; }
+.cash-flow-period-table col:nth-child(3) { width: 13%; }
+.cash-flow-period-table col:nth-child(4) { width: 22%; }
+.cash-flow-period-table col:nth-child(5) { width: 21%; }
+.cash-flow-period-table col:nth-child(6) { width: 5%; }
+
+@media (max-width: 1050px) {
+  .cash-flow-filter-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+
+  .cash-flow-filter-row > .timeframe-control { grid-column: 1; grid-row: 1; justify-self: start; }
+
+  .cash-flow-filter-selects { grid-column: 1 / -1; grid-row: 2; }
+
+  .cash-flow-filter-count { grid-column: 2; grid-row: 1; }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .cash-flow-month-summary { grid-template-columns: 220px minmax(0, 1fr); }
+
+  .cash-flow-month-summary > .cash-flow-period-group-actions { grid-column: 1 / -1; justify-self: end; }
+}
 
 .cash-flow-entry-details {
   margin-top: 3px;
@@ -4612,6 +4685,19 @@ main > .page-loader { animation: none; }
   .ai-status-card { align-items: flex-start; flex-direction: column; }
 
   .snapshot-diff-recorded-flow-heading { grid-template-columns: 1fr; gap: 8px; }
+
+  .cash-flow-filter-row { grid-template-columns: 1fr; align-items: stretch; }
+
+  .cash-flow-filter-row > .timeframe-control,
+  .cash-flow-filter-selects,
+  .cash-flow-filter-count { grid-column: 1; grid-row: auto; }
+
+  .cash-flow-filter-row > .timeframe-control,
+  .cash-flow-filter-selects { height: auto; min-height: 46px; }
+
+  .cash-flow-filter-selects { grid-template-columns: 1fr; }
+
+  .cash-flow-filter-count { justify-self: start; }
 
   .cash-flow-month-summary { grid-template-columns: 1fr; gap: 9px; padding: 12px 14px; }
 
