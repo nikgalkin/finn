@@ -37,7 +37,6 @@ const logoCopy: Record<LogoChoice, { title: string; hint: string }> = {
   'hat-dot': { title: 'Hat Dot', hint: 'The Finn hat is tucked above the letter i.' },
   'mark': { title: 'Mark', hint: 'Badge only — the same shape as the favicon.' },
   'face': { title: 'Face', hint: 'Chibi Finn looks back at you, tongue out.' },
-  'candle': { title: 'Candle', hint: 'A candlestick in the hood: the hat that tracks.' },
 };
 
 const netWorthCardCopy: Record<NetWorthCardChoice, { title: string; hint: string }> = {

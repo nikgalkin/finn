@@ -5,7 +5,6 @@ export const logoChoices = [
   'hat-dot',
   'mark',
   'face',
-  'candle',
 ] as const;
 
 export const netWorthCardChoices = [
@@ -85,7 +84,7 @@ export function readVisualPreferences(
     loader: readChoice(storage, loaderStorageKey, loaderChoices, 'bmo'),
     logo: readChoice(storage, logoStorageKey, logoChoices, 'plain'),
     logoGradient: storedLogoGradient === null ? true : storedLogoGradient === 'true',
-    netWorthCard: readChoice(storage, netWorthCardStorageKey, netWorthCardChoices, 'classic'),
+    netWorthCard: readChoice(storage, netWorthCardStorageKey, netWorthCardChoices, 'split'),
     netWorthStrip: readChoice(storage, netWorthStripStorageKey, netWorthStripChoices, 'allocation'),
   };
 }

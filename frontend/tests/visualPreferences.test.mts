@@ -20,7 +20,7 @@ const defaults = {
   loader: 'bmo',
   logo: 'plain',
   logoGradient: true,
-  netWorthCard: 'classic',
+  netWorthCard: 'split',
   netWorthStrip: 'allocation'
 };
 
@@ -38,7 +38,7 @@ test('reads stored choices and keeps the gradient on unless it was turned off', 
     loader: 'marceline',
     logo: 'face',
     logoGradient: true,
-    netWorthCard: 'classic',
+    netWorthCard: 'split',
     netWorthStrip: 'allocation',
   });
 
@@ -52,7 +52,7 @@ test('reads the net worth card choice and ignores unknown layouts', () => {
   assert.equal(readVisualPreferences(storage).netWorthCard, 'split');
 
   storage.setItem('finn:net-worth-card', 'stacked');
-  assert.equal(readVisualPreferences(storage).netWorthCard, 'classic');
+  assert.equal(readVisualPreferences(storage).netWorthCard, 'split');
 });
 
 test('reads the net worth strip choice and ignores unknown content', () => {

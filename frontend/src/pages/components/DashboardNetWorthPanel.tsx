@@ -179,13 +179,7 @@ function MoneyStack({ data, inline = false }: { data: NetWorthPanelData; inline?
           <MoneyAmount
             value={data.totalSecondary}
             className="dashboard-net-worth-money-amount is-secondary"
-            tooltip={[
-              'Secondary currency',
-              `${formatNumber(data.totalSecondary)} ${data.secondaryCurrency}`,
-              data.secondaryRate
-                ? `1 ${data.secondaryCurrency} = ${formatExchangeRate(data.secondaryRate)} ${data.baseCurrency}`
-                : null
-            ].filter(Boolean).join('\n')}
+            tooltip={`Secondary currency\n${formatNumber(data.totalSecondary)} ${data.secondaryCurrency}`}
           />
           <small className="is-secondary">{data.secondaryCurrency}</small>
         </span>

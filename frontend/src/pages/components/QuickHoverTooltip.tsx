@@ -16,6 +16,8 @@ type TooltipPosition = {
   centered: boolean;
 };
 
+type TooltipPoint = { x: number; y: number };
+
 const TOOLTIP_WIDTH = 320;
 const TOOLTIP_GAP = 12;
 const VIEWPORT_PADDING = 12;
@@ -24,32 +26,36 @@ export function QuickHoverTooltip({ text, children, className = '', placement = 
   const anchorRef = useRef<HTMLSpanElement | null>(null);
   const tooltipRef = useRef<HTMLSpanElement | null>(null);
   const timerRef = useRef<number | null>(null);
+  const pointerRef = useRef<TooltipPoint | null>(null);
   const [position, setPosition] = useState<TooltipPosition | null>(null);
 
   const close = () => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
+    pointerRef.current = null;
     setPosition(null);
   };
 
-  const open = (delay: number, point?: { x: number; y: number }) => {
+  const open = (delay: number, point?: TooltipPoint) => {
     if (!text) return;
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    const rect = anchorRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const nextPosition: TooltipPosition = point ? {
-      left: point.x,
-      top: point.y - TOOLTIP_GAP,
-      above: true,
-      centered: true
-    } : {
-      left: Math.max(VIEWPORT_PADDING, Math.min(rect.left, window.innerWidth - TOOLTIP_WIDTH - VIEWPORT_PADDING)),
-      top: rect.top > 140 ? rect.top - 7 : rect.bottom + 7,
-      above: rect.top > 140,
-      centered: false
-    };
+    pointerRef.current = point ?? null;
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const latestPoint = pointerRef.current;
+      const nextPosition: TooltipPosition = latestPoint ? {
+        left: latestPoint.x,
+        top: latestPoint.y - TOOLTIP_GAP,
+        above: true,
+        centered: true
+      } : {
+        left: Math.max(VIEWPORT_PADDING, Math.min(rect.left, window.innerWidth - TOOLTIP_WIDTH - VIEWPORT_PADDING)),
+        top: rect.top > 140 ? rect.top - 7 : rect.bottom + 7,
+        above: rect.top > 140,
+        centered: false
+      };
       setPosition(nextPosition);
     }, delay);
   };
@@ -80,6 +86,11 @@ export function QuickHoverTooltip({ text, children, className = '', placement = 
       className={`quick-hover-anchor${className ? ` ${className}` : ''}`}
       style={style}
       onMouseEnter={event => open(45, placement === 'pointer' ? { x: event.clientX, y: event.clientY } : undefined)}
+      onMouseMove={event => {
+        if (placement === 'pointer' && timerRef.current !== null) {
+          pointerRef.current = { x: event.clientX, y: event.clientY };
+        }
+      }}
       onMouseLeave={close}
       onFocusCapture={() => open(0)}
       onBlurCapture={close}

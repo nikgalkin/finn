@@ -1442,15 +1442,6 @@ main > .page-loader { animation: none; }
   stroke-width: 0.7;
 }
 
-.finn-hat-wordmark__candle-body { fill: var(--success); stroke: rgba(240, 253, 244, 0.5); stroke-width: 0.9; }
-
-.finn-hat-wordmark__candle-wick {
-  fill: none;
-  stroke: var(--success);
-  stroke-linecap: round;
-  stroke-width: 2.1;
-}
-
 .finn-face-wordmark__face {
   width: 1.3em;
   height: 1.3em;
