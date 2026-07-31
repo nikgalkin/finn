@@ -230,7 +230,7 @@ a { color: var(--accent); text-decoration: none; }
 .dashboard-page-header {
   display: flex;
   min-height: 52px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -277,7 +277,7 @@ a { color: var(--accent); text-decoration: none; }
 .dashboard-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   align-items: stretch;
   gap: 14px;
 }
