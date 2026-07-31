@@ -470,6 +470,7 @@ a { color: var(--accent); text-decoration: none; }
   gap: 6px;
   font-size: 12px;
   line-height: 1;
+  transform: translateY(1px);
 }
 
 .dashboard-net-worth-bar-segment-label strong { font-weight: 780; }
@@ -1714,7 +1715,7 @@ main > .page-loader { animation: none; }
     linear-gradient(to bottom, rgba(var(--surface-rgb), 0.14), transparent);
 }
 
-.snapshot-editor-page { padding-bottom: 24px; }
+.snapshot-editor-page { width: 100%; max-width: 1080px; margin: 0 auto; padding-bottom: 24px; }
 
 .snapshot-editor-page .sticky-page-header { padding-top: 12px; padding-bottom: 12px; gap: 20px; }
 
@@ -1911,14 +1912,18 @@ main > .page-loader { animation: none; }
 
 .snapshot-rates-actions { display: flex; flex: 0 0 auto; gap: 7px; }
 
-.snapshot-rates-actions .btn { padding: 6px 9px; font-size: 12px; }
+.snapshot-rates-actions .btn { height: 38px; padding: 6px 9px; font-size: 12px; }
+
+.snapshot-rates-actions .snapshot-rate-add { margin-left: 2px; }
 
 .snapshot-rates-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  max-height: 129px;
   margin-top: 9px;
   align-items: end;
   gap: 9px;
+  overflow-y: auto;
 }
 
 .snapshot-rate-field { min-width: 0; }
@@ -1932,10 +1937,7 @@ main > .page-loader { animation: none; }
   gap: 6px;
 }
 
-.snapshot-rate-field .input,
-.snapshot-rate-add .btn { height: 38px; }
-
-.snapshot-rate-add .snapshot-rate-label { visibility: hidden; }
+.snapshot-rate-field .input { height: 38px; }
 
 .snapshot-organizations-section { display: flex; flex-direction: column; gap: 10px; }
 
@@ -2189,6 +2191,8 @@ main > .page-loader { animation: none; }
 
   .snapshot-rates-heading { align-items: flex-start; flex-direction: column; gap: 10px; }
 
+  .snapshot-rates-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+
   .snapshot-organizations-heading,
   .snapshot-organizations-empty { align-items: flex-start; }
 
@@ -2421,7 +2425,11 @@ main > .page-loader { animation: none; }
 
 .cash-flow-month-input { color-scheme: dark; }
 
-.cash-flow-month-input::-webkit-calendar-picker-indicator { cursor: pointer; filter: invert(86%) sepia(8%) saturate(621%) hue-rotate(176deg) brightness(89%); opacity: 0.9; }
+.cash-flow-month-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: brightness(0) saturate(100%) invert(77%) sepia(15%) saturate(1242%) hue-rotate(179deg) brightness(103%) contrast(98%);
+  opacity: 1;
+}
 
 .cash-flow-direction-switch {
   display: inline-grid;
@@ -2512,7 +2520,7 @@ main > .page-loader { animation: none; }
   overflow: hidden;
 }
 
-.cash-flow-period-modal { width: min(1320px, 96vw); height: min(88vh, 900px); box-shadow: 0 32px 90px rgba(0, 0, 0, 0.55); }
+.cash-flow-period-modal { width: min(1320px, 96vw); height: min(calc(100vh - 48px), 769px); box-shadow: 0 32px 90px rgba(0, 0, 0, 0.55); }
 
 .cash-flow-import-modal { width: min(1080px, 94vw); max-height: min(86vh, 820px); box-shadow: 0 32px 90px rgba(0, 0, 0, 0.55); }
 
@@ -2654,7 +2662,7 @@ main > .page-loader { animation: none; }
   flex: 0 0 auto;
 }
 
-.cash-flow-period-header-month .cash-flow-month-input { width: 155px; }
+.cash-flow-period-header-month .cash-flow-month-input { width: 180px; text-align: center; }
 
 .cash-flow-icon-button { padding: 7px; }
 
@@ -2683,21 +2691,24 @@ main > .page-loader { animation: none; }
 
 .cash-flow-period-list {
   display: flex;
-  flex: 1;
+  flex: 1 1 570px;
   flex-direction: column;
-  gap: 9px;
+  gap: 0;
   min-height: 120px;
-  padding: 14px 16px;
+  max-height: 570px;
+  padding: 14px 16px 0;
   overflow: auto;
 }
 
 .cash-flow-period-row {
   position: relative;
   display: grid;
+  flex: 0 0 82px;
   grid-template-columns: 25px 112px repeat(9, minmax(90px, 1fr)) 38px;
   gap: 8px;
   align-items: end;
   min-width: 1180px;
+  margin-bottom: 9px;
   padding: 11px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
@@ -2725,6 +2736,34 @@ main > .page-loader { animation: none; }
 .cash-flow-period-comment { grid-column: 11; }
 
 .cash-flow-period-row.is-transfer .cash-flow-period-received { grid-column: 9 / span 2; }
+
+.cash-flow-period-received-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.cash-flow-transfer-copy-values {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  border-radius: 4px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cash-flow-transfer-copy-values:hover:not(:disabled) { border-color: rgba(var(--accent-rgb), 0.6); background: rgba(var(--accent-rgb), 0.2); color: #fff; }
+
+.cash-flow-transfer-copy-values:disabled { cursor: not-allowed; opacity: 0.4; }
 
 .cash-flow-period-row.is-focused { border-color: rgba(var(--accent-rgb), 0.75); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.14); }
 
@@ -3880,6 +3919,13 @@ main > .page-loader { animation: none; }
   user-select: none;
 }
 
+.cash-flow-month-summary > .cash-flow-net-summary { grid-column: 2; }
+
+.cash-flow-month-summary > .cash-flow-period-group-actions {
+  grid-column: 3;
+  justify-self: end;
+}
+
 .cash-flow-month-summary:hover { background: rgba(30, 41, 59, 0.82); }
 
 .cash-flow-month-group:not([open]) > .cash-flow-month-summary::before {
@@ -4549,7 +4595,7 @@ main > .page-loader { animation: none; }
 
   .cash-flow-period-header-info { padding-right: 44px; }
 
-  .cash-flow-period-row { grid-template-columns: 1fr; min-width: 0; padding: 34px 12px 12px; }
+  .cash-flow-period-row { flex-basis: auto; grid-template-columns: 1fr; min-width: 0; padding: 34px 12px 12px; }
 
   .cash-flow-period-row > * { grid-column: 1 !important; }
 
@@ -4577,6 +4623,9 @@ main > .page-loader { animation: none; }
   .snapshot-diff-recorded-flow-heading { grid-template-columns: 1fr; gap: 8px; }
 
   .cash-flow-month-summary { grid-template-columns: 1fr; gap: 9px; padding: 12px 14px; }
+
+  .cash-flow-month-summary > .cash-flow-net-summary,
+  .cash-flow-month-summary > .cash-flow-period-group-actions { grid-column: 1; justify-self: start; }
 
   .cash-flow-year-summary-actions { width: 100%; justify-content: space-between; flex-wrap: wrap; }
 

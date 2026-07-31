@@ -139,7 +139,7 @@ function ClassicVariant({ data }: { data: NetWorthPanelData }) {
 
 function MoneyAmount({ value, className, tooltip }: { value: number; className: string; tooltip: string }) {
   return (
-    <QuickHoverTooltip text={tooltip} className="dashboard-net-worth-money-anchor">
+    <QuickHoverTooltip text={tooltip} className="dashboard-net-worth-money-anchor" placement="pointer">
       <span className={className}>{formatCompact(value)}</span>
     </QuickHoverTooltip>
   );
@@ -274,6 +274,7 @@ function AllocationStrip({ data, items, label }: { data: NetWorthPanelData; item
           key={segment.key}
           text={segment.title}
           className="dashboard-net-worth-bar-segment"
+          placement="pointer"
           style={{ flexGrow: segment.value, backgroundColor: segment.color }}
         >
           <span className="dashboard-net-worth-bar-segment-label">
@@ -309,6 +310,7 @@ function FlowStrip({ data }: { data: NetWorthPanelData }) {
             key={part.key}
             text={`${part.name}\n${formatSigned(part.value)} ${data.baseCurrency}`}
             className="dashboard-net-worth-bar-segment"
+            placement="pointer"
             style={{ flexGrow: Math.abs(part.value), backgroundColor: part.color }}
           >
             <span className="dashboard-net-worth-bar-segment-label">
@@ -346,6 +348,7 @@ function HistoryStrip({ data }: { data: NetWorthPanelData }) {
             key={point.month}
             text={`${point.month}\n${formatSigned(point.delta)} ${data.baseCurrency} (${formatPercent(point.percent, 1)})`}
             className="dashboard-net-worth-history-anchor"
+            placement="pointer"
           >
             <span
               className={`dashboard-net-worth-history-bar is-${point.delta >= 0 ? 'positive' : 'negative'}`}
