@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { ArrowLeft, Check, CheckCircle2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isTextInputTarget } from '../lib/hotkeys';
@@ -22,6 +22,15 @@ import { logoMarks } from './components/logoMarks';
 import { CompactLoader, Spinner } from './components/PageLoader';
 import { DashboardNetWorthPanel, type NetWorthPanelData } from './components/DashboardNetWorthPanel';
 import { StickyPageHeader } from './components/StickyPageHeader';
+import './StyleLab.css';
+
+const styleLabLoaderChoices = ['standard', 'marceline', 'bmo'] as const satisfies readonly LoaderChoice[];
+
+const loaderCopy: Record<LoaderChoice, { title: string; hint: string }> = {
+  'standard': { title: 'Standard', hint: 'Simple rotating ring' },
+  'marceline': { title: 'Marceline', hint: 'Smooth money-counting loop' },
+  'bmo': { title: 'BMO', hint: 'Pixel motion-trail loop' },
+};
 
 const logoCopy: Record<LogoChoice, { title: string; hint: string }> = {
   'plain': { title: 'Plain', hint: 'Just Finn Tracker, clean and quiet.' },
@@ -42,14 +51,6 @@ const netWorthStripCopy: Record<NetWorthStripChoice, { title: string; hint: stri
   'history': { title: 'Month history', hint: 'One bar per snapshot, height by size of the change.' },
   'goal': { title: 'Next milestone', hint: 'Progress to the next round number, with a pace estimate.' },
 };
-
-const standaloneNetWorthCardChoices = [
-  'classic',
-] as const satisfies readonly NetWorthCardChoice[];
-
-const stripNetWorthCardChoices = [
-  'split',
-] as const satisfies readonly NetWorthCardChoice[];
 
 const netWorthSample: NetWorthPanelData = {
   month: '2026-07',
@@ -100,66 +101,37 @@ const netWorthSample: NetWorthPanelData = {
   ],
 };
 
-function NetWorthCardOption({
-  choice,
+function NetWorthOption({
+  title,
+  hint,
   isSelected,
-  strip,
+  onSelect,
+  children,
 }: {
-  choice: NetWorthCardChoice;
+  title: string;
+  hint: string;
   isSelected: boolean;
-  strip: NetWorthStripChoice;
+  onSelect: () => void;
+  children: ReactNode;
 }) {
   return (
-    <div className={`glass-panel style-lab-net-worth-choice${isSelected ? ' is-selected' : ''}`}>
+    <div className={`glass-panel style-lab-choice style-lab-net-worth-choice${isSelected ? ' is-selected' : ''}`}>
       <div className="style-lab-net-worth-head">
         <div className="style-lab-choice-copy">
-          <strong>{netWorthCardCopy[choice].title}</strong>
-          <small>{netWorthCardCopy[choice].hint}</small>
+          <strong>{title}</strong>
+          <small>{hint}</small>
         </div>
         <button
           type="button"
           className={`btn${isSelected ? ' btn-primary' : ''}`}
           role="radio"
           aria-checked={isSelected}
-          onClick={() => selectNetWorthCard(choice)}
+          onClick={onSelect}
         >
           {isSelected ? <><Check size={14} /> Selected</> : 'Use this'}
         </button>
       </div>
-      <div className="style-lab-net-worth-preview">
-        <DashboardNetWorthPanel variant={choice} strip={strip} data={netWorthSample} />
-      </div>
-    </div>
-  );
-}
-
-function NetWorthStripOption({
-  choice,
-  isSelected,
-}: {
-  choice: NetWorthStripChoice;
-  isSelected: boolean;
-}) {
-  return (
-    <div className={`glass-panel style-lab-net-worth-choice${isSelected ? ' is-selected' : ''}`}>
-      <div className="style-lab-net-worth-head">
-        <div className="style-lab-choice-copy">
-          <strong>{netWorthStripCopy[choice].title}</strong>
-          <small>{netWorthStripCopy[choice].hint}</small>
-        </div>
-        <button
-          type="button"
-          className={`btn${isSelected ? ' btn-primary' : ''}`}
-          role="radio"
-          aria-checked={isSelected}
-          onClick={() => selectNetWorthStrip(choice)}
-        >
-          {isSelected ? <><Check size={14} /> Selected</> : 'Use this'}
-        </button>
-      </div>
-      <div className="style-lab-net-worth-preview">
-        <DashboardNetWorthPanel variant="split" strip={choice} data={netWorthSample} />
-      </div>
+      <div className="style-lab-net-worth-preview">{children}</div>
     </div>
   );
 }
@@ -186,9 +158,6 @@ export default function StyleLab() {
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [navigate]);
 
-  const chooseLoader = (loader: LoaderChoice) => selectLoader(loader);
-  const chooseLogo = (logo: LogoChoice) => selectLogo(logo);
-
   return (
     <div className="style-lab-page">
       <StickyPageHeader marginBottom="0" compactTop>
@@ -213,59 +182,27 @@ export default function StyleLab() {
         </div>
 
         <div className="style-lab-loader-grid">
-          <button
-            type="button"
-            className={`glass-panel style-lab-choice style-lab-loader-choice${preferences.loader === 'standard' ? ' is-selected' : ''}`}
-            aria-pressed={preferences.loader === 'standard'}
-            onClick={() => chooseLoader('standard')}
-          >
-            {preferences.loader === 'standard' && (
-              <span className="style-lab-selected"><Check size={12} /> Selected</span>
-            )}
-            <span className="style-lab-loader-preview">
-              <Spinner character="standard" label="Standard loader preview" size={176} />
-            </span>
-            <span className="style-lab-choice-copy">
-              <strong>Standard</strong>
-              <small>Simple rotating ring</small>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`glass-panel style-lab-choice style-lab-loader-choice${preferences.loader === 'marceline' ? ' is-selected' : ''}`}
-            aria-pressed={preferences.loader === 'marceline'}
-            onClick={() => chooseLoader('marceline')}
-          >
-            {preferences.loader === 'marceline' && (
-              <span className="style-lab-selected"><Check size={12} /> Selected</span>
-            )}
-            <span className="style-lab-loader-preview">
-              <Spinner character="marceline" label="Marceline loader preview" size={176} />
-            </span>
-            <span className="style-lab-choice-copy">
-              <strong>Marceline</strong>
-              <small>Smooth money-counting loop</small>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            className={`glass-panel style-lab-choice style-lab-loader-choice${preferences.loader === 'bmo' ? ' is-selected' : ''}`}
-            aria-pressed={preferences.loader === 'bmo'}
-            onClick={() => chooseLoader('bmo')}
-          >
-            {preferences.loader === 'bmo' && (
-              <span className="style-lab-selected"><Check size={12} /> Selected</span>
-            )}
-            <span className="style-lab-loader-preview">
-              <Spinner character="bmo" label="BMO loader preview" size={176} />
-            </span>
-            <span className="style-lab-choice-copy">
-              <strong>BMO</strong>
-              <small>Pixel motion-trail loop</small>
-            </span>
-          </button>
+          {styleLabLoaderChoices.map(choice => {
+            const isSelected = preferences.loader === choice;
+            return (
+              <button
+                key={choice}
+                type="button"
+                className={`glass-panel style-lab-choice${isSelected ? ' is-selected' : ''}`}
+                aria-pressed={isSelected}
+                onClick={() => selectLoader(choice)}
+              >
+                {isSelected && <span className="style-lab-selected"><Check size={12} /> Selected</span>}
+                <span className="style-lab-loader-preview">
+                  <Spinner character={choice} label={`${loaderCopy[choice].title} loader preview`} size={176} />
+                </span>
+                <span className="style-lab-choice-copy">
+                  <strong>{loaderCopy[choice].title}</strong>
+                  <small>{loaderCopy[choice].hint}</small>
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="glass-panel style-lab-live-preview">
@@ -312,7 +249,7 @@ export default function StyleLab() {
                 type="button"
                 className={`glass-panel style-lab-choice style-lab-brand-choice${isSelected ? ' is-selected' : ''}`}
                 aria-pressed={isSelected}
-                onClick={() => chooseLogo(choice)}
+                onClick={() => selectLogo(choice)}
               >
                 {isSelected && (
                   <span className="style-lab-selected"><Check size={12} /> Selected</span>
@@ -331,68 +268,48 @@ export default function StyleLab() {
       <section className="style-lab-section">
         <div className="style-lab-section-heading">
           <h3>NET WORTH CARDS</h3>
-          <p>Choose the dashboard layout. Strip-based cards have their content setting grouped with them.</p>
+          <p>Choose the dashboard layout. Overview uses the strip content selected below.</p>
         </div>
 
-        <div className="style-lab-net-worth-groups">
-          <div className="style-lab-net-worth-card-groups" role="radiogroup" aria-label="Net worth card layout">
-            <div className="style-lab-net-worth-group" role="group" aria-labelledby="standalone-card-group-title">
-              <div className="style-lab-net-worth-group-head">
-                <div>
-                  <h4 id="standalone-card-group-title">Standalone cards</h4>
-                  <p>Complete layouts that do not use the strip setting.</p>
-                </div>
-                <span>{standaloneNetWorthCardChoices.length} layout</span>
+        <div className="style-lab-net-worth">
+          <div className="style-lab-net-worth-grid" role="radiogroup" aria-label="Net worth card layout">
+            {netWorthCardChoices.map(choice => (
+              <NetWorthOption
+                key={choice}
+                title={netWorthCardCopy[choice].title}
+                hint={netWorthCardCopy[choice].hint}
+                isSelected={preferences.netWorthCard === choice}
+                onSelect={() => selectNetWorthCard(choice)}
+              >
+                <DashboardNetWorthPanel
+                  variant={choice}
+                  strip={preferences.netWorthStrip}
+                  data={netWorthSample}
+                />
+              </NetWorthOption>
+            ))}
+          </div>
+
+          <div className="style-lab-net-worth-strip-config">
+            <div className="style-lab-net-worth-strip-heading">
+              <div>
+                <h4>Overview strip content</h4>
+                <p>Choose what appears below the totals in Overview.</p>
               </div>
-              <div className="style-lab-net-worth-grid">
-                {standaloneNetWorthCardChoices.map(choice => (
-                  <NetWorthCardOption
-                    key={choice}
-                    choice={choice}
-                    isSelected={preferences.netWorthCard === choice}
-                    strip={preferences.netWorthStrip}
-                  />
-                ))}
-              </div>
+              <span>{netWorthStripChoices.length} options</span>
             </div>
-
-            <div className="style-lab-net-worth-group is-strip-based" role="group" aria-labelledby="strip-card-group-title">
-              <div className="style-lab-net-worth-group-head">
-                <div>
-                  <h4 id="strip-card-group-title">Cards with a strip</h4>
-                  <p>These layouts use the strip content selected directly below.</p>
-                </div>
-                <span>{stripNetWorthCardChoices.length} layout</span>
-              </div>
-              <div className="style-lab-net-worth-grid">
-                {stripNetWorthCardChoices.map(choice => (
-                  <NetWorthCardOption
-                    key={choice}
-                    choice={choice}
-                    isSelected={preferences.netWorthCard === choice}
-                    strip={preferences.netWorthStrip}
-                  />
-                ))}
-              </div>
-
-              <div className="style-lab-net-worth-strip-config">
-                <div className="style-lab-net-worth-group-head">
-                  <div>
-                    <h4>Strip content</h4>
-                    <p>Used by Overview.</p>
-                  </div>
-                  <span>{netWorthStripChoices.length} options</span>
-                </div>
-                <div className="style-lab-net-worth-grid" role="radiogroup" aria-label="Net worth strip content">
-                  {netWorthStripChoices.map(choice => (
-                    <NetWorthStripOption
-                      key={choice}
-                      choice={choice}
-                      isSelected={preferences.netWorthStrip === choice}
-                    />
-                  ))}
-                </div>
-              </div>
+            <div className="style-lab-net-worth-grid" role="radiogroup" aria-label="Net worth strip content">
+              {netWorthStripChoices.map(choice => (
+                <NetWorthOption
+                  key={choice}
+                  title={netWorthStripCopy[choice].title}
+                  hint={netWorthStripCopy[choice].hint}
+                  isSelected={preferences.netWorthStrip === choice}
+                  onSelect={() => selectNetWorthStrip(choice)}
+                >
+                  <DashboardNetWorthPanel variant="split" strip={choice} data={netWorthSample} />
+                </NetWorthOption>
+              ))}
             </div>
           </div>
         </div>
