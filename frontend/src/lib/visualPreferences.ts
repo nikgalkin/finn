@@ -8,8 +8,22 @@ export const logoChoices = [
   'candle',
 ] as const;
 
+export const netWorthCardChoices = [
+  'classic',
+  'split',
+] as const;
+
+export const netWorthStripChoices = [
+  'allocation',
+  'flow',
+  'history',
+  'goal',
+] as const;
+
 export type LoaderChoice = (typeof loaderChoices)[number];
 export type LogoChoice = (typeof logoChoices)[number];
+export type NetWorthCardChoice = (typeof netWorthCardChoices)[number];
+export type NetWorthStripChoice = (typeof netWorthStripChoices)[number];
 
 export type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
@@ -17,11 +31,15 @@ type VisualPreferences = {
   loader: LoaderChoice;
   logo: LogoChoice;
   logoGradient: boolean;
+  netWorthCard: NetWorthCardChoice;
+  netWorthStrip: NetWorthStripChoice;
 };
 
 const loaderStorageKey = 'finn:loader-choice';
 const logoStorageKey = 'finn:logo-choice';
 const logoGradientStorageKey = 'finn:logo-gradient';
+const netWorthCardStorageKey = 'finn:net-worth-card';
+const netWorthStripStorageKey = 'finn:net-worth-strip';
 const preferenceEvent = 'finn:visual-preferences-changed';
 
 const browserStorage = (): PreferenceStorage | null => {
@@ -67,6 +85,8 @@ export function readVisualPreferences(
     loader: readChoice(storage, loaderStorageKey, loaderChoices, 'bmo'),
     logo: readChoice(storage, logoStorageKey, logoChoices, 'plain'),
     logoGradient: storedLogoGradient === null ? true : storedLogoGradient === 'true',
+    netWorthCard: readChoice(storage, netWorthCardStorageKey, netWorthCardChoices, 'classic'),
+    netWorthStrip: readChoice(storage, netWorthStripStorageKey, netWorthStripChoices, 'allocation'),
   };
 }
 
@@ -84,6 +104,16 @@ export function selectLoader(loader: LoaderChoice) {
 
 export function selectLogo(logo: LogoChoice) {
   safelyWrite(browserStorage(), logoStorageKey, logo);
+  announcePreferenceChange();
+}
+
+export function selectNetWorthCard(netWorthCard: NetWorthCardChoice) {
+  safelyWrite(browserStorage(), netWorthCardStorageKey, netWorthCard);
+  announcePreferenceChange();
+}
+
+export function selectNetWorthStrip(netWorthStrip: NetWorthStripChoice) {
+  safelyWrite(browserStorage(), netWorthStripStorageKey, netWorthStrip);
   announcePreferenceChange();
 }
 

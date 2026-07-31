@@ -7,12 +7,16 @@ import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { useFlowEntries } from '../hooks/useFlowEntries';
+import { useVisualPreferences } from '../hooks/useVisualPreferences';
+import { DashboardNetWorthPanel } from './components/DashboardNetWorthPanel';
+import type { NetWorthDelta } from './components/DashboardNetWorthPanel';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
 import { SnapshotNotesModal } from './components/SnapshotNotesModal';
 import { PageLoader } from './components/PageLoader';
 import { GraphTooltip, SimpleGraphTooltip } from './components/graphs/GraphTooltip';
 import { ScrollForMore } from './components/ScrollForMore';
 import { SnapshotDraftsNotice } from './components/SnapshotDraftsNotice';
+import { allocationColor } from '../lib/chartColors';
 import { isTextInputTarget } from '../lib/hotkeys';
 import { useHistoryEntryState } from '../lib/historyEntryState';
 import { formatCompact, formatNumber, formatPercent, formatSigned, getDeltaColor, getMoneyDeltaColor } from '../lib/format';
@@ -73,6 +77,7 @@ const CustomTooltip = ({ active, payload, label, baseCurrency, secondaryCurrency
 
 export default function Dashboard() {
   const { settings } = useSettings();
+  const { netWorthCard, netWorthStrip } = useVisualPreferences();
   const baseCurrency = settings.baseCurrency || 'RUB';
   const { snapshots, setSnapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
   const secondaryCurrency = settings.secondaryCurrency ?? 'USD';
@@ -221,7 +226,7 @@ export default function Dashboard() {
     }
   };
 
-  const CHART_COLORS = ['#eab308', '#3b82f6', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316', '#ef4444', '#10b981'];
+  const showsNetWorthOverview = netWorthCard === 'split';
 
   const latestTotals = useMemo(
     () => latestSnapshot ? calculateTotals(latestSnapshot, baseCurrency, secondaryCurrency) : { totalBase: 0, totalSecondary: 0 },
@@ -239,19 +244,25 @@ export default function Dashboard() {
       : null,
     [baseCurrency, latestYearAgoSnapshot, secondaryCurrency]
   );
-  const latestBaseYoYDelta = latestYearAgoTotals
-    ? latestTotals.totalBase - latestYearAgoTotals.totalBase
-    : 0;
-  const latestBaseYoYPercent = latestYearAgoTotals?.totalBase
-    ? (latestBaseYoYDelta / latestYearAgoTotals.totalBase) * 100
-    : 0;
+  const previousTotals = useMemo(
+    () => snapshots.length > 1
+      ? calculateTotals(snapshots[snapshots.length - 2], baseCurrency, secondaryCurrency)
+      : null,
+    [snapshots, baseCurrency, secondaryCurrency]
+  );
+
+  const toDelta = (previousBase: number | undefined): NetWorthDelta | null => {
+    if (previousBase === undefined) return null;
+    const amount = latestTotals.totalBase - previousBase;
+    return { amount, percent: previousBase ? (amount / previousBase) * 100 : 0 };
+  };
 
   const hasSecondaryCurrency = Boolean(secondaryCurrency && secondaryCurrency !== baseCurrency);
-  const hasYoY = Boolean(latestYearAgoTotals && latestYearAgoSnapshot);
-  const isYoYStable = Math.abs(latestBaseYoYDelta) < 1;
-  const yoyColor = isYoYStable ? undefined : getDeltaColor(latestBaseYoYDelta);
-  const yoyAmount = isYoYStable ? 'Stable' : formatSigned(latestBaseYoYDelta);
-  const yoyPercent = isYoYStable ? '' : formatPercent(latestBaseYoYPercent, 1);
+  const monthDelta = toDelta(previousTotals?.totalBase);
+  const yearDelta = toDelta(latestYearAgoTotals?.totalBase);
+  const secondaryRate = hasSecondaryCurrency && latestSnapshot
+    ? convertAmount(1, secondaryCurrency, baseCurrency, latestSnapshot.data.rates)
+    : null;
 
   const pieData = useMemo(() => {
     if (!latestSnapshot) return [];
@@ -262,6 +273,39 @@ export default function Dashboard() {
       .filter(item => item.value > 0)
       .sort((a, b) => b.value - a.value);
   }, [latestSnapshot, baseCurrency]);
+
+  const currencyAllocation = useMemo(() => {
+    if (!latestSnapshot) return [];
+    return Object.entries(calculateCurrencyTotals(latestSnapshot))
+      .map(([currency, amount]) => ({
+        name: currency,
+        value: Math.round(convertAmount(amount, currency, baseCurrency, latestSnapshot.data.rates))
+      }))
+      .filter(item => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [latestSnapshot, baseCurrency]);
+
+  const netWorthFlow = useMemo(() => {
+    if (!latestSnapshot || snapshots.length < 2) return null;
+    const previous = snapshots[snapshots.length - 2];
+    const { organicDelta, fxImpactDelta } = calculateFlowDecomposition(latestSnapshot, previous, baseCurrency);
+    return {
+      previousMonth: previous.month,
+      previousTotal: calculateTotals(previous, baseCurrency, secondaryCurrency).totalBase,
+      deposits: organicDelta,
+      fxImpact: fxImpactDelta
+    };
+  }, [latestSnapshot, snapshots, baseCurrency, secondaryCurrency]);
+
+  const netWorthHistory = useMemo(() => chartData.slice(1).map((point, index) => {
+    const previousTotal = chartData[index].BASE;
+    const delta = point.BASE - previousTotal;
+    return {
+      month: point.name,
+      delta,
+      percent: previousTotal ? (delta / previousTotal) * 100 : 0
+    };
+  }), [chartData]);
 
   const renderDiff = (current: number, previous: number | undefined) => {
     if (previous === undefined || previous === 0) return null;
@@ -359,49 +403,28 @@ export default function Dashboard() {
         </section>
       ) : (
         <>
-          <div className="dashboard-overview-grid">
-            <section className="glass-panel dashboard-net-worth-panel">
-              <div className="dashboard-net-worth-body">
-                <div className="dashboard-net-worth-main">
-                  <h3 className="dashboard-net-worth-label">Total Net Worth</h3>
-                  <div className="dashboard-net-worth-value">
-                    {formatNumber(latestTotals.totalBase)}
-                    <small>{baseCurrency}</small>
-                  </div>
-                  {hasYoY && (
-                    <div className="dashboard-net-worth-yoy">
-                      <strong style={{ color: yoyColor }}>{yoyAmount}</strong>
-                      {yoyPercent && <em>{yoyPercent}</em>}
-                      <span>YoY</span>
-                    </div>
-                  )}
-                </div>
-                <div className={`dashboard-net-worth-metrics${hasSecondaryCurrency ? '' : ' is-single-currency'}`}>
-                  {hasSecondaryCurrency && (
-                    <div className="dashboard-net-worth-secondary">
-                      <span className="dashboard-net-worth-label">Secondary</span>
-                      <div className="dashboard-net-worth-secondary-slot">
-                        <div className="dashboard-net-worth-secondary-value">
-                          {formatNumber(latestTotals.totalSecondary)}
-                          <small>{secondaryCurrency}</small>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="dashboard-net-worth-counters">
-                    <div>
-                      <strong>{pieData.length}</strong>
-                      <span>Organizations</span>
-                    </div>
-                    <div>
-                      <strong>{snapshots.length}</strong>
-                      <span>Snapshots</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
+          <div className={`dashboard-overview-grid${showsNetWorthOverview ? ' is-single' : ''}`}>
+            <DashboardNetWorthPanel
+              variant={netWorthCard}
+              strip={netWorthStrip}
+              data={{
+                month: latestSnapshot?.month ?? '',
+                baseCurrency,
+                secondaryCurrency: hasSecondaryCurrency ? secondaryCurrency : null,
+                totalBase: latestTotals.totalBase,
+                totalSecondary: latestTotals.totalSecondary,
+                secondaryRate,
+                monthDelta,
+                yearDelta,
+                organizations: pieData,
+                snapshots: snapshots.length,
+                allocation: currencyAllocation,
+                flow: netWorthFlow,
+                history: netWorthHistory
+              }}
+            />
 
+            {!showsNetWorthOverview && (
             <section className="glass-panel dashboard-pie-panel">
               <div className="dashboard-pie-content">
                 <div className="dashboard-pie-chart">
@@ -409,7 +432,7 @@ export default function Dashboard() {
                     <PieChart>
                       <Pie data={pieData} cx="50%" cy="50%" innerRadius={32} outerRadius={47} paddingAngle={3} dataKey="value">
                         {pieData.map((_entry, idx) => (
-                          <Cell key={`cell-${idx}`} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                          <Cell key={`cell-${idx}`} fill={allocationColor(idx)} />
                         ))}
                       </Pie>
                       <Tooltip content={<SimpleGraphTooltip formatter={(value, _name, item) => [
@@ -439,7 +462,7 @@ export default function Dashboard() {
                       const percent = latestTotals.totalBase > 0 ? (entry.value / latestTotals.totalBase) * 100 : 0;
                       return (
                         <div key={entry.name} className="dashboard-pie-legend-row">
-                          <span className="dashboard-pie-legend-marker" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }} />
+                          <span className="dashboard-pie-legend-marker" style={{ backgroundColor: allocationColor(idx) }} />
                           <span className="dashboard-pie-legend-name" title={entry.name}>{entry.name}</span>
                           <span className="dashboard-pie-legend-value">{percent.toFixed(1)}%</span>
                         </div>
@@ -449,6 +472,7 @@ export default function Dashboard() {
                 </div>
               </div>
             </section>
+            )}
           </div>
 
           {snapshots.length > 0 && (

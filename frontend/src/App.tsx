@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Keyboard, Power } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
-import StyleLab from './pages/StyleLab';
 import { logoMarks } from './pages/components/logoMarks';
 import { HeaderNav } from './pages/components/HeaderNav';
 import { HotkeysHelpModal } from './pages/components/HotkeysHelpModal';
@@ -24,6 +23,7 @@ const Settings = lazy(() => loadDeferredRoutes().then(module => ({ default: modu
 const CashFlow = lazy(() => loadDeferredRoutes().then(module => ({ default: module.CashFlow })));
 const AIChat = lazy(() => loadDeferredRoutes().then(module => ({ default: module.AIChat })));
 const Tools = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Tools })));
+const StyleLab = lazy(() => import('./pages/StyleLab'));
 
 type BackupTargetResult = {
   name: string;

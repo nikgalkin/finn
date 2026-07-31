@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 type QuickHoverTooltipProps = {
   text: string;
   children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
 };
 
 type TooltipPosition = {
@@ -15,7 +17,7 @@ type TooltipPosition = {
 const TOOLTIP_WIDTH = 320;
 const VIEWPORT_PADDING = 12;
 
-export function QuickHoverTooltip({ text, children }: QuickHoverTooltipProps) {
+export function QuickHoverTooltip({ text, children, className = '', style }: QuickHoverTooltipProps) {
   const anchorRef = useRef<HTMLSpanElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const [position, setPosition] = useState<TooltipPosition | null>(null);
@@ -53,7 +55,8 @@ export function QuickHoverTooltip({ text, children }: QuickHoverTooltipProps) {
   return (
     <span
       ref={anchorRef}
-      className="quick-hover-anchor"
+      className={`quick-hover-anchor${className ? ` ${className}` : ''}`}
+      style={style}
       onMouseEnter={() => open(45)}
       onMouseLeave={close}
       onFocusCapture={() => open(0)}

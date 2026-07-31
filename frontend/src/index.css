@@ -291,6 +291,7 @@ a { color: var(--accent); text-decoration: none; }
   flex-direction: column;
   overflow: hidden;
   background: var(--glass-bg);
+  container-type: inline-size;
 }
 
 .dashboard-panel-heading,
@@ -330,147 +331,415 @@ a { color: var(--accent); text-decoration: none; }
   text-transform: uppercase;
 }
 
-.dashboard-net-worth-body {
-  display: grid;
+.dashboard-overview-grid.is-single { grid-template-columns: minmax(0, 1fr); }
+
+.dashboard-net-worth-panel.is-split {
   min-height: 0;
+  padding: 13px 18px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-net-worth-split {
+  display: grid;
+  min-width: 0;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr) minmax(185px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(168px, 0.3fr);
   align-items: center;
   gap: 18px;
 }
 
-.dashboard-net-worth-main {
+.dashboard-net-worth-split-main {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  justify-content: center;
+  gap: 10px;
+  container-name: net-worth-head;
+  container-type: inline-size;
 }
 
-.dashboard-net-worth-value {
-  display: flex;
-  min-width: 0;
-  margin-top: 9px;
-  align-items: baseline;
-  gap: 9px;
-  font-size: clamp(24px, 2.3vw, 30px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.dashboard-net-worth-value small {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 720;
-  letter-spacing: 0.06em;
-}
-
-.dashboard-net-worth-yoy {
-  display: flex;
-  margin-top: 10px;
-  padding-top: 8px;
-  align-items: baseline;
-  gap: 7px;
-  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
-  font-size: 13px;
-  line-height: 1;
-}
-
-.dashboard-net-worth-yoy > span {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 720;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
-}
-
-.dashboard-net-worth-yoy > strong { font-weight: 740; }
-
-.dashboard-net-worth-yoy > em { color: var(--text-secondary); font-style: normal; }
-
-.dashboard-net-worth-metrics {
+.dashboard-net-worth-split-legend {
   display: flex;
   min-width: 0;
   padding-left: 18px;
   flex-direction: column;
   justify-content: center;
   border-left: 1px solid rgba(var(--muted-rgb), 0.13);
+  font-size: 0.85rem;
 }
 
-.dashboard-net-worth-secondary {
+.dashboard-net-worth-split-legend-scroll {
   display: flex;
-  min-width: 0;
+  min-height: 0;
+  max-height: 67px;
   flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  padding-right: 4px;
+  outline: none;
+  scroll-behavior: smooth;
 }
 
-.dashboard-net-worth-secondary-slot {
-  display: flex;
-  min-height: clamp(24px, 2.3vw, 30px);
-  margin-top: 9px;
-  align-items: flex-end;
+.dashboard-net-worth-split-legend-scroll:focus-visible { border-radius: 5px; box-shadow: 0 0 0 1px rgba(var(--brand-rgb), 0.5); }
+
+.dashboard-net-worth-split-legend .dashboard-pie-legend-name { max-width: none; }
+
+.dashboard-net-worth-bar-head {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  align-items: end;
+  gap: 7px 16px;
 }
 
-.dashboard-net-worth-secondary-value {
+.dashboard-net-worth-bar-headline {
+  min-width: 0;
+  grid-area: 1 / 1 / span 2 / auto;
+  align-self: center;
+  container-name: net-worth-money;
+  container-type: inline-size;
+}
+
+.quick-hover-anchor.dashboard-net-worth-money-anchor { display: inline-flex; width: auto; min-width: 0; }
+
+.dashboard-net-worth-panel .quick-hover-anchor { cursor: help; }
+
+.dashboard-net-worth-panel.is-split .dashboard-net-worth-money-amount { font-size: clamp(19px, 6.5cqi, 27px); }
+
+.dashboard-net-worth-panel.is-split .dashboard-net-worth-money-divider { font-size: clamp(15px, 5cqi, 22px); }
+
+.dashboard-net-worth-panel.is-split .dashboard-net-worth-money { margin-top: 7px; gap: 5px 8px; }
+
+.dashboard-net-worth-bar-chips {
   display: flex;
   min-width: 0;
-  align-items: baseline;
+  grid-area: 1 / 2;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1;
+  flex-wrap: wrap;
+}
+
+.dashboard-net-worth-bar-facts {
+  min-width: 0;
+  grid-area: 2 / 2;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: right;
   white-space: nowrap;
 }
 
-.dashboard-net-worth-secondary-value small {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 720;
-  letter-spacing: 0.06em;
+@container net-worth-head (max-width: 560px) {
+  .dashboard-net-worth-bar-head { grid-template-columns: minmax(0, 1fr); }
+
+  .dashboard-net-worth-bar-headline,
+  .dashboard-net-worth-bar-chips { grid-area: auto; }
+
+  .dashboard-net-worth-bar-chips { justify-content: flex-start; }
+
+  .dashboard-net-worth-bar-facts { grid-area: auto; text-align: left; white-space: normal; }
 }
 
-.dashboard-net-worth-counters {
+.dashboard-net-worth-bar-track {
   display: flex;
-  margin-top: 10px;
-  padding-top: 8px;
-  align-items: baseline;
-  gap: 16px;
-  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
-  line-height: 1;
+  height: 17px;
+  min-width: 0;
+  gap: 3px;
+  overflow: hidden;
+  border-radius: 7px;
 }
 
-.dashboard-net-worth-counters:first-child {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
-}
-
-.dashboard-net-worth-counters > div {
+.dashboard-net-worth-bar-segment,
+.quick-hover-anchor.dashboard-net-worth-bar-segment {
   display: flex;
+  min-width: 4px;
+  padding: 0 9px;
+  flex-basis: 0;
+  align-items: center;
+  overflow: hidden;
+  color: rgb(var(--shadow-rgb));
+  container-type: inline-size;
+  -webkit-font-smoothing: subpixel-antialiased;
+}
+
+.dashboard-net-worth-bar-segment-label {
+  display: none;
   min-width: 0;
   align-items: baseline;
   gap: 6px;
+  font-size: 12px;
+  line-height: 1;
 }
 
-.dashboard-net-worth-counters strong { font-size: 13px; font-weight: 740; }
+.dashboard-net-worth-bar-segment-label strong { font-weight: 780; }
 
-.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters {
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 12px;
+.dashboard-net-worth-bar-segment-name { display: none; }
+
+@container (min-width: 34px) {
+  .dashboard-net-worth-bar-segment-label { display: flex; }
 }
 
-.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters strong { font-size: 20px; }
+@container (min-width: 98px) {
+  .dashboard-net-worth-bar-segment-name {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 660;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
 
-.dashboard-net-worth-metrics.is-single-currency .dashboard-net-worth-counters span { font-size: 12px; }
+.dashboard-net-worth-strip { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 
-.dashboard-net-worth-counters span {
+.dashboard-net-worth-strip-caption {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
   color: var(--text-secondary);
   font-size: 11px;
-  font-weight: 720;
-  letter-spacing: 0.035em;
+  line-height: 1;
+}
+
+.dashboard-net-worth-strip-caption.is-muted { color: rgba(var(--muted-rgb), 0.7); }
+
+.dashboard-net-worth-strip-caption strong { color: var(--text-primary); font-weight: 740; }
+
+.dashboard-net-worth-strip-caption-end { margin-left: auto; text-align: right; }
+
+.dashboard-net-worth-history { display: flex; height: 26px; min-width: 0; align-items: stretch; gap: 3px; }
+
+.quick-hover-anchor.dashboard-net-worth-history-anchor { display: flex; width: auto; min-width: 3px; flex: 1; align-items: flex-end; }
+
+.dashboard-net-worth-history-bar { width: 100%; border-radius: 3px; }
+
+.dashboard-net-worth-history-bar.is-positive { background: rgba(var(--success-rgb), 0.55); }
+
+.dashboard-net-worth-history-bar.is-negative { background: rgba(var(--danger-rgb), 0.5); }
+
+.dashboard-net-worth-history-bar:last-child.is-positive { background: rgb(var(--success-rgb)); }
+
+.dashboard-net-worth-history-bar:last-child.is-negative { background: rgb(var(--danger-rgb)); }
+
+.dashboard-net-worth-goal-track {
+  height: 10px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(var(--muted-rgb), 0.16);
+}
+
+.dashboard-net-worth-goal-fill { display: block; height: 100%; border-radius: 999px; background: rgb(var(--success-rgb)); }
+
+.dashboard-net-worth-panel.is-classic { padding: 18px 20px; justify-content: center; }
+
+.dashboard-net-worth-chip {
+  display: inline-flex;
+  padding: 4px 10px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.dashboard-net-worth-chip.is-positive { background: rgba(var(--success-rgb), 0.13); color: var(--diff-positive); }
+
+.dashboard-net-worth-chip.is-negative { background: rgba(var(--danger-rgb), 0.13); color: var(--diff-negative); }
+
+.dashboard-net-worth-chip.is-flat { background: rgba(var(--muted-rgb), 0.1); color: var(--text-secondary); }
+
+.dashboard-net-worth-chip strong { font-weight: 740; }
+
+.dashboard-net-worth-chip em { font-style: normal; font-weight: 600; }
+
+.dashboard-net-worth-chip > span {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.dashboard-net-worth-money {
+  display: grid;
+  min-width: 0;
+  margin-top: 9px;
+  grid-template-columns: max-content max-content;
+  align-items: baseline;
+  justify-content: start;
+  gap: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-net-worth-money-amount {
+  font-size: clamp(20px, 2.3vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dashboard-net-worth-money-approx {
+  margin-right: 5px;
+  color: rgba(var(--muted-rgb), 0.6);
+  font-weight: 620;
+}
+
+.dashboard-net-worth-money-amount.is-secondary { color: var(--text-secondary); letter-spacing: -0.02em; }
+
+.dashboard-net-worth-money:not(.is-inline) .dashboard-net-worth-money-amount.is-secondary { font-size: 17px; }
+
+.dashboard-net-worth-money small { color: var(--text-secondary); font-size: 13px; font-weight: 720; letter-spacing: 0.06em; }
+
+.dashboard-net-worth-money:not(.is-inline) small.is-secondary { font-size: 11px; }
+
+.dashboard-net-worth-money.is-inline {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 4px 9px;
+  flex-wrap: wrap;
+}
+
+.dashboard-net-worth-money-pair {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.dashboard-net-worth-money-divider {
+  color: rgba(var(--muted-rgb), 0.34);
+  font-size: 0.8em;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.dashboard-net-worth-classic {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-net-worth-classic-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+}
+
+.dashboard-net-worth-classic-heading > span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 680;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.dashboard-net-worth-panel.is-classic .dashboard-net-worth-money {
+  margin-top: 9px;
+  gap: 5px 9px;
+}
+
+.dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount {
+  font-size: clamp(24px, 2.5vw, 30px);
+}
+
+.dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount.is-secondary {
+  font-size: clamp(20px, 2vw, 24px);
+}
+
+.dashboard-net-worth-classic-meta {
+  display: grid;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(var(--muted-rgb), 0.13);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-net-worth-classic-metric {
+  display: flex;
+  min-width: 0;
+  padding: 0 10px;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid rgba(var(--muted-rgb), 0.13);
+}
+
+.dashboard-net-worth-classic-metric:first-child { padding-left: 0; border-left: 0; }
+
+.dashboard-net-worth-classic-metric:last-child { padding-right: 0; }
+
+.dashboard-net-worth-classic-metric > span {
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 740;
+  letter-spacing: 0.055em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.dashboard-net-worth-classic-metric > div {
+  display: flex;
+  min-width: 0;
+  margin-top: 6px;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.dashboard-net-worth-classic-metric strong {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 740;
+  line-height: 1;
+}
+
+.dashboard-net-worth-classic-metric small {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1;
+}
+
+@container (max-width: 300px) {
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money.is-inline {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-pair { gap: 5px; }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount { font-size: 22px; }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money-amount.is-secondary { font-size: 19px; }
+
+  .dashboard-net-worth-panel.is-classic .dashboard-net-worth-money small { font-size: 10px; }
+
+  .dashboard-net-worth-classic-meta {
+    gap: 10px 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-net-worth-classic-metric { padding: 0 8px; }
+
+  .dashboard-net-worth-classic-metric:nth-child(odd) { padding-left: 0; border-left: 0; }
+
+  .dashboard-net-worth-classic-metric:nth-child(even) { padding-right: 0; }
+
+  .dashboard-net-worth-classic-metric:nth-child(n + 3) {
+    padding-top: 10px;
+    border-top: 1px solid rgba(var(--muted-rgb), 0.13);
+  }
 }
 
 .dashboard-pie-panel {
@@ -683,14 +952,25 @@ a { color: var(--accent); text-decoration: none; }
 
   .dashboard-page-title p { display: none; }
 
-  .dashboard-net-worth-body { grid-template-columns: 1fr; gap: 12px; }
+  .dashboard-net-worth-split { grid-template-columns: 1fr; gap: 14px; }
 
-  .dashboard-net-worth-metrics {
-    padding-top: 11px;
+  .dashboard-net-worth-split-legend {
+    padding-top: 12px;
     padding-left: 0;
     border-top: 1px solid rgba(var(--muted-rgb), 0.13);
     border-left: 0;
   }
+
+  .dashboard-net-worth-bar-head { grid-template-columns: minmax(0, 1fr); }
+
+  .dashboard-net-worth-bar-headline,
+  .dashboard-net-worth-bar-chips { grid-area: auto; }
+
+  .dashboard-net-worth-bar-facts { max-width: none; grid-area: auto; }
+
+  .dashboard-net-worth-bar-chips { justify-content: flex-start; }
+
+  .dashboard-net-worth-bar-facts { text-align: left; }
 
   .dashboard-pie-content { grid-template-columns: 28px minmax(0, 1fr); }
 
@@ -1295,6 +1575,118 @@ main > .page-loader { animation: none; }
 
 .style-lab-brand-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 
+.style-lab-net-worth-groups,
+.style-lab-net-worth-card-groups {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.style-lab-net-worth-group {
+  display: flex;
+  min-width: 0;
+  padding: 16px;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid rgba(var(--muted-rgb), 0.12);
+  border-radius: 14px;
+  background: rgba(var(--surface-rgb), 0.24);
+}
+
+.style-lab-net-worth-group.is-strip-based {
+  border-color: rgba(var(--brand-rgb), 0.22);
+  background:
+    linear-gradient(180deg, rgba(var(--brand-rgb), 0.045), transparent 180px),
+    rgba(var(--surface-rgb), 0.24);
+}
+
+.style-lab-net-worth-group-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.style-lab-net-worth-group-head h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 740;
+}
+
+.style-lab-net-worth-group-head p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.style-lab-net-worth-group-head > span {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid rgba(var(--muted-rgb), 0.14);
+  border-radius: 999px;
+  background: rgba(var(--surface-rgb), 0.46);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.style-lab-net-worth-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr));
+  gap: 14px;
+}
+
+.style-lab-net-worth-strip-config {
+  display: flex;
+  min-width: 0;
+  padding: 14px;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(var(--brand-rgb), 0.2);
+  border-radius: 12px;
+  background: rgba(var(--brand-rgb), 0.045);
+}
+
+.style-lab-net-worth-choice {
+  display: flex;
+  min-width: 0;
+  padding: 14px;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.style-lab-net-worth-choice.is-selected { border-color: rgba(var(--brand-rgb), 0.72); box-shadow:
+    0 0 0 2px rgba(var(--brand-rgb), 0.14),
+    0 4px 30px rgba(0, 0, 0, 0.1); }
+
+.style-lab-net-worth-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.style-lab-net-worth-head > .btn { flex: 0 0 auto; }
+
+.style-lab-net-worth-preview {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(var(--muted-rgb), 0.1);
+  border-radius: 12px;
+  background: rgba(var(--surface-rgb), 0.4);
+}
+
+.style-lab-net-worth-preview > .dashboard-net-worth-panel { width: 100%; max-width: none; }
+
 .style-lab-brand-choice { padding: 14px 16px; }
 
 :where(.finn-plain-wordmark, .finn-hat-wordmark, .finn-side-wordmark) {
@@ -1438,10 +1830,16 @@ main > .page-loader { animation: none; }
   .style-lab-live-stage { min-width: 0; }
 
   .style-lab-brand-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .style-lab-net-worth-group { padding: 12px; }
+
+  .style-lab-net-worth-strip-config { padding: 12px; }
 }
 
 @media (max-width: 520px) {
   .style-lab-brand-grid { grid-template-columns: 1fr; }
+
+  .style-lab-net-worth-group-head { flex-direction: column; gap: 9px; }
 }
 
 .app-header {

@@ -16,7 +16,13 @@ class BlockedStorage implements PreferenceStorage {
   setItem(): void { throw new Error('storage is blocked'); }
 }
 
-const defaults = { loader: 'bmo', logo: 'plain', logoGradient: true };
+const defaults = {
+  loader: 'bmo',
+  logo: 'plain',
+  logoGradient: true,
+  netWorthCard: 'classic',
+  netWorthStrip: 'allocation'
+};
 
 test('falls back to defaults when the browser blocks storage access', () => {
   assert.deepEqual(readVisualPreferences(null), defaults);
@@ -32,10 +38,30 @@ test('reads stored choices and keeps the gradient on unless it was turned off', 
     loader: 'marceline',
     logo: 'face',
     logoGradient: true,
+    netWorthCard: 'classic',
+    netWorthStrip: 'allocation',
   });
 
   storage.setItem('finn:logo-gradient', 'false');
   assert.equal(readVisualPreferences(storage).logoGradient, false);
+});
+
+test('reads the net worth card choice and ignores unknown layouts', () => {
+  const storage = new MemoryStorage();
+  storage.setItem('finn:net-worth-card', 'split');
+  assert.equal(readVisualPreferences(storage).netWorthCard, 'split');
+
+  storage.setItem('finn:net-worth-card', 'stacked');
+  assert.equal(readVisualPreferences(storage).netWorthCard, 'classic');
+});
+
+test('reads the net worth strip choice and ignores unknown content', () => {
+  const storage = new MemoryStorage();
+  storage.setItem('finn:net-worth-strip', 'history');
+  assert.equal(readVisualPreferences(storage).netWorthStrip, 'history');
+
+  storage.setItem('finn:net-worth-strip', 'sparkline');
+  assert.equal(readVisualPreferences(storage).netWorthStrip, 'allocation');
 });
 
 test('accepts the standard loader choice', () => {
