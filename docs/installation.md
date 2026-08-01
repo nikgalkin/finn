@@ -16,16 +16,16 @@ curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.s
 
 ## Windows PowerShell
 
-The Windows installer uses the same download, validation, and atomic replacement process. Close a running Finn instance before updating it; Windows does not allow the installer to safely replace an executable that is in use. Short-lived file locks, such as antivirus scanning immediately after a download, are retried automatically. Open PowerShell and run:
+The Windows installer downloads a release directly to `~/.finn/bin/finn.exe`. Close a running Finn instance before updating so Windows can overwrite the executable. Open PowerShell and run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1 | iex"
+$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; try { Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p -ErrorAction Stop; Unblock-File $p; & $p } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
 ```
 
-To install a specific release:
+To install a specific release, pass its tag with or without the leading `v`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1))) -Version v1.8.0"
+$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; try { Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p -ErrorAction Stop; Unblock-File $p; & $p -Version v1.8.0 } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
 ```
 
 ## Configuration

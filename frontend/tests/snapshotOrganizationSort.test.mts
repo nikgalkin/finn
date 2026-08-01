@@ -95,6 +95,17 @@ test('keeps existing cards fixed when balances change and only places new organi
   );
 });
 
+test('reconciles stale and duplicate card ids without duplicating organizations', () => {
+  assert.deepEqual(
+    reconcileSnapshotOrganizationOrder(
+      organizations,
+      ['missing', 'beta', 'beta', 'gamma'],
+      'name',
+    ),
+    ['beta', 'gamma', 'alpha', 'delta'],
+  );
+});
+
 test('remembers a valid sort and safely falls back when storage is unavailable', () => {
   const storage = new MemoryStorage();
   assert.equal(readSnapshotOrganizationSort(storage), 'settings-order');

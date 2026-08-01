@@ -78,7 +78,8 @@ export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320
         aria-label={ariaLabel}
         onClick={event => {
           event.stopPropagation();
-          openTooltip();
+          if (open) setOpen(false);
+          else openTooltip();
         }}
         style={{
           width: '18px',

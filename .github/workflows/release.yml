@@ -141,9 +141,10 @@ jobs:
 
           if grep -q '[^[:space:]]' pr-description.md; then
             {
+              printf "## What's Changed\n\n"
               cat pr-description.md
               printf '\n\n---\n\n'
-              cat generated-release-notes.md
+              sed "1{/^## What's Changed$/d;}" generated-release-notes.md
             } > release-notes.md
           else
             mv generated-release-notes.md release-notes.md
