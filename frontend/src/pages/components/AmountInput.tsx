@@ -54,12 +54,11 @@ const formatAmount = (amount: number | string, maximumFractionDigits: number): s
 
 const editingAmount = (amount: number | string, maximumFractionDigits: number) => {
   if (amount === 0) return '';
-  const numericAmount = typeof amount === 'number' ? amount : Number(amount);
-  if (!Number.isFinite(numericAmount)) return String(amount);
+  if (typeof amount === 'string') return amount;
   return new Intl.NumberFormat('en-US', {
     useGrouping: false,
     maximumFractionDigits
-  }).format(numericAmount);
+  }).format(amount);
 };
 
 export function AmountInput({
@@ -171,7 +170,16 @@ export function AmountInput({
         ));
       const currentIndex = fields.indexOf(input);
       const nextIndex = adjacentFieldIndex(currentIndex, fields.length, direction);
-      if (nextIndex !== null) fields[nextIndex]?.focus();
+      if (nextIndex === null) return;
+
+      const nextField = fields[nextIndex];
+      const wrapped = fields.length > 1 && (direction === 1
+        ? nextIndex <= currentIndex
+        : nextIndex >= currentIndex);
+      nextField?.focus({ preventScroll: wrapped });
+      if (wrapped) {
+        nextField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     });
   };
 

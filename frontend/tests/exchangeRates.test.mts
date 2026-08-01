@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { fetchLatestCurrencyRates, getFetchedCurrencyRate } from '../src/lib/exchangeRates.ts';
+import {
+  fetchLatestCurrencyRates,
+  getFetchedCurrencyQuote,
+  getFetchedCurrencyRate,
+} from '../src/lib/exchangeRates.ts';
 import { calculateTotals, convertAmount, monthsBetween, normalizeRates, normalizeSnapshotRates } from '../src/lib/finance.ts';
 import type { ParsedSnapshot } from '../src/types.ts';
 
@@ -100,6 +104,18 @@ test('falls back to the secondary latest-rate source', async () => {
 test('uses the USD quote as the latest USDT reference', () => {
   assert.equal(getFetchedCurrencyRate({ usd: 0.0125 }, 'USDT'), 0.0125);
   assert.equal(getFetchedCurrencyRate({ usd: 0 }, 'USDT'), null);
+});
+
+test('chooses a readable fetched quote and honors an existing quote direction', () => {
+  assert.deepEqual(
+    getFetchedCurrencyQuote({ rub: 80 }, 'RUB'),
+    { rate: 80, direction: 'buy-per-spend' },
+  );
+  assert.deepEqual(
+    getFetchedCurrencyQuote({ rub: 80 }, 'RUB', 'spend-per-buy'),
+    { rate: 0.0125, direction: 'spend-per-buy' },
+  );
+  assert.equal(getFetchedCurrencyQuote({}, 'RUB'), null);
 });
 
 test('counts the calendar months a snapshot covers, including skipped ones', () => {

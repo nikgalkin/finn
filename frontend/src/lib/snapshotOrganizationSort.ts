@@ -15,6 +15,7 @@ type SortableOrganization = Pick<OrganizationDraft, 'name' | 'balances'>;
 type OrderableOrganization = SortableOrganization & Pick<OrganizationDraft, 'id'>;
 
 const storageKey = 'finn:snapshot-organization-sort';
+const normalizeOrganizationName = (name: string) => name.trim().toLocaleLowerCase();
 
 const browserStorage = (): SnapshotOrganizationSortStorage | null => {
   try {
@@ -54,13 +55,21 @@ export function sortSnapshotOrganizations<T extends SortableOrganization>(
   settingsOrganizationOrder: readonly string[] = [],
 ): T[] {
   const settingsOrder = new Map<string, number>();
-  settingsOrganizationOrder.forEach((name, index) => {
-    const normalizedName = name.trim().toLocaleLowerCase();
-    if (normalizedName && !settingsOrder.has(normalizedName)) settingsOrder.set(normalizedName, index);
-  });
+  if (sort === 'settings-order') {
+    settingsOrganizationOrder.forEach((name, index) => {
+      const normalizedName = normalizeOrganizationName(name);
+      if (normalizedName && !settingsOrder.has(normalizedName)) settingsOrder.set(normalizedName, index);
+    });
+  }
 
   return organizations
-    .map((organization, index) => ({ organization, index }))
+    .map((organization, index) => ({
+      organization,
+      index,
+      settingsPosition: sort === 'settings-order'
+        ? settingsOrder.get(normalizeOrganizationName(organization.name))
+        : undefined,
+    }))
     .sort((left, right) => {
       if (sort === 'balance-count-desc') {
         return right.organization.balances.length - left.organization.balances.length || left.index - right.index;
@@ -75,9 +84,8 @@ export function sortSnapshotOrganizations<T extends SortableOrganization>(
         }) || left.index - right.index;
       }
       if (sort === 'settings-order') {
-        const leftPosition = settingsOrder.get(left.organization.name.trim().toLocaleLowerCase());
-        const rightPosition = settingsOrder.get(right.organization.name.trim().toLocaleLowerCase());
-        return (leftPosition ?? Number.MAX_SAFE_INTEGER) - (rightPosition ?? Number.MAX_SAFE_INTEGER)
+        return (left.settingsPosition ?? Number.MAX_SAFE_INTEGER)
+          - (right.settingsPosition ?? Number.MAX_SAFE_INTEGER)
           || left.index - right.index;
       }
       return left.index - right.index;
@@ -92,10 +100,12 @@ export function reconcileSnapshotOrganizationOrder<T extends OrderableOrganizati
   settingsOrganizationOrder: readonly string[] = [],
 ): string[] {
   const organizationsById = new Map(organizations.map(organization => [organization.id, organization]));
-  const retainedOrder = currentOrder.filter((id, index) => (
-    organizationsById.has(id) && currentOrder.indexOf(id) === index
-  ));
-  const retainedIds = new Set(retainedOrder);
+  const retainedIds = new Set<string>();
+  const retainedOrder = currentOrder.filter(id => {
+    if (!organizationsById.has(id) || retainedIds.has(id)) return false;
+    retainedIds.add(id);
+    return true;
+  });
   const addedOrganizations = organizations.filter(organization => !retainedIds.has(organization.id));
 
   return [

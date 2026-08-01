@@ -14,6 +14,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-installer:
+    name: Windows installer syntax
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse PowerShell installer
+        shell: powershell
+        run: |
+          $Tokens = $null
+          $ParseErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "bin/install.ps1"),
+            [ref]$Tokens,
+            [ref]$ParseErrors
+          ) | Out-Null
+
+          if ($ParseErrors.Count -gt 0) {
+            $ParseErrors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest

@@ -449,10 +449,10 @@ export default function Settings() {
 
   const reorderOrganization = (fromIndex: number, toIndex: number, restoreFocus = false) => {
     if (fromIndex === toIndex) return;
-    setSettings({
-      ...settings,
-      organizations: moveActiveOrganization(settings.organizations, fromIndex, toIndex),
-    });
+    setSettings(currentSettings => ({
+      ...currentSettings,
+      organizations: moveActiveOrganization(currentSettings.organizations, fromIndex, toIndex),
+    }));
     if (restoreFocus) {
       requestAnimationFrame(() => {
         document.getElementById(`settings-organization-${toIndex}-drag-handle`)?.focus({ preventScroll: true });

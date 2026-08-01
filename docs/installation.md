@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.s
 
 ## Windows PowerShell
 
-The Windows installer uses the same download, validation, and atomic replacement process. Close a running Finn instance before updating it; Windows does not allow the installer to safely replace an executable that is in use. Short-lived file locks, such as antivirus scanning immediately after a download, are retried automatically. Open PowerShell and run:
+The Windows installer uses the same download, validation, and atomic replacement process. When Finn is running, the installer requests its local shutdown endpoint, waits for the final backup and process exit, and then replaces the executable. If safe shutdown cannot be requested, the existing installation is left unchanged and the installer asks you to close Finn manually. Short-lived file locks, such as antivirus scanning immediately after a download, are retried automatically. Open PowerShell and run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1 | iex"

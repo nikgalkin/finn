@@ -30,7 +30,11 @@ import {
   getSnapshotFxQuote,
   getSnapshotPortfolioTotal
 } from '../../../lib/calculatorSnapshotDefaults';
-import { fetchLatestCurrencyRates, getFetchedCurrencyRate } from '../../../lib/exchangeRates';
+import {
+  fetchLatestCurrencyRates,
+  getFetchedCurrencyQuote,
+  type FetchedCurrencyQuote,
+} from '../../../lib/exchangeRates';
 import { parseNumberExpression } from '../../../lib/numberExpression';
 import { useFlowEntries } from '../../../hooks/useFlowEntries';
 import { useSettings } from '../../../hooks/useSettings';
@@ -747,7 +751,7 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
   const [targetReceiveOverride, setTargetReceiveOverride] = useState<NumericValue | null>(null);
   const [rateAOverride, setRateAOverride] = useState<NumericValue | null>(null);
   const [rateBOverride, setRateBOverride] = useState<NumericValue | null>(null);
-  const [fetchedRateA, setFetchedRateA] = useState<number | null>(null);
+  const [fetchedQuoteA, setFetchedQuoteA] = useState<FetchedCurrencyQuote | null>(null);
   const [fetchingLatestRate, setFetchingLatestRate] = useState(false);
   const latestRateRequestRef = useRef(0);
   const [feeA, setFeeA] = useState<NumericValue>(0);
@@ -766,9 +770,14 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
     fromCurrency,
     toCurrency
   );
-  const quoteDirection = snapshotQuote?.direction ?? 'spend-per-buy';
-  const rateA = rateAOverride ?? fetchedRateA ?? snapshotQuote?.rate ?? 7;
-  const rateB = rateBOverride ?? snapshotQuote?.rate ?? 7;
+  const quoteDirection = fetchedQuoteA?.direction ?? snapshotQuote?.direction ?? 'spend-per-buy';
+  const snapshotReferenceRate = !snapshotQuote
+    ? null
+    : snapshotQuote.direction === quoteDirection
+      ? snapshotQuote.rate
+      : 1 / snapshotQuote.rate;
+  const rateA = rateAOverride ?? fetchedQuoteA?.rate ?? snapshotReferenceRate ?? 7;
+  const rateB = rateBOverride ?? snapshotReferenceRate ?? 7;
   const usesCostQuote = quoteDirection === 'spend-per-buy';
   const ratePrompt = usesCostQuote
     ? `Enter how much 1 ${toCurrency} costs in ${fromCurrency}`
@@ -780,7 +789,7 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
   const resetSnapshotRates = () => {
     latestRateRequestRef.current += 1;
     setFetchingLatestRate(false);
-    setFetchedRateA(null);
+    setFetchedQuoteA(null);
     setRateAOverride(null);
     setRateBOverride(null);
   };
@@ -804,12 +813,12 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
     try {
       const rates = await fetchLatestCurrencyRates(fromCurrency);
       if (latestRateRequestRef.current !== requestID) return;
-      const buyPerSpend = getFetchedCurrencyRate(rates, toCurrency);
-      if (buyPerSpend === null) {
+      const fetchedQuote = getFetchedCurrencyQuote(rates, toCurrency, snapshotQuote?.direction);
+      if (fetchedQuote === null) {
         throw new Error(`Exchange rate response does not contain ${toCurrency}`);
       }
 
-      setFetchedRateA(quoteDirection === 'spend-per-buy' ? 1 / buyPerSpend : buyPerSpend);
+      setFetchedQuoteA(fetchedQuote);
       setRateAOverride(null);
     } catch (error) {
       if (latestRateRequestRef.current !== requestID) return;
@@ -954,7 +963,7 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
           <strong>{ratePrompt}</strong>
           <span>
             {snapshotQuote && latestSnapshot
-              ? `Snapshot reference: ${formatValue(snapshotQuote.rate)} ${usesCostQuote ? fromCurrency : toCurrency} · ${latestSnapshot.month}. `
+              ? `Snapshot reference: ${formatValue(snapshotReferenceRate ?? snapshotQuote.rate)} ${usesCostQuote ? fromCurrency : toCurrency} · ${latestSnapshot.month}. `
               : ''}
             {usesCostQuote
               ? 'A lower effective price is the better offer after fees.'
@@ -998,9 +1007,9 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
             <CalculatorField
               label={rateLabel}
               value={rateA}
-              onChange={value => setRateAOverride(value)}
+              onChange={setRateAOverride}
               suffix={usesCostQuote ? fromCurrency : toCurrency}
-              hint={rateHint(rateAOverride, fetchedRateA !== null)}
+              hint={rateHint(rateAOverride, fetchedQuoteA !== null)}
             />
             <CalculatorField label="Fee" value={feeA} onChange={setFeeA} suffix="%" />
           </div>

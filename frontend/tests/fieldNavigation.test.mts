@@ -7,8 +7,12 @@ test('moves between adjacent fields in either direction', () => {
   assert.equal(adjacentFieldIndex(2, 4, -1), 1);
 });
 
-test('stops at the first and last field instead of wrapping', () => {
-  assert.equal(adjacentFieldIndex(0, 4, -1), null);
-  assert.equal(adjacentFieldIndex(3, 4, 1), null);
+test('wraps between the first and last field', () => {
+  assert.equal(adjacentFieldIndex(0, 4, -1), 3);
+  assert.equal(adjacentFieldIndex(3, 4, 1), 0);
+});
+
+test('ignores a field outside the navigation group', () => {
   assert.equal(adjacentFieldIndex(-1, 4, 1), null);
+  assert.equal(adjacentFieldIndex(4, 4, -1), null);
 });

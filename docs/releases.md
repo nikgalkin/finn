@@ -106,7 +106,7 @@ The current build matrix produces:
 | Linux | AMD64 | `finn-linux-amd64` |
 | macOS | ARM64 | `finn-darwin-arm64` |
 
-Release notes are generated once and passed to the publishing action as the complete release body. When the tagged commit belongs to a merged pull request and that pull request has a non-empty description, the description is placed before the generated `What's Changed` section. Commits without an associated merged pull request, including direct pushes, and pull requests without a description fall back to generated notes only. A manually created tag still includes the pull request description when it points to a merge commit. Re-running publication replaces the complete body instead of appending another `What's Changed` or `Full Changelog` section.
+Release notes are generated once and passed to the publishing action as the complete release body. When the tagged commit belongs to a merged pull request and that pull request has a non-empty description, the release starts with `What's Changed` followed by the pull request description. The generated change list and full changelog follow without repeating the heading. Commits without an associated merged pull request, including direct pushes, and pull requests without a description fall back to generated notes only. A manually created tag still includes the pull request description when it points to a merge commit. Re-running publication replaces the complete body instead of appending another `What's Changed` or `Full Changelog` section.
 
 ## Manual release tags
 

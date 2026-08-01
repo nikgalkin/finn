@@ -48,6 +48,52 @@ function Get-RunningInstalledFinn {
     )
 }
 
+function Stop-RunningInstalledFinn {
+    $RunningProcesses = @(Get-RunningInstalledFinn)
+    if ($RunningProcesses.Count -eq 0) {
+        return
+    }
+
+    Write-Host "🛑 Stopping the running Finn instance safely..." -ForegroundColor Yellow
+    foreach ($FinnProcess in $RunningProcesses) {
+        try {
+            $Listeners = @(
+                Get-NetTCPConnection -OwningProcess $FinnProcess.Id -State Listen -ErrorAction Stop |
+                    Where-Object { $_.LocalAddress -eq "127.0.0.1" }
+            )
+        } catch {
+            $Listeners = @()
+        }
+
+        $ShutdownRequested = $false
+        foreach ($Listener in $Listeners) {
+            try {
+                $ShutdownUrl = "http://127.0.0.1:$($Listener.LocalPort)/api/shutdown"
+                $Response = Invoke-WebRequest -Uri $ShutdownUrl -Method Post -UseBasicParsing -TimeoutSec 120
+                if ($Response.StatusCode -eq 202) {
+                    $ShutdownRequested = $true
+                    break
+                }
+            } catch {
+                # This listener may belong to another service opened by the process.
+            }
+        }
+
+        if (-not $ShutdownRequested) {
+            $FinnProcess.Refresh()
+            if ($FinnProcess.HasExited) {
+                continue
+            }
+
+            throw "Could not request a safe Finn shutdown. Close Finn manually and run the installer again."
+        }
+
+        if (-not $FinnProcess.WaitForExit(30000)) {
+            throw "Finn did not stop within 30 seconds. Close Finn manually and run the installer again."
+        }
+    }
+}
+
 Write-Host "🚀 Starting Finn installation for Windows..." -ForegroundColor Cyan
 Write-Host "--------------------------------------------------"
 
@@ -62,10 +108,6 @@ Write-Host "ℹ️ Version: $VersionLabel" -ForegroundColor Gray
 Write-Host "📥 Downloading application binary..." -ForegroundColor Yellow
 $InstallError = $null
 try {
-    if (@(Get-RunningInstalledFinn).Count -gt 0) {
-        throw "Finn is currently running from $BinaryPath. Close Finn and run the installer again."
-    }
-
     Invoke-WebRequest -Uri $BinaryUrl -OutFile $TempPath -UserAgent "Mozilla/5.0"
     Unblock-File -Path $TempPath -ErrorAction SilentlyContinue
 
@@ -79,9 +121,7 @@ try {
     }
 
     if (Test-Path $BinaryPath) {
-        if (@(Get-RunningInstalledFinn).Count -gt 0) {
-            throw "Finn is currently running from $BinaryPath. Close Finn and run the installer again."
-        }
+        Stop-RunningInstalledFinn
 
         $MaxReplaceAttempts = 10
         for ($Attempt = 1; $Attempt -le $MaxReplaceAttempts; $Attempt++) {

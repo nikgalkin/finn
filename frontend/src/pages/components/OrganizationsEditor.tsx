@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { ArrowDownWideNarrow, Building2, Copy, List, MessageSquare, Plus, Trash2, WalletCards } from 'lucide-react';
-import type { AppSettings, BalanceDraft, OrganizationDraft } from '../../types';
+import type { AppSettings, BalanceDraft, ConfiguredOrganization, OrganizationDraft } from '../../types';
 import { getCountryByAlpha3, getCountryDisplayName } from '../../lib/countries';
 import {
   readSnapshotOrganizationSort,
@@ -46,6 +46,7 @@ const getIconStyle = (hasComment: boolean) => ({
 const cellStyle = { padding: '5px 6px 5px 0' };
 const headerStyle = { padding: '7px 5px', textTransform: 'uppercase' as const, fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' as const };
 const tableHeaders = [['25%', 'Tags'], ['45%', 'Amount'], ['20%', 'Currency'], ['10%', '']] as const;
+const normalizeOrganizationName = (name: string) => name.trim().toLocaleLowerCase();
 const organizationSortOptions: AppSelectOption[] = [
   { value: 'settings-order', label: 'Settings order', description: 'Uses your preferred organization sequence' },
   { value: 'balance-count-desc', label: 'Most balances first', description: 'Groups taller cards together' },
@@ -130,15 +131,30 @@ export function OrganizationsEditor({
       sortSnapshotOrganizations(organizations, sort, configuredOrganizationOrder).map(organization => organization.id),
     );
   };
-  const uniqueConfiguredOrganizations = settings.organizations.filter((organization, index, organizations) => (
-    !organization.archivedAt
-    && organizations.findIndex(candidate => !candidate.archivedAt && candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
-  ));
-  const selectedOrganizationNames = new Set(
-    organizations.map(org => org.name.trim().toLocaleLowerCase()).filter(Boolean)
-  );
+  const uniqueConfiguredOrganizations = useMemo(() => {
+    const seenNames = new Set<string>();
+    return settings.organizations.filter(organization => {
+      const name = normalizeOrganizationName(organization.name);
+      if (organization.archivedAt || seenNames.has(name)) return false;
+      seenNames.add(name);
+      return true;
+    });
+  }, [settings.organizations]);
+  const archivedOrganizationsByName = useMemo(() => {
+    const organizationsByName = new Map<string, ConfiguredOrganization>();
+    settings.organizations.forEach(organization => {
+      const name = normalizeOrganizationName(organization.name);
+      if (organization.archivedAt && !organizationsByName.has(name)) {
+        organizationsByName.set(name, organization);
+      }
+    });
+    return organizationsByName;
+  }, [settings.organizations]);
+  const selectedOrganizationNames = useMemo(() => new Set(
+    organizations.map(organization => normalizeOrganizationName(organization.name)).filter(Boolean),
+  ), [organizations]);
   const allOrganizationsUsed = uniqueConfiguredOrganizations.every(organization => (
-    selectedOrganizationNames.has(organization.name.trim().toLocaleLowerCase())
+    selectedOrganizationNames.has(normalizeOrganizationName(organization.name))
   ));
   const hasUnselectedOrganization = organizations.some(organization => !organization.name.trim());
   const addOrganizationDisabled = allOrganizationsUsed || hasUnselectedOrganization;
@@ -148,10 +164,10 @@ export function OrganizationsEditor({
       ? 'Select the organization you just added first'
       : 'Add organization';
   const baseCurrency = (settings.baseCurrency || 'RUB').toUpperCase();
-  const configuredCurrencyOptions: AppSelectOption[] = settings.currencies.map(currency => ({
+  const configuredCurrencyOptions = useMemo<AppSelectOption[]>(() => settings.currencies.map(currency => ({
     value: currency,
     meta: currency.toUpperCase() === baseCurrency ? 'BASE' : undefined
-  }));
+  })), [baseCurrency, settings.currencies]);
 
   return (
     <section className="snapshot-organizations-section">
@@ -238,25 +254,18 @@ export function OrganizationsEditor({
       <div className="snapshot-organizations-grid">
         {displayedOrganizations.map(org => {
           const isCurrentOrgDropdownOpen = activeDropdownOrgId === org.id;
-          const selectedOrganizationNames = new Set(
-            organizations
-              .filter(item => item.id !== org.id)
-              .map(item => item.name.trim().toLocaleLowerCase())
-              .filter(Boolean)
-          );
-          const archivedOrganization = settings.organizations.find(organization => (
-            !!organization.archivedAt
-            && organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase()
-          ));
+          const normalizedOrganizationName = normalizeOrganizationName(org.name);
+          const archivedOrganization = archivedOrganizationsByName.get(normalizedOrganizationName);
           const country = getCountryByAlpha3(org.country);
           const organizationOptions: AppSelectOption[] = uniqueConfiguredOrganizations.map(organization => {
             const optionCountry = getCountryByAlpha3(organization.country);
-            const isCurrent = organization.name.trim().toLocaleLowerCase() === org.name.trim().toLocaleLowerCase();
+            const optionName = normalizeOrganizationName(organization.name);
+            const isCurrent = optionName === normalizedOrganizationName;
             return {
               value: organization.name,
               description: optionCountry ? getCountryDisplayName(optionCountry) : undefined,
               meta: optionCountry?.alpha3,
-              disabled: !isCurrent && selectedOrganizationNames.has(organization.name.trim().toLocaleLowerCase())
+              disabled: !isCurrent && selectedOrganizationNames.has(optionName)
             };
           });
           if (org.name && !organizationOptions.some(option => option.value === org.name)) {
