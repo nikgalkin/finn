@@ -100,6 +100,7 @@ jobs:
     needs: build-and-release
     permissions:
       contents: write
+      pull-requests: read
     steps:
       - name: Download release binaries
         uses: actions/download-artifact@v4
@@ -117,7 +118,36 @@ jobs:
             --method POST \
             "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
             -f tag_name="${RELEASE_TAG}" \
-            --jq '.body' > release-notes.md
+            --jq '.body' > generated-release-notes.md
+
+          release_sha="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" \
+              --jq '.sha'
+          )"
+          pr_number="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/commits/${release_sha}/pulls" \
+              --jq 'map(select(.merged_at != null)) | sort_by(.merged_at) | last | .number // empty'
+          )"
+
+          if [ -n "$pr_number" ]; then
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" \
+              --jq '.body // ""' > pr-description.md
+          else
+            : > pr-description.md
+          fi
+
+          if grep -q '[^[:space:]]' pr-description.md; then
+            {
+              cat pr-description.md
+              printf '\n\n---\n\n'
+              cat generated-release-notes.md
+            } > release-notes.md
+          else
+            mv generated-release-notes.md release-notes.md
+          fi
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

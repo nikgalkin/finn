@@ -145,6 +145,7 @@ jobs:
     if: needs.tag.outputs.tag != ''
     permissions:
       contents: write
+      pull-requests: read
     uses: ./.github/workflows/release.yml
     with:
       tag: ${{ needs.tag.outputs.tag }}
