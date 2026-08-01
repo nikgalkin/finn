@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { fetchLatestCurrencyRates, getFetchedCurrencyRate } from '../src/lib/exchangeRates.ts';
 import { calculateTotals, convertAmount, monthsBetween, normalizeRates, normalizeSnapshotRates } from '../src/lib/finance.ts';
 import type { ParsedSnapshot } from '../src/types.ts';
 
@@ -65,6 +66,40 @@ test('parses numeric strings so a hand-edited rate still rescales', () => {
 
 test('leaves unquoted currencies at zero instead of inventing a rate', () => {
   assert.deepEqual(normalizeRates({ USD: 90, EUR: 100, GBP: 0 }, 'USD'), { USD: 1, EUR: 100 / 90, GBP: 0 });
+});
+
+test('fetches latest rates from the shared primary currency source', async () => {
+  const requestedUrls: string[] = [];
+  const rates = await fetchLatestCurrencyRates('RUB', async url => {
+    requestedUrls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ rub: { usd: 0.0125, eur: 0.011 } })
+    };
+  });
+
+  assert.deepEqual(rates, { usd: 0.0125, eur: 0.011 });
+  assert.equal(requestedUrls.length, 1);
+  assert.match(requestedUrls[0], /currencies\/rub\.json$/);
+});
+
+test('falls back to the secondary latest-rate source', async () => {
+  let requestCount = 0;
+  const rates = await fetchLatestCurrencyRates('USD', async () => {
+    requestCount += 1;
+    return requestCount === 1
+      ? { ok: false, status: 503, json: async () => ({}) }
+      : { ok: true, status: 200, json: async () => ({ usd: { rub: 80 } }) };
+  });
+
+  assert.equal(requestCount, 2);
+  assert.equal(rates.rub, 80);
+});
+
+test('uses the USD quote as the latest USDT reference', () => {
+  assert.equal(getFetchedCurrencyRate({ usd: 0.0125 }, 'USDT'), 0.0125);
+  assert.equal(getFetchedCurrencyRate({ usd: 0 }, 'USDT'), null);
 });
 
 test('counts the calendar months a snapshot covers, including skipped ones', () => {

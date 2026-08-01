@@ -1,7 +1,16 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import { Building2, Copy, List, MessageSquare, Plus, Trash2, WalletCards } from 'lucide-react';
+import { ArrowDownWideNarrow, Building2, Copy, List, MessageSquare, Plus, Trash2, WalletCards } from 'lucide-react';
 import type { AppSettings, BalanceDraft, OrganizationDraft } from '../../types';
 import { getCountryByAlpha3, getCountryDisplayName } from '../../lib/countries';
+import {
+  readSnapshotOrganizationSort,
+  reconcileSnapshotOrganizationOrder,
+  saveSnapshotOrganizationSort,
+  snapshotOrganizationOrderNeedsApply,
+  sortSnapshotOrganizations,
+  type SnapshotOrganizationSort,
+} from '../../lib/snapshotOrganizationSort';
 import { AppSelect, type AppSelectOption } from './AppSelect';
 import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
@@ -37,6 +46,14 @@ const getIconStyle = (hasComment: boolean) => ({
 const cellStyle = { padding: '5px 6px 5px 0' };
 const headerStyle = { padding: '7px 5px', textTransform: 'uppercase' as const, fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' as const };
 const tableHeaders = [['25%', 'Tags'], ['45%', 'Amount'], ['20%', 'Currency'], ['10%', '']] as const;
+const organizationSortOptions: AppSelectOption[] = [
+  { value: 'settings-order', label: 'Settings order', description: 'Uses your preferred organization sequence' },
+  { value: 'balance-count-desc', label: 'Most balances first', description: 'Groups taller cards together' },
+  { value: 'balance-count-asc', label: 'Fewest balances first', description: 'Starts with compact cards' },
+  { value: 'name', label: 'Name A–Z', description: 'Sorts organizations alphabetically' },
+  { value: 'original', label: 'Snapshot order', description: 'Uses the saved organization order' },
+];
+
 export function OrganizationsEditor({
   activeDropdownOrgId,
   isNew,
@@ -56,6 +73,63 @@ export function OrganizationsEditor({
   onUpdateBalance,
   onUpdateOrganizationField
 }: OrganizationsEditorProps) {
+  const configuredOrganizationOrder = useMemo(() => (
+    settings.organizations.filter(organization => !organization.archivedAt).map(organization => organization.name)
+  ), [settings.organizations]);
+  const [organizationSort, setOrganizationSort] = useState<SnapshotOrganizationSort>(readSnapshotOrganizationSort);
+  const [organizationOrder, setOrganizationOrder] = useState<string[]>(() => (
+    sortSnapshotOrganizations(
+      organizations,
+      organizationSort,
+      settings.organizations.filter(organization => !organization.archivedAt).map(organization => organization.name),
+    ).map(organization => organization.id)
+  ));
+  const organizationIds = organizations.map(organization => organization.id).join('\u0000');
+  const organizationsRef = useRef(organizations);
+  const organizationSortRef = useRef(organizationSort);
+  organizationsRef.current = organizations;
+  organizationSortRef.current = organizationSort;
+
+  useEffect(() => {
+    setOrganizationOrder(currentOrder => (
+      reconcileSnapshotOrganizationOrder(
+        organizationsRef.current,
+        currentOrder,
+        organizationSortRef.current,
+        configuredOrganizationOrder,
+      )
+    ));
+    // Balance edits intentionally do not trigger a reorder. Membership changes do.
+  }, [configuredOrganizationOrder, organizationIds]);
+
+  const displayedOrganizations = useMemo(
+    () => {
+      const organizationsById = new Map(organizations.map(organization => [organization.id, organization]));
+      return reconcileSnapshotOrganizationOrder(
+        organizations,
+        organizationOrder,
+        organizationSort,
+        configuredOrganizationOrder,
+      )
+        .map(id => organizationsById.get(id))
+        .filter((organization): organization is OrganizationDraft => !!organization);
+    },
+    [configuredOrganizationOrder, organizationOrder, organizationSort, organizations],
+  );
+  const organizationSortNeedsApply = useMemo(
+    () => snapshotOrganizationOrderNeedsApply(
+      organizations,
+      organizationOrder,
+      organizationSort,
+      configuredOrganizationOrder,
+    ),
+    [configuredOrganizationOrder, organizationOrder, organizationSort, organizations],
+  );
+  const applyOrganizationSort = (sort: SnapshotOrganizationSort) => {
+    setOrganizationOrder(
+      sortSnapshotOrganizations(organizations, sort, configuredOrganizationOrder).map(organization => organization.id),
+    );
+  };
   const uniqueConfiguredOrganizations = settings.organizations.filter((organization, index, organizations) => (
     !organization.archivedAt
     && organizations.findIndex(candidate => !candidate.archivedAt && candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
@@ -87,19 +161,56 @@ export function OrganizationsEditor({
           <div>
             <div className="flex items-center gap-2">
               <h3>Organizations & Accounts</h3>
-              <HelpTooltip text={<AmountFieldHelp />} ariaLabel="Amount field help" width={400} />
+              <HelpTooltip text={<AmountFieldHelp />} ariaLabel="Amount field help" width={400} placement="side" />
             </div>
             <p>Keep balances grouped by where they are held.</p>
           </div>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={onAddOrganization}
-          disabled={addOrganizationDisabled}
-          title={addOrganizationTitle}
-        >
-          <Plus size={18} className="mr-1" /> Add Organization
-        </button>
+        <div className="snapshot-organizations-controls">
+          {organizations.length > 1 && (
+            <div className="snapshot-organizations-sort">
+              <button
+                className={`btn snapshot-organizations-sort-apply${organizationSortNeedsApply ? ' is-pending' : ''}`}
+                type="button"
+                title={organizationSortNeedsApply
+                  ? 'Balances changed — apply the selected organization order'
+                  : 'Organization order is up to date'}
+                aria-label={organizationSortNeedsApply
+                  ? 'Apply updated organization sorting'
+                  : 'Organization sorting is up to date'}
+                onClick={() => applyOrganizationSort(organizationSort)}
+                disabled={!organizationSortNeedsApply}
+              >
+                <ArrowDownWideNarrow size={17} aria-hidden="true" />
+              </button>
+              <AppSelect
+                id="snapshot-organization-sort"
+                ariaLabel="Organization display order"
+                value={organizationSort}
+                options={organizationSortOptions}
+                placeholder="Sort organizations"
+                onChange={value => {
+                  const nextSort = value as SnapshotOrganizationSort;
+                  setOrganizationSort(nextSort);
+                  applyOrganizationSort(nextSort);
+                  saveSnapshotOrganizationSort(nextSort);
+                }}
+                width="190px"
+                dropdownWidth={270}
+                dropdownAlign="right"
+                height="38px"
+              />
+            </div>
+          )}
+          <button
+            className="btn btn-primary"
+            onClick={onAddOrganization}
+            disabled={addOrganizationDisabled}
+            title={addOrganizationTitle}
+          >
+            <Plus size={18} className="mr-1" /> Add Organization
+          </button>
+        </div>
       </div>
 
       {organizations.length === 0 && (
@@ -125,7 +236,7 @@ export function OrganizationsEditor({
       )}
 
       <div className="snapshot-organizations-grid">
-        {organizations.map(org => {
+        {displayedOrganizations.map(org => {
           const isCurrentOrgDropdownOpen = activeDropdownOrgId === org.id;
           const selectedOrganizationNames = new Set(
             organizations
@@ -254,6 +365,8 @@ export function OrganizationsEditor({
                               value={balance.amount}
                               onChange={value => onUpdateBalance(org.id, index, 'amount', value)}
                               maximumFractionDigits={8}
+                              ariaLabel={`${org.name || 'Organization'} balance ${index + 1} amount`}
+                              navigationGroup="snapshot-balances"
                             />
                           </td>
                           <td style={cellStyle}>

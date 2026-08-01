@@ -30,6 +30,24 @@ $TempPath = Join-Path $BinDir $TempName
 
 $BinaryUrl = "https://github.com/nikgalkin/finn/releases/$ReleasePath/finn-windows-amd64.exe"
 
+function Get-RunningInstalledFinn {
+    if (-not (Test-Path $BinaryPath)) {
+        return @()
+    }
+
+    $ExpectedPath = [System.IO.Path]::GetFullPath($BinaryPath)
+    return @(
+        Get-Process -Name "finn" -ErrorAction SilentlyContinue | Where-Object {
+            try {
+                $ProcessPath = [System.IO.Path]::GetFullPath($_.Path)
+                [string]::Equals($ProcessPath, $ExpectedPath, [System.StringComparison]::OrdinalIgnoreCase)
+            } catch {
+                $false
+            }
+        }
+    )
+}
+
 Write-Host "🚀 Starting Finn installation for Windows..." -ForegroundColor Cyan
 Write-Host "--------------------------------------------------"
 
@@ -44,6 +62,10 @@ Write-Host "ℹ️ Version: $VersionLabel" -ForegroundColor Gray
 Write-Host "📥 Downloading application binary..." -ForegroundColor Yellow
 $InstallError = $null
 try {
+    if (@(Get-RunningInstalledFinn).Count -gt 0) {
+        throw "Finn is currently running from $BinaryPath. Close Finn and run the installer again."
+    }
+
     Invoke-WebRequest -Uri $BinaryUrl -OutFile $TempPath -UserAgent "Mozilla/5.0"
     Unblock-File -Path $TempPath -ErrorAction SilentlyContinue
 
@@ -57,7 +79,27 @@ try {
     }
 
     if (Test-Path $BinaryPath) {
-        [System.IO.File]::Replace($TempPath, $BinaryPath, $null)
+        if (@(Get-RunningInstalledFinn).Count -gt 0) {
+            throw "Finn is currently running from $BinaryPath. Close Finn and run the installer again."
+        }
+
+        $MaxReplaceAttempts = 10
+        for ($Attempt = 1; $Attempt -le $MaxReplaceAttempts; $Attempt++) {
+            try {
+                [System.IO.File]::Replace($TempPath, $BinaryPath, $null)
+                break
+            } catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+                if ($Attempt -eq $MaxReplaceAttempts) {
+                    if (@(Get-RunningInstalledFinn).Count -gt 0) {
+                        throw "Finn started while the installer was running. Close Finn and run the installer again."
+                    }
+
+                    throw "Could not replace $BinaryPath after $MaxReplaceAttempts attempts. Another process may be locking the file. Close Finn and try again. Original error: $($_.Exception.Message)"
+                }
+
+                Start-Sleep -Milliseconds 500
+            }
+        }
     } else {
         [System.IO.File]::Move($TempPath, $BinaryPath)
     }
@@ -68,7 +110,7 @@ try {
     $InstallError = $_
 } finally {
     if ($TempPath -and (Test-Path $TempPath)) {
-        Remove-Item -Force $TempPath
+        Remove-Item -Force $TempPath -ErrorAction SilentlyContinue
     }
 }
 

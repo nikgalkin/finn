@@ -470,7 +470,6 @@ a { color: var(--accent); text-decoration: none; }
   gap: 6px;
   font-size: 12px;
   line-height: 1;
-  transform: translateY(1px);
 }
 
 .dashboard-net-worth-bar-segment-label strong { font-weight: 780; }
@@ -1285,6 +1284,43 @@ main > .page-loader { animation: none; }
 
 .settings-page .input::placeholder { font-weight: 400; }
 
+.settings-organization-row {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.settings-organization-row.is-drop-target {
+  background: rgba(var(--accent-rgb), 0.08);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+}
+
+.settings-organization-drag-handle {
+  width: 28px;
+  height: 34px;
+  flex: 0 0 28px;
+  justify-content: center;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.settings-organization-drag-handle:hover { border-color: var(--glass-border); }
+
+.settings-organization-drag-handle:focus-visible {
+  outline: none;
+  border-color: rgba(var(--brand-rgb), 0.85);
+  box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.55);
+}
+
+.settings-organization-drag-handle:active { cursor: grabbing; }
+
 .settings-style-lab-link {
   border-color: rgba(167, 139, 250, 0.34);
   background:
@@ -1706,7 +1742,7 @@ main > .page-loader { animation: none; }
     linear-gradient(to bottom, rgba(var(--surface-rgb), 0.14), transparent);
 }
 
-.snapshot-editor-page { width: 100%; max-width: 1080px; margin: 0 auto; padding-bottom: 24px; }
+.snapshot-editor-page { width: 100%; padding-bottom: 24px; }
 
 .snapshot-editor-page .sticky-page-header { padding-top: 12px; padding-bottom: 12px; gap: 20px; }
 
@@ -1958,6 +1994,34 @@ main > .page-loader { animation: none; }
 
 .snapshot-organizations-title p { margin: 4px 0 0; color: var(--text-secondary); font-size: 12px; }
 
+.snapshot-organizations-controls,
+.snapshot-organizations-sort {
+  display: flex;
+  align-items: center;
+}
+
+.snapshot-organizations-controls {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.snapshot-organizations-sort { gap: 7px; color: var(--text-secondary); }
+
+.snapshot-organizations-sort-apply {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  justify-content: center;
+  padding: 0;
+}
+
+.snapshot-organizations-sort-apply.is-pending {
+  border-color: rgba(var(--accent-rgb), 0.4);
+  background: rgba(var(--accent-rgb), 0.1);
+  color: var(--accent-text);
+}
+
 .snapshot-organizations-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2187,6 +2251,8 @@ main > .page-loader { animation: none; }
   .snapshot-organizations-heading,
   .snapshot-organizations-empty { align-items: flex-start; }
 
+  .snapshot-organizations-controls { flex-wrap: wrap; }
+
   .snapshot-organizations-empty { flex-wrap: wrap; }
 
   .snapshot-organizations-empty-actions { width: 100%; margin-left: 64px; flex-wrap: wrap; }
@@ -2205,7 +2271,13 @@ main > .page-loader { animation: none; }
 
   .snapshot-organizations-heading { align-items: stretch; flex-direction: column; }
 
-  .snapshot-organizations-heading > .btn { align-self: flex-start; }
+  .snapshot-organizations-controls { width: 100%; align-items: flex-start; flex-direction: column; }
+
+  .snapshot-organizations-sort { width: 100%; }
+
+  .snapshot-organizations-sort .app-select { width: 100% !important; }
+
+  .snapshot-organizations-controls > .btn { align-self: flex-start; }
 
   .snapshot-organizations-empty-actions { margin-left: 0; }
 
@@ -5079,6 +5151,17 @@ main > .page-loader { animation: none; }
 
 .rebalance-source-guide > :last-child,
 .fx-rate-guide > :last-child { flex: 0 0 auto; }
+
+.fx-rate-guide > .fx-rate-guide-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px !important;
+}
+
+.fx-rate-guide-actions > .btn { flex: 1 1 auto; justify-content: center; }
 
 .rebalance-heading,
 .rebalance-edit-row {
