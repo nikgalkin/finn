@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.s
 
 ## Windows PowerShell
 
-The Windows installer uses the same download, validation, and atomic replacement process. When Finn is running, the installer requests its local shutdown endpoint, waits for the final backup and process exit, and then replaces the executable. If safe shutdown cannot be requested, the existing installation is left unchanged and the installer asks you to close Finn manually. Short-lived file locks, such as antivirus scanning immediately after a download, are retried automatically. Open PowerShell and run:
+The Windows installer downloads the selected release directly to `~/.finn/bin/finn.exe`. Close a running Finn instance before updating so Windows can overwrite the executable. Open PowerShell and run:
 
 ```powershell
 irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1 | iex

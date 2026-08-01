@@ -25,74 +25,8 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 # 1. Setup paths
 $BinDir = Join-Path $HOME ".finn\bin"
 $BinaryPath = Join-Path $BinDir "finn.exe"
-$TempName = ".finn.$([guid]::NewGuid().ToString('N')).tmp.exe"
-$TempPath = Join-Path $BinDir $TempName
 
 $BinaryUrl = "https://github.com/nikgalkin/finn/releases/$ReleasePath/finn-windows-amd64.exe"
-
-function Get-RunningInstalledFinn {
-    if (-not (Test-Path $BinaryPath)) {
-        return @()
-    }
-
-    $ExpectedPath = [System.IO.Path]::GetFullPath($BinaryPath)
-    return @(
-        Get-Process -Name "finn" -ErrorAction SilentlyContinue | Where-Object {
-            try {
-                $ProcessPath = [System.IO.Path]::GetFullPath($_.Path)
-                [string]::Equals($ProcessPath, $ExpectedPath, [System.StringComparison]::OrdinalIgnoreCase)
-            } catch {
-                $false
-            }
-        }
-    )
-}
-
-function Stop-RunningInstalledFinn {
-    $RunningProcesses = @(Get-RunningInstalledFinn)
-    if ($RunningProcesses.Count -eq 0) {
-        return
-    }
-
-    Write-Host "🛑 Stopping the running Finn instance safely..." -ForegroundColor Yellow
-    foreach ($FinnProcess in $RunningProcesses) {
-        try {
-            $Listeners = @(
-                Get-NetTCPConnection -OwningProcess $FinnProcess.Id -State Listen -ErrorAction Stop |
-                    Where-Object { $_.LocalAddress -eq "127.0.0.1" }
-            )
-        } catch {
-            $Listeners = @()
-        }
-
-        $ShutdownRequested = $false
-        foreach ($Listener in $Listeners) {
-            try {
-                $ShutdownUrl = "http://127.0.0.1:$($Listener.LocalPort)/api/shutdown"
-                $Response = Invoke-WebRequest -Uri $ShutdownUrl -Method Post -UseBasicParsing -TimeoutSec 120
-                if ($Response.StatusCode -eq 202) {
-                    $ShutdownRequested = $true
-                    break
-                }
-            } catch {
-                # This listener may belong to another service opened by the process.
-            }
-        }
-
-        if (-not $ShutdownRequested) {
-            $FinnProcess.Refresh()
-            if ($FinnProcess.HasExited) {
-                continue
-            }
-
-            throw "Could not request a safe Finn shutdown. Close Finn manually and run the installer again."
-        }
-
-        if (-not $FinnProcess.WaitForExit(30000)) {
-            throw "Finn did not stop within 30 seconds. Close Finn manually and run the installer again."
-        }
-    }
-}
 
 Write-Host "🚀 Starting Finn installation for Windows..." -ForegroundColor Cyan
 Write-Host "--------------------------------------------------"
@@ -103,59 +37,15 @@ if (-not (Test-Path $BinDir)) {
     New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 }
 
-# 3. Download, validate, and atomically replace the executable artifact
+# 3. Download the executable artifact directly to the installation path
 Write-Host "ℹ️ Version: $VersionLabel" -ForegroundColor Gray
 Write-Host "📥 Downloading application binary..." -ForegroundColor Yellow
-$InstallError = $null
 try {
-    Invoke-WebRequest -Uri $BinaryUrl -OutFile $TempPath -UserAgent "Mozilla/5.0"
-    Unblock-File -Path $TempPath -ErrorAction SilentlyContinue
-
-    Write-Host "🔎 Validating downloaded binary..." -ForegroundColor Gray
-    $InstalledVersion = (& $TempPath -v | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Downloaded binary failed validation with exit code $LASTEXITCODE"
-    }
-    if (-not $InstalledVersion.StartsWith("finn version ")) {
-        throw "Downloaded file returned an unexpected version: $InstalledVersion"
-    }
-
-    if (Test-Path $BinaryPath) {
-        Stop-RunningInstalledFinn
-
-        $MaxReplaceAttempts = 10
-        for ($Attempt = 1; $Attempt -le $MaxReplaceAttempts; $Attempt++) {
-            try {
-                [System.IO.File]::Replace($TempPath, $BinaryPath, $null)
-                break
-            } catch [System.IO.IOException], [System.UnauthorizedAccessException] {
-                if ($Attempt -eq $MaxReplaceAttempts) {
-                    if (@(Get-RunningInstalledFinn).Count -gt 0) {
-                        throw "Finn started while the installer was running. Close Finn and run the installer again."
-                    }
-
-                    throw "Could not replace $BinaryPath after $MaxReplaceAttempts attempts. Another process may be locking the file. Close Finn and try again. Original error: $($_.Exception.Message)"
-                }
-
-                Start-Sleep -Milliseconds 500
-            }
-        }
-    } else {
-        [System.IO.File]::Move($TempPath, $BinaryPath)
-    }
-
-    $TempPath = $null
+    Invoke-WebRequest -Uri $BinaryUrl -OutFile $BinaryPath -UserAgent "Mozilla/5.0"
+    Unblock-File -Path $BinaryPath -ErrorAction SilentlyContinue
     Write-Host "✅ Binary successfully saved to $BinaryPath" -ForegroundColor Green
 } catch {
-    $InstallError = $_
-} finally {
-    if ($TempPath -and (Test-Path $TempPath)) {
-        Remove-Item -Force $TempPath -ErrorAction SilentlyContinue
-    }
-}
-
-if ($InstallError) {
-    Write-Host "❌ Installation failed; existing binary was not changed: $InstallError" -ForegroundColor Red
+    Write-Host "❌ Failed to download binary: $_" -ForegroundColor Red
     Exit 1
 }
 
@@ -173,7 +63,7 @@ if ($UserPath -split ';' -notcontains $BinDir) {
 # 4. Success info
 Write-Host "--------------------------------------------------"
 Write-Host "🎉 Finn installation completed successfully!" -ForegroundColor Green
-Write-Host "   $InstalledVersion" -ForegroundColor Gray
+Write-Host "   Version: $VersionLabel" -ForegroundColor Gray
 Write-Host ""
 Write-Host "📢 IMPORTANT: Please open a NEW terminal window to apply changes." -ForegroundColor Yellow
 Write-Host ""
