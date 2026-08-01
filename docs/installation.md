@@ -19,13 +19,13 @@ curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.s
 The Windows installer downloads a release directly to `~/.finn/bin/finn.exe`. Close a running Finn instance before updating so Windows can overwrite the executable. Open PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1 | iex
+$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p; Unblock-File $p; try { & $p } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
 ```
 
 To install a specific release, pass its tag with or without the leading `v`:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1))) -Version v1.8.0
+$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p; Unblock-File $p; try { & $p -Version v1.8.0 } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
 ```
 
 ## Configuration
