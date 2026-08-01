@@ -1,4 +1,5 @@
 # Install script for Finn App on Windows
+# Keep this file ASCII-only: Windows PowerShell 5.1 reads BOM-less scripts as ANSI.
 param(
     [string]$Version = $env:FINN_VERSION
 )
