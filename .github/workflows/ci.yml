@@ -22,19 +22,22 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Parse PowerShell installer
-        shell: powershell
+        shell: pwsh
         run: |
+          $InstallerPath = (Resolve-Path "bin/install.ps1").Path
           $Tokens = $null
           $ParseErrors = $null
           [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path "bin/install.ps1"),
+            $InstallerPath,
             [ref]$Tokens,
             [ref]$ParseErrors
           ) | Out-Null
 
           if ($ParseErrors.Count -gt 0) {
-            $ParseErrors | ForEach-Object { Write-Error $_.Message }
-            exit 1
+            $Messages = $ParseErrors | ForEach-Object {
+              "${InstallerPath}:$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber): $($_.Message)"
+            }
+            throw ($Messages -join [Environment]::NewLine)
           }
 
   frontend:
