@@ -19,13 +19,13 @@ curl -fsSL https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.s
 The Windows installer downloads a release directly to `~/.finn/bin/finn.exe`. Close a running Finn instance before updating so Windows can overwrite the executable. Open PowerShell and run:
 
 ```powershell
-$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; try { Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p -ErrorAction Stop; Unblock-File $p; & $p } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
+$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; try { Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p -ErrorAction Stop; Unblock-File $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p; if ($LASTEXITCODE -ne 0) { throw "Finn installer failed with exit code $LASTEXITCODE" } } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
 ```
 
 To install a specific release, pass its tag with or without the leading `v`:
 
 ```powershell
-$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; try { Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p -ErrorAction Stop; Unblock-File $p; & $p -Version v1.8.0 } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
+$p = Join-Path $env:TEMP "finn-install-$PID.ps1"; try { Invoke-WebRequest -UseBasicParsing 'https://raw.githubusercontent.com/nikgalkin/finn/master/bin/install.ps1' -OutFile $p -ErrorAction Stop; Unblock-File $p; powershell.exe -NoProfile -ExecutionPolicy Bypass -File $p -Version v1.8.0; if ($LASTEXITCODE -ne 0) { throw "Finn installer failed with exit code $LASTEXITCODE" } } finally { Remove-Item $p -Force -ErrorAction SilentlyContinue }
 ```
 
 ## Configuration
