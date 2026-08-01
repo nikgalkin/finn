@@ -1,17 +1,46 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 type HelpTooltipProps = {
   text: ReactNode;
   ariaLabel?: string;
   width?: number;
+  placement?: 'bottom' | 'side';
 };
 
-export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320 }: HelpTooltipProps) {
+export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320, placement = 'bottom' }: HelpTooltipProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
+
+  const calculatePosition = useCallback((buttonRect: DOMRect, tooltipRect?: DOMRect) => {
+    const viewportPadding = 12;
+    const gap = placement === 'side' ? 14 : 8;
+    const tooltipWidth = tooltipRect?.width ?? Math.min(width, window.innerWidth - viewportPadding * 2);
+    const tooltipHeight = tooltipRect?.height ?? 0;
+    const maxLeft = window.innerWidth - tooltipWidth - viewportPadding;
+    const maxTop = window.innerHeight - tooltipHeight - viewportPadding;
+
+    if (placement === 'side') {
+      const fitsRight = buttonRect.right + gap + tooltipWidth <= window.innerWidth - viewportPadding;
+      const fitsLeft = buttonRect.left - gap - tooltipWidth >= viewportPadding;
+      if (fitsRight || fitsLeft) {
+        return {
+          left: fitsRight ? buttonRect.right + gap : buttonRect.left - tooltipWidth - gap,
+          top: Math.max(viewportPadding, Math.min(buttonRect.top - 8, maxTop)),
+        };
+      }
+    }
+
+    const preferredTop = buttonRect.bottom + gap;
+    return {
+      left: Math.max(viewportPadding, Math.min(buttonRect.left - 24, maxLeft)),
+      top: preferredTop + tooltipHeight <= window.innerHeight - viewportPadding
+        ? preferredTop
+        : Math.max(viewportPadding, buttonRect.top - tooltipHeight - gap),
+    };
+  }, [placement, width]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -20,28 +49,17 @@ export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320
     const tooltipRect = tooltipRef.current?.getBoundingClientRect();
     if (!buttonRect || !tooltipRect) return;
 
-    const viewportPadding = 12;
-    const gap = 8;
-    const preferredTop = buttonRect.bottom + gap;
-    const top = preferredTop + tooltipRect.height <= window.innerHeight - viewportPadding
-      ? preferredTop
-      : Math.max(viewportPadding, buttonRect.top - tooltipRect.height - gap);
-
-    setPosition(current => current.top === top ? current : { ...current, top });
-  }, [open]);
+    const nextPosition = calculatePosition(buttonRect, tooltipRect);
+    setPosition(current => (
+      current.top === nextPosition.top && current.left === nextPosition.left ? current : nextPosition
+    ));
+  }, [calculatePosition, open]);
 
   const openTooltip = () => {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const viewportPadding = 12;
-    const preferredLeft = rect.left - 24;
-    const maxLeft = window.innerWidth - width - viewportPadding;
-
-    setPosition({
-      top: rect.bottom + 8,
-      left: Math.max(viewportPadding, Math.min(preferredLeft, maxLeft))
-    });
+    setPosition(calculatePosition(rect));
     setOpen(true);
   };
 
@@ -60,8 +78,7 @@ export function HelpTooltip({ text, ariaLabel = 'Chart explanation', width = 320
         aria-label={ariaLabel}
         onClick={event => {
           event.stopPropagation();
-          if (open) setOpen(false);
-          else openTooltip();
+          openTooltip();
         }}
         style={{
           width: '18px',

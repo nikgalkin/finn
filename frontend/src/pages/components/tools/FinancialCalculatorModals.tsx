@@ -5,6 +5,7 @@ import {
   CircleCheck,
   Database,
   Plus,
+  RefreshCw,
   Scale,
   Trash2,
   TrendingUp,
@@ -29,12 +30,14 @@ import {
   getSnapshotFxQuote,
   getSnapshotPortfolioTotal
 } from '../../../lib/calculatorSnapshotDefaults';
+import { fetchLatestCurrencyRates, getFetchedCurrencyRate } from '../../../lib/exchangeRates';
 import { parseNumberExpression } from '../../../lib/numberExpression';
 import { useFlowEntries } from '../../../hooks/useFlowEntries';
 import { useSettings } from '../../../hooks/useSettings';
 import { useSnapshots } from '../../../hooks/useSnapshots';
 import { AppSelect } from '../AppSelect';
 import { AmountInput } from '../AmountInput';
+import { Spinner } from '../PageLoader';
 import { SegmentedControl } from '../SegmentedControl';
 import { ToolModal } from './ToolModal';
 
@@ -744,6 +747,9 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
   const [targetReceiveOverride, setTargetReceiveOverride] = useState<NumericValue | null>(null);
   const [rateAOverride, setRateAOverride] = useState<NumericValue | null>(null);
   const [rateBOverride, setRateBOverride] = useState<NumericValue | null>(null);
+  const [fetchedRateA, setFetchedRateA] = useState<number | null>(null);
+  const [fetchingLatestRate, setFetchingLatestRate] = useState(false);
+  const latestRateRequestRef = useRef(0);
   const [feeA, setFeeA] = useState<NumericValue>(0);
   const [feeB, setFeeB] = useState<NumericValue>(0);
   const fromCurrency = fromCurrencyOverride || baseCurrency;
@@ -761,7 +767,7 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
     toCurrency
   );
   const quoteDirection = snapshotQuote?.direction ?? 'spend-per-buy';
-  const rateA = rateAOverride ?? snapshotQuote?.rate ?? 7;
+  const rateA = rateAOverride ?? fetchedRateA ?? snapshotQuote?.rate ?? 7;
   const rateB = rateBOverride ?? snapshotQuote?.rate ?? 7;
   const usesCostQuote = quoteDirection === 'spend-per-buy';
   const ratePrompt = usesCostQuote
@@ -772,6 +778,9 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
     : `${toCurrency} per 1 ${fromCurrency}`;
 
   const resetSnapshotRates = () => {
+    latestRateRequestRef.current += 1;
+    setFetchingLatestRate(false);
+    setFetchedRateA(null);
     setRateAOverride(null);
     setRateBOverride(null);
   };
@@ -785,6 +794,30 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
     setFromCurrencyOverride(toCurrency);
     setToCurrencyOverride(fromCurrency);
     resetCurrencyPair();
+  };
+
+  const fetchLatestRate = async () => {
+    const requestID = latestRateRequestRef.current + 1;
+    latestRateRequestRef.current = requestID;
+    setFetchingLatestRate(true);
+
+    try {
+      const rates = await fetchLatestCurrencyRates(fromCurrency);
+      if (latestRateRequestRef.current !== requestID) return;
+      const buyPerSpend = getFetchedCurrencyRate(rates, toCurrency);
+      if (buyPerSpend === null) {
+        throw new Error(`Exchange rate response does not contain ${toCurrency}`);
+      }
+
+      setFetchedRateA(quoteDirection === 'spend-per-buy' ? 1 / buyPerSpend : buyPerSpend);
+      setRateAOverride(null);
+    } catch (error) {
+      if (latestRateRequestRef.current !== requestID) return;
+      console.error(error);
+      alert(`Failed to fetch the latest ${fromCurrency}/${toCurrency} rate`);
+    } finally {
+      if (latestRateRequestRef.current === requestID) setFetchingLatestRate(false);
+    }
   };
 
   const comparison = useMemo(() => compareFxDeals({
@@ -840,9 +873,11 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
   const effectiveRateUnit = usesCostQuote
     ? `${fromCurrency} per 1 ${toCurrency}`
     : `${toCurrency} per 1 ${fromCurrency}`;
-  const rateHint = (override: NumericValue | null) => {
+  const rateHint = (override: NumericValue | null, fetched = false) => {
+    if (override !== null) return 'Custom rate';
+    if (fetched) return 'Latest fetched rate';
     if (!snapshotQuote) return undefined;
-    return override === null ? `Rate from ${latestSnapshot?.month}` : 'Custom rate';
+    return `Rate from ${latestSnapshot?.month}`;
   };
 
   return (
@@ -926,12 +961,26 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
               : 'A higher effective rate is the better offer after fees.'}
           </span>
         </div>
-        <SnapshotSourceButton
-          month={latestSnapshot?.month}
-          loading={snapshotLoading}
-          label="Reset to reference"
-          onClick={resetSnapshotRates}
-        />
+        <div className="fx-rate-guide-actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={fetchingLatestRate || fromCurrency === toCurrency}
+            onClick={fetchLatestRate}
+            title={`Fetch the latest ${fromCurrency}/${toCurrency} rate into Offer A`}
+          >
+            {fetchingLatestRate
+              ? <Spinner label="Fetching latest exchange rate" size={13} />
+              : <RefreshCw size={13} />}
+            {fetchingLatestRate ? 'Fetching…' : 'Fetch Latest · Offer A'}
+          </button>
+          <SnapshotSourceButton
+            month={latestSnapshot?.month}
+            loading={snapshotLoading}
+            label="Reset to reference"
+            onClick={resetSnapshotRates}
+          />
+        </div>
       </div>
 
       <div className="calculator-shell fx-deals">
@@ -949,9 +998,9 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
             <CalculatorField
               label={rateLabel}
               value={rateA}
-              onChange={setRateAOverride}
+              onChange={value => setRateAOverride(value)}
               suffix={usesCostQuote ? fromCurrency : toCurrency}
-              hint={rateHint(rateAOverride)}
+              hint={rateHint(rateAOverride, fetchedRateA !== null)}
             />
             <CalculatorField label="Fee" value={feeA} onChange={setFeeA} suffix="%" />
           </div>

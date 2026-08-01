@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, Coins, FlaskConical, Save, Plus, RefreshCw, RotateCcw, Server, Trash2, TrendingUp, Wallet } from 'lucide-react';
+import { Archive, ArrowDownUp, ArrowLeft, ArrowRight, Coins, FlaskConical, GripVertical, Save, Plus, RefreshCw, RotateCcw, Server, Trash2, TrendingUp, Wallet } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL, getCurrencyColor } from '../types';
 import type { CashFlowSettings, LocalAISettings, LocalAIStatus, Snapshot } from '../types';
 import { isValidCountryCode } from '../lib/countries';
+import { moveActiveOrganization } from '../lib/settingsOrganizationOrder';
 import {
   UNSAVED_NAVIGATION_REQUEST_EVENT,
   type UnsavedNavigationRequestDetail
@@ -192,6 +193,8 @@ export default function Settings() {
   const [archiveImpact, setArchiveImpact] = useState<ArchiveImpact | null>(null);
   const [aiStatus, setAIStatus] = useState<LocalAIStatus | null>(null);
   const [aiProbing, setAIProbing] = useState(false);
+  const [draggedOrganizationIndex, setDraggedOrganizationIndex] = useState<number | null>(null);
+  const [organizationDropTargetIndex, setOrganizationDropTargetIndex] = useState<number | null>(null);
   const initialSettingsHash = useRef('');
   const scrollBodyRefs = useRef<Record<ScrollableSettingsListKey, HTMLDivElement | null>>({
     currencies: null,
@@ -442,6 +445,24 @@ export default function Settings() {
 
   const updateOrganization = (index: number, field: 'name' | 'country', value: string) => {
     setSettings({ ...settings, organizations: replaceAt(settings.organizations, index, { ...settings.organizations[index], [field]: value }) });
+  };
+
+  const reorderOrganization = (fromIndex: number, toIndex: number, restoreFocus = false) => {
+    if (fromIndex === toIndex) return;
+    setSettings({
+      ...settings,
+      organizations: moveActiveOrganization(settings.organizations, fromIndex, toIndex),
+    });
+    if (restoreFocus) {
+      requestAnimationFrame(() => {
+        document.getElementById(`settings-organization-${toIndex}-drag-handle`)?.focus({ preventScroll: true });
+      });
+    }
+  };
+
+  const clearOrganizationDrag = () => {
+    setDraggedOrganizationIndex(null);
+    setOrganizationDropTargetIndex(null);
   };
 
   const addOrganization = () => {
@@ -706,7 +727,7 @@ export default function Settings() {
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-2">
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Organizations</h3>
-          <HelpTooltip text="Country is optional. Finn stores it as an ISO 3166-1 alpha-3 code, for example DEU or USA." ariaLabel="Organization country explanation" width={280} />
+          <HelpTooltip text="Drag organizations into your preferred order. Country is optional and stored as an ISO 3166-1 alpha-3 code, for example DEU or USA." ariaLabel="Organization settings explanation" width={320} />
         </div>
         <button className="btn" style={compactButtonStyle} onClick={addOrganization} aria-label="Add organization">
           <Plus size={14} /> Add
@@ -716,7 +737,50 @@ export default function Settings() {
         {activeOrganizations.map(({ organization, index }) => {
           const isDuplicate = duplicateOrganizations.names.has(normalizeListValue(organization.name));
           return (
-            <div key={index} className="flex gap-2 items-center">
+            <div
+              key={index}
+              className={`settings-organization-row${organizationDropTargetIndex === index && draggedOrganizationIndex !== index ? ' is-drop-target' : ''}`}
+              onDragEnter={() => {
+                if (draggedOrganizationIndex !== null && draggedOrganizationIndex !== index) {
+                  setOrganizationDropTargetIndex(index);
+                }
+              }}
+              onDragOver={event => {
+                if (draggedOrganizationIndex === null || draggedOrganizationIndex === index) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={event => {
+                event.preventDefault();
+                if (draggedOrganizationIndex !== null) reorderOrganization(draggedOrganizationIndex, index);
+                clearOrganizationDrag();
+              }}
+            >
+              <button
+                id={`settings-organization-${index}-drag-handle`}
+                type="button"
+                className="btn settings-organization-drag-handle"
+                draggable
+                aria-label={`Reorder ${organization.name || `organization ${index + 1}`}`}
+                title="Drag to reorder. Use Arrow Up or Arrow Down from the keyboard."
+                onDragStart={event => {
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('text/plain', String(index));
+                  setDraggedOrganizationIndex(index);
+                }}
+                onDragEnd={clearOrganizationDrag}
+                onKeyDown={event => {
+                  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                  const activePosition = activeOrganizations.findIndex(item => item.index === index);
+                  const targetPosition = activePosition + (event.key === 'ArrowUp' ? -1 : 1);
+                  const targetIndex = activeOrganizations[targetPosition]?.index;
+                  if (targetIndex === undefined) return;
+                  event.preventDefault();
+                  reorderOrganization(index, targetIndex, true);
+                }}
+              >
+                <GripVertical size={16} aria-hidden="true" />
+              </button>
               <input
                 id={`settings-organization-${index}-name`}
                 name={`settings-organization-${index}-name`}

@@ -17,6 +17,7 @@ import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { copyFlowPeriodEntries } from '../lib/cashFlow';
+import { fetchLatestCurrencyRates } from '../lib/exchangeRates';
 import { normalizeRates } from '../lib/finance';
 import { normalizeSnapshotAmounts } from '../lib/snapshotAmounts';
 import { removeSnapshotDraft } from '../lib/snapshotDraftStorage';
@@ -507,33 +508,10 @@ export default function SnapshotEdit() {
   const fetchLatestRates = async () => {
     setFetchingRates('latest');
     const base = (settings.baseCurrency || 'RUB').toLowerCase();
-    const urls = [
-      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${base}.json`,
-      `https://latest.currency-api.pages.dev/v1/currencies/${base}.json`
-    ];
 
     try {
-      let lastError: unknown;
-
-      for (const url of urls) {
-        try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`Exchange rate request failed with status ${response.status}`);
-
-          const responseData: Record<string, unknown> = await response.json();
-          const rates = responseData[base];
-          if (!rates || typeof rates !== 'object' || Array.isArray(rates)) {
-            throw new Error('Exchange rate response does not contain rates');
-          }
-
-          applyFetchedRates(rates as Record<string, number>);
-          return;
-        } catch (error) {
-          lastError = error;
-        }
-      }
-
-      throw lastError || new Error('All exchange rate sources failed');
+      const rates = await fetchLatestCurrencyRates(base);
+      applyFetchedRates(rates);
     } catch (error) {
       console.error(error);
       alert('Failed to fetch latest rates');

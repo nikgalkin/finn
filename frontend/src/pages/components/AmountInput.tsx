@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type MouseEvent } from 'react';
+import { adjacentFieldIndex } from '../../lib/fieldNavigation';
 import { normalizeNumberExpressionInput, parseNumberExpression } from '../../lib/numberExpression';
 
 type AmountInputProps = {
@@ -9,6 +10,7 @@ type AmountInputProps = {
   ariaLabel?: string;
   id?: string;
   name?: string;
+  navigationGroup?: string;
 };
 
 export function AmountFieldHelp() {
@@ -16,7 +18,7 @@ export function AmountFieldHelp() {
     <div>
       <div style={{ fontWeight: 700, marginBottom: '8px' }}>Amount field capabilities</div>
       <div style={{ marginBottom: '8px' }}>
-        The value is calculated when you press Enter or leave the field.
+        The value is calculated when you press Enter or leave the field. In the snapshot editor, Enter moves to the next Amount field and Shift+Enter moves to the previous one.
       </div>
       <div style={{ marginBottom: '4px', fontWeight: 700 }}>Basic math</div>
       <div style={{ marginBottom: '8px' }}>
@@ -50,13 +52,14 @@ const formatAmount = (amount: number | string, maximumFractionDigits: number): s
   return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(numericAmount).replace(/,/g, ' ');
 };
 
-const editingAmount = (amount: number | string) => {
+const editingAmount = (amount: number | string, maximumFractionDigits: number) => {
   if (amount === 0) return '';
-  if (typeof amount === 'string') return amount;
+  const numericAmount = typeof amount === 'number' ? amount : Number(amount);
+  if (!Number.isFinite(numericAmount)) return String(amount);
   return new Intl.NumberFormat('en-US', {
     useGrouping: false,
-    maximumFractionDigits: 20
-  }).format(amount);
+    maximumFractionDigits
+  }).format(numericAmount);
 };
 
 export function AmountInput({
@@ -66,7 +69,8 @@ export function AmountInput({
   required = false,
   ariaLabel = 'Amount',
   id,
-  name
+  name,
+  navigationGroup
 }: AmountInputProps) {
   const generatedId = `amount-${useId()}`;
   const inputId = id || generatedId;
@@ -156,6 +160,21 @@ export function AmountInput({
     event.clipboardData.setData('text/plain', input.value.slice(selectionStart, selectionEnd).replace(/\s/g, ''));
   };
 
+  const navigateToAdjacentAmount = (input: HTMLInputElement, direction: 1 | -1) => {
+    if (!navigationGroup) return;
+    requestAnimationFrame(() => {
+      const fields = Array.from(document.querySelectorAll<HTMLInputElement>('input[data-amount-navigation]'))
+        .filter(field => (
+          field.dataset.amountNavigation === navigationGroup
+          && !field.disabled
+          && field.getClientRects().length > 0
+        ));
+      const currentIndex = fields.indexOf(input);
+      const nextIndex = adjacentFieldIndex(currentIndex, fields.length, direction);
+      if (nextIndex !== null) fields[nextIndex]?.focus();
+    });
+  };
+
   return (
     <input
       ref={inputRef}
@@ -164,6 +183,7 @@ export function AmountInput({
       type="text"
       inputMode="decimal"
       className="input"
+      data-amount-navigation={navigationGroup}
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
       value={draft}
@@ -171,7 +191,7 @@ export function AmountInput({
       required={required}
       onMouseDown={handleMouseDown}
       onFocus={event => {
-        const exactValue = editingAmount(value);
+        const exactValue = editingAmount(value, maximumFractionDigits);
         setEditing(true);
         setInvalid(false);
         setDraft(exactValue);
@@ -184,7 +204,10 @@ export function AmountInput({
       onKeyDown={event => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
-        (event.target as HTMLInputElement).blur();
+        const input = event.currentTarget;
+        const canNavigate = input.value.trim() === '' || parseNumberExpression(input.value) !== null;
+        input.blur();
+        if (canNavigate) navigateToAdjacentAmount(input, event.shiftKey ? -1 : 1);
       }}
     />
   );

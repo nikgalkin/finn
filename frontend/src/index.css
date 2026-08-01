@@ -1284,6 +1284,43 @@ main > .page-loader { animation: none; }
 
 .settings-page .input::placeholder { font-weight: 400; }
 
+.settings-organization-row {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.settings-organization-row.is-drop-target {
+  background: rgba(var(--accent-rgb), 0.08);
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.35);
+}
+
+.settings-organization-drag-handle {
+  width: 28px;
+  height: 34px;
+  flex: 0 0 28px;
+  justify-content: center;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.settings-organization-drag-handle:hover { border-color: var(--glass-border); }
+
+.settings-organization-drag-handle:focus-visible {
+  outline: none;
+  border-color: rgba(var(--brand-rgb), 0.85);
+  box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.55);
+}
+
+.settings-organization-drag-handle:active { cursor: grabbing; }
+
 .settings-style-lab-link {
   border-color: rgba(167, 139, 250, 0.34);
   background:
@@ -5114,6 +5151,17 @@ main > .page-loader { animation: none; }
 
 .rebalance-source-guide > :last-child,
 .fx-rate-guide > :last-child { flex: 0 0 auto; }
+
+.fx-rate-guide > .fx-rate-guide-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px !important;
+}
+
+.fx-rate-guide-actions > .btn { flex: 1 1 auto; justify-content: center; }
 
 .rebalance-heading,
 .rebalance-edit-row {

@@ -47,6 +47,7 @@ const cellStyle = { padding: '5px 6px 5px 0' };
 const headerStyle = { padding: '7px 5px', textTransform: 'uppercase' as const, fontSize: '12px', letterSpacing: '0.5px', color: 'var(--text-secondary)', textAlign: 'center' as const };
 const tableHeaders = [['25%', 'Tags'], ['45%', 'Amount'], ['20%', 'Currency'], ['10%', '']] as const;
 const organizationSortOptions: AppSelectOption[] = [
+  { value: 'settings-order', label: 'Settings order', description: 'Uses your preferred organization sequence' },
   { value: 'balance-count-desc', label: 'Most balances first', description: 'Groups taller cards together' },
   { value: 'balance-count-asc', label: 'Fewest balances first', description: 'Starts with compact cards' },
   { value: 'name', label: 'Name A–Z', description: 'Sorts organizations alphabetically' },
@@ -72,9 +73,16 @@ export function OrganizationsEditor({
   onUpdateBalance,
   onUpdateOrganizationField
 }: OrganizationsEditorProps) {
+  const configuredOrganizationOrder = useMemo(() => (
+    settings.organizations.filter(organization => !organization.archivedAt).map(organization => organization.name)
+  ), [settings.organizations]);
   const [organizationSort, setOrganizationSort] = useState<SnapshotOrganizationSort>(readSnapshotOrganizationSort);
   const [organizationOrder, setOrganizationOrder] = useState<string[]>(() => (
-    sortSnapshotOrganizations(organizations, organizationSort).map(organization => organization.id)
+    sortSnapshotOrganizations(
+      organizations,
+      organizationSort,
+      settings.organizations.filter(organization => !organization.archivedAt).map(organization => organization.name),
+    ).map(organization => organization.id)
   ));
   const organizationIds = organizations.map(organization => organization.id).join('\u0000');
   const organizationsRef = useRef(organizations);
@@ -84,26 +92,43 @@ export function OrganizationsEditor({
 
   useEffect(() => {
     setOrganizationOrder(currentOrder => (
-      reconcileSnapshotOrganizationOrder(organizationsRef.current, currentOrder, organizationSortRef.current)
+      reconcileSnapshotOrganizationOrder(
+        organizationsRef.current,
+        currentOrder,
+        organizationSortRef.current,
+        configuredOrganizationOrder,
+      )
     ));
     // Balance edits intentionally do not trigger a reorder. Membership changes do.
-  }, [organizationIds]);
+  }, [configuredOrganizationOrder, organizationIds]);
 
   const displayedOrganizations = useMemo(
     () => {
       const organizationsById = new Map(organizations.map(organization => [organization.id, organization]));
-      return reconcileSnapshotOrganizationOrder(organizations, organizationOrder, organizationSort)
+      return reconcileSnapshotOrganizationOrder(
+        organizations,
+        organizationOrder,
+        organizationSort,
+        configuredOrganizationOrder,
+      )
         .map(id => organizationsById.get(id))
         .filter((organization): organization is OrganizationDraft => !!organization);
     },
-    [organizationOrder, organizationSort, organizations],
+    [configuredOrganizationOrder, organizationOrder, organizationSort, organizations],
   );
   const organizationSortNeedsApply = useMemo(
-    () => snapshotOrganizationOrderNeedsApply(organizations, organizationOrder, organizationSort),
-    [organizationOrder, organizationSort, organizations],
+    () => snapshotOrganizationOrderNeedsApply(
+      organizations,
+      organizationOrder,
+      organizationSort,
+      configuredOrganizationOrder,
+    ),
+    [configuredOrganizationOrder, organizationOrder, organizationSort, organizations],
   );
   const applyOrganizationSort = (sort: SnapshotOrganizationSort) => {
-    setOrganizationOrder(sortSnapshotOrganizations(organizations, sort).map(organization => organization.id));
+    setOrganizationOrder(
+      sortSnapshotOrganizations(organizations, sort, configuredOrganizationOrder).map(organization => organization.id),
+    );
   };
   const uniqueConfiguredOrganizations = settings.organizations.filter((organization, index, organizations) => (
     !organization.archivedAt
@@ -136,7 +161,7 @@ export function OrganizationsEditor({
           <div>
             <div className="flex items-center gap-2">
               <h3>Organizations & Accounts</h3>
-              <HelpTooltip text={<AmountFieldHelp />} ariaLabel="Amount field help" width={400} />
+              <HelpTooltip text={<AmountFieldHelp />} ariaLabel="Amount field help" width={400} placement="side" />
             </div>
             <p>Keep balances grouped by where they are held.</p>
           </div>
@@ -340,6 +365,8 @@ export function OrganizationsEditor({
                               value={balance.amount}
                               onChange={value => onUpdateBalance(org.id, index, 'amount', value)}
                               maximumFractionDigits={8}
+                              ariaLabel={`${org.name || 'Organization'} balance ${index + 1} amount`}
+                              navigationGroup="snapshot-balances"
                             />
                           </td>
                           <td style={cellStyle}>

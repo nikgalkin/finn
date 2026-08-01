@@ -52,6 +52,17 @@ test('supports alphabetical and saved organization order', () => {
   );
 });
 
+test('uses the preferred organization order from settings', () => {
+  assert.deepEqual(
+    sortSnapshotOrganizations(
+      organizations,
+      'settings-order',
+      ['Delta', 'Beta', 'alpha'],
+    ).map(organization => organization.name),
+    ['Delta', 'Beta', 'alpha', 'Gamma'],
+  );
+});
+
 test('keeps existing cards fixed when balances change and only places new organizations', () => {
   const currentOrder = ['gamma', 'beta', 'alpha', 'delta'];
   const editedOrganizations = [
@@ -86,13 +97,13 @@ test('keeps existing cards fixed when balances change and only places new organi
 
 test('remembers a valid sort and safely falls back when storage is unavailable', () => {
   const storage = new MemoryStorage();
-  assert.equal(readSnapshotOrganizationSort(storage), 'balance-count-desc');
+  assert.equal(readSnapshotOrganizationSort(storage), 'settings-order');
 
   saveSnapshotOrganizationSort('name', storage);
   assert.equal(readSnapshotOrganizationSort(storage), 'name');
 
   storage.setItem('finn:snapshot-organization-sort', 'unknown');
-  assert.equal(readSnapshotOrganizationSort(storage), 'balance-count-desc');
-  assert.equal(readSnapshotOrganizationSort(new BlockedStorage()), 'balance-count-desc');
+  assert.equal(readSnapshotOrganizationSort(storage), 'settings-order');
+  assert.equal(readSnapshotOrganizationSort(new BlockedStorage()), 'settings-order');
   assert.doesNotThrow(() => saveSnapshotOrganizationSort('original', new BlockedStorage()));
 });

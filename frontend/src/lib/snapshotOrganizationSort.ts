@@ -1,6 +1,7 @@
 import type { OrganizationDraft } from '../types';
 
 export const snapshotOrganizationSortChoices = [
+  'settings-order',
   'balance-count-desc',
   'balance-count-asc',
   'name',
@@ -30,9 +31,9 @@ export function readSnapshotOrganizationSort(
     const stored = storage?.getItem(storageKey) as SnapshotOrganizationSort | null;
     return stored && snapshotOrganizationSortChoices.includes(stored)
       ? stored
-      : 'balance-count-desc';
+      : 'settings-order';
   } catch {
-    return 'balance-count-desc';
+    return 'settings-order';
   }
 }
 
@@ -50,7 +51,14 @@ export function saveSnapshotOrganizationSort(
 export function sortSnapshotOrganizations<T extends SortableOrganization>(
   organizations: readonly T[],
   sort: SnapshotOrganizationSort,
+  settingsOrganizationOrder: readonly string[] = [],
 ): T[] {
+  const settingsOrder = new Map<string, number>();
+  settingsOrganizationOrder.forEach((name, index) => {
+    const normalizedName = name.trim().toLocaleLowerCase();
+    if (normalizedName && !settingsOrder.has(normalizedName)) settingsOrder.set(normalizedName, index);
+  });
+
   return organizations
     .map((organization, index) => ({ organization, index }))
     .sort((left, right) => {
@@ -66,6 +74,12 @@ export function sortSnapshotOrganizations<T extends SortableOrganization>(
           sensitivity: 'base',
         }) || left.index - right.index;
       }
+      if (sort === 'settings-order') {
+        const leftPosition = settingsOrder.get(left.organization.name.trim().toLocaleLowerCase());
+        const rightPosition = settingsOrder.get(right.organization.name.trim().toLocaleLowerCase());
+        return (leftPosition ?? Number.MAX_SAFE_INTEGER) - (rightPosition ?? Number.MAX_SAFE_INTEGER)
+          || left.index - right.index;
+      }
       return left.index - right.index;
     })
     .map(({ organization }) => organization);
@@ -75,6 +89,7 @@ export function reconcileSnapshotOrganizationOrder<T extends OrderableOrganizati
   organizations: readonly T[],
   currentOrder: readonly string[],
   sort: SnapshotOrganizationSort,
+  settingsOrganizationOrder: readonly string[] = [],
 ): string[] {
   const organizationsById = new Map(organizations.map(organization => [organization.id, organization]));
   const retainedOrder = currentOrder.filter((id, index) => (
@@ -85,7 +100,7 @@ export function reconcileSnapshotOrganizationOrder<T extends OrderableOrganizati
 
   return [
     ...retainedOrder,
-    ...sortSnapshotOrganizations(addedOrganizations, sort).map(organization => organization.id),
+    ...sortSnapshotOrganizations(addedOrganizations, sort, settingsOrganizationOrder).map(organization => organization.id),
   ];
 }
 
@@ -93,8 +108,9 @@ export function snapshotOrganizationOrderNeedsApply<T extends OrderableOrganizat
   organizations: readonly T[],
   currentOrder: readonly string[],
   sort: SnapshotOrganizationSort,
+  settingsOrganizationOrder: readonly string[] = [],
 ): boolean {
-  const displayedOrder = reconcileSnapshotOrganizationOrder(organizations, currentOrder, sort);
-  const sortedOrder = sortSnapshotOrganizations(organizations, sort).map(organization => organization.id);
+  const displayedOrder = reconcileSnapshotOrganizationOrder(organizations, currentOrder, sort, settingsOrganizationOrder);
+  const sortedOrder = sortSnapshotOrganizations(organizations, sort, settingsOrganizationOrder).map(organization => organization.id);
   return displayedOrder.some((id, index) => id !== sortedOrder[index]);
 }
