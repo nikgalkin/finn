@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type MouseEvent } from 'react';
 import { adjacentFieldIndex } from '../../lib/fieldNavigation';
-import { normalizeNumberExpressionInput, parseNumberExpression } from '../../lib/numberExpression';
+import { formatFullNumber, formatTrimmedNumber } from '../../lib/format';
+import { normalizeNumberExpressionInput, parseNumberExpression, substituteExpressionBase } from '../../lib/numberExpression';
 
 type AmountInputProps = {
   value: number | string;
@@ -49,17 +50,24 @@ const formatAmount = (amount: number | string, maximumFractionDigits: number): s
   if (amount === 0) return '';
   const numericAmount = typeof amount === 'number' ? amount : Number(amount);
   if (!Number.isFinite(numericAmount)) return String(amount);
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(numericAmount).replace(/,/g, ' ');
+  return formatTrimmedNumber(numericAmount, maximumFractionDigits).replace(/,/g, ' ');
 };
 
 const editingAmount = (amount: number | string, maximumFractionDigits: number) => {
   if (amount === 0) return '';
   if (typeof amount === 'string') return amount;
-  return new Intl.NumberFormat('en-US', {
-    useGrouping: false,
-    maximumFractionDigits
-  }).format(amount);
+  return formatTrimmedNumber(amount, maximumFractionDigits).replace(/,/g, '');
 };
+
+const exactAmount = (amount: number, maximumFractionDigits: number) => (
+  formatFullNumber(amount, maximumFractionDigits).replace(/,/g, '')
+);
+
+const exactAmountTitle = (amount: number | string, maximumFractionDigits: number) => (
+  typeof amount === 'number' && Number.isFinite(amount) && amount !== 0
+    ? formatFullNumber(amount, maximumFractionDigits).replace(/,/g, ' ')
+    : ''
+);
 
 export function AmountInput({
   value,
@@ -78,6 +86,8 @@ export function AmountInput({
   const [invalid, setInvalid] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const caretRef = useRef<number | null>(null);
+  const untouchedRef = useRef(true);
+  const baseRef = useRef<{ shown: string; exact: string } | null>(null);
 
   useEffect(() => {
     if (!editing) {
@@ -117,13 +127,18 @@ export function AmountInput({
     }
 
     caretRef.current = caret;
+    untouchedRef.current = false;
     setDraft(normalized);
     onChange(normalized);
   };
 
   const commitValue = (rawValue: string) => {
-    const committed = rawValue.trim() === '' ? 0 : parseNumberExpression(rawValue);
     setEditing(false);
+    if (untouchedRef.current) return;
+
+    const base = baseRef.current;
+    const expression = base ? substituteExpressionBase(rawValue, base.shown, base.exact) : rawValue;
+    const committed = expression.trim() === '' ? 0 : parseNumberExpression(expression);
     if (committed === null) {
       setInvalid(true);
       setDraft(rawValue);
@@ -194,16 +209,21 @@ export function AmountInput({
       data-amount-navigation={navigationGroup}
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
+      title={exactAmountTitle(value, maximumFractionDigits) || undefined}
       value={draft}
       placeholder="0"
       required={required}
       onMouseDown={handleMouseDown}
       onFocus={event => {
-        const exactValue = editingAmount(value, maximumFractionDigits);
+        const editableValue = editingAmount(value, maximumFractionDigits);
+        untouchedRef.current = true;
+        baseRef.current = typeof value === 'number' && Number.isFinite(value)
+          ? { shown: editableValue, exact: exactAmount(value, maximumFractionDigits) }
+          : null;
         setEditing(true);
         setInvalid(false);
-        setDraft(exactValue);
-        caretRef.current = exactValue.length;
+        setDraft(editableValue);
+        caretRef.current = editableValue.length;
         moveCaretToEnd(event.currentTarget);
       }}
       onChange={event => handleChange(event.target)}

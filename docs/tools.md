@@ -140,7 +140,7 @@ error-prone to edit by hand. Selecting a JSON cell adds a tree to the same panel
 
 ```sql
 UPDATE snapshots
-SET data = json_set(data, '$.organizations[0].name', 'Alfa-Bank')
+SET data = json_set(data, '$.organizations[0].name', 'Honey Pot Savings')
 WHERE month = '2026-07';
 ```
 
@@ -172,14 +172,14 @@ array instead:
 
 ```sql
 UPDATE snapshots
-SET data = json_set(data, '$.organizations[0].name', 'Alfa-Bank')
+SET data = json_set(data, '$.organizations[0].name', 'Honey Pot Savings')
 WHERE EXISTS (
   SELECT 1 FROM json_each(data, '$.organizations')
-  WHERE json_extract(value, '$.id') = 'ad2c48a2-5cd4-4bf9-8712-087485a904d0'
+  WHERE json_extract(value, '$.id') = 'f0a1c2d3-1111-4aaa-8b01-6d5e4f3a2b10'
 );
 ```
 
-The difference is not subtle: in the demo data `$.organizations[0].name = 'Binance'` matches no rows
+The difference is not subtle: in the demo data `$.organizations[0].name = 'Lazy Otter Capital'` matches no rows
 at all, while the scan finds it in all fourteen snapshots.
 
 The box is ticked automatically when the path contains an array index, and disabled when it has none
@@ -199,12 +199,12 @@ the same test deciding which elements change:
 UPDATE snapshots
 SET data = json_set(data, '$.organizations',
   (SELECT json_group_array(
-     CASE WHEN json_extract(value, '$.id') = 'ad2c48a2-5cd4-4bf9-8712-087485a904d0'
-          THEN json_set(value, '$.name', 'Alfa-Bank')
+     CASE WHEN json_extract(value, '$.id') = 'f0a1c2d3-1111-4aaa-8b01-6d5e4f3a2b10'
+          THEN json_set(value, '$.name', 'Honey Pot Savings')
           ELSE value END)
    FROM json_each(data, '$.organizations')))
 WHERE EXISTS (SELECT 1 FROM json_each(data, '$.organizations')
-              WHERE json_extract(value, '$.id') = 'ad2c48a2-5cd4-4bf9-8712-087485a904d0');
+              WHERE json_extract(value, '$.id') = 'f0a1c2d3-1111-4aaa-8b01-6d5e4f3a2b10');
 ```
 
 Elements that do not match pass through untouched, and matching elements keep every other field —

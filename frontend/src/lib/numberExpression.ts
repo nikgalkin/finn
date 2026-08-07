@@ -30,6 +30,12 @@ export const normalizeNumberExpressionInput = (value: string): string | null => 
   return DISALLOWED_INPUT_CHARACTER.test(translated) ? null : translated;
 };
 
+export const substituteExpressionBase = (expression: string, shownBase: string, exactBase: string) => (
+  shownBase && expression.startsWith(shownBase)
+    ? `${exactBase}${expression.slice(shownBase.length)}`
+    : expression
+);
+
 const SHORTHAND_MULTIPLIERS: Record<string, number> = {
   k: 1_000,
   kk: 1_000_000,

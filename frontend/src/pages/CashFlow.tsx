@@ -20,7 +20,7 @@ import { AppSelect } from './components/AppSelect';
 import { findFlowCsvDuplicates, parseFlowCsv } from '../lib/flowCsv';
 import type { FlowCsvPreview } from '../lib/flowCsv';
 import { orientExchangeRate } from '../lib/finance';
-import { formatExchangeRate, formatFlowAmount, formatMonth, getDeltaColor } from '../lib/format';
+import { formatCompactFlowAmount, formatExchangeRate, formatFlowAmount, formatFullFlowAmount, formatMonth, getDeltaColor } from '../lib/format';
 
 type FlowMovementFilter = 'all' | FlowDirection | 'transfer';
 
@@ -55,6 +55,20 @@ const formatTransferRate = (entry: FlowEntry) => {
   const directRate = entry.toAmount / entry.amount;
   const displayRate = orientExchangeRate(entry.currency, entry.toCurrency, directRate);
   return `1 ${displayRate.fromCurrency} = ${formatExchangeRate(displayRate.rate)} ${displayRate.toCurrency}`;
+};
+
+const amountParts = (entry: FlowEntry, netAmount: number) => entry.entryType === 'transfer'
+  ? [
+    { sign: '−', value: entry.amount, currency: entry.currency },
+    { sign: '+', value: entry.toAmount, currency: entry.toCurrency }
+  ]
+  : [{ sign: entry.direction === 'in' ? '+' : '−', value: Math.abs(netAmount), currency: entry.currency }];
+
+const formatExactAmounts = (entry: FlowEntry, netAmount: number) => {
+  const parts = amountParts(entry, netAmount);
+  const shown = parts.map(part => `${part.sign}${formatCompactFlowAmount(part.value, part.currency)}`).join(' → ');
+  const exact = parts.map(part => `${part.sign}${formatFullFlowAmount(part.value, part.currency)}`).join(' → ');
+  return shown === exact ? '' : exact;
 };
 
 const nextMonth = (month: string) => {
@@ -808,8 +822,20 @@ export default function CashFlow() {
                                         </button>
                                       </QuickHoverTooltip>
                                     </td>
-                                    <td className="text-right" style={{ whiteSpace: 'nowrap', color: movementColor, fontWeight: 700 }}>
-                                      <div>{isTransfer ? `−${formatFlowAmount(entry.amount, entry.currency)} → +${formatFlowAmount(entry.toAmount, entry.toCurrency)}` : `${entry.direction === 'in' ? '+' : '−'}${formatFlowAmount(Math.abs(netAmount), entry.currency)}`}</div>
+                                    <td className="text-right" style={{ color: movementColor, fontWeight: 700 }}>
+                                      <QuickHoverTooltip text={formatExactAmounts(entry, netAmount)} className="cash-flow-amount-anchor">
+                                        <span className="cash-flow-amount-line">
+                                          {isTransfer ? (
+                                            <>
+                                              <span>−{formatCompactFlowAmount(entry.amount, entry.currency)}</span>
+                                              <span className="cash-flow-amount-arrow">→</span>
+                                              <span>+{formatCompactFlowAmount(entry.toAmount, entry.toCurrency)}</span>
+                                            </>
+                                          ) : (
+                                            <span>{entry.direction === 'in' ? '+' : '−'}{formatCompactFlowAmount(Math.abs(netAmount), entry.currency)}</span>
+                                          )}
+                                        </span>
+                                      </QuickHoverTooltip>
                                       {isTransfer && formatTransferRate(entry) && <div className="cash-flow-entry-details">Rate: {formatTransferRate(entry)}</div>}
                                       {isTransfer && (entry.tag || entry.toTag) && (
                                         <div className="cash-flow-entry-details cash-flow-entry-tags">

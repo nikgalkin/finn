@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import { ArrowDownWideNarrow, Building2, Copy, List, MessageSquare, Plus, Trash2, WalletCards } from 'lucide-react';
+import { ArrowDownWideNarrow, Building2, Copy, List, MessageSquare, Plus, Tags, Trash2, WalletCards } from 'lucide-react';
 import type { AppSettings, BalanceDraft, ConfiguredOrganization, OrganizationDraft } from '../../types';
 import { getCountryByAlpha3, getCountryDisplayName } from '../../lib/countries';
+import {
+  readSnapshotBalanceView,
+  saveSnapshotBalanceView,
+  sortSnapshotBalanceRows,
+  type SnapshotBalanceView,
+} from '../../lib/snapshotBalanceView';
 import {
   readSnapshotOrganizationSort,
   reconcileSnapshotOrganizationOrder,
@@ -15,12 +21,14 @@ import { AppSelect, type AppSelectOption } from './AppSelect';
 import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { HelpTooltip } from './HelpTooltip';
 import { MultiTagSelect } from './MultiTagSelect';
+import { QuickHoverTooltip } from './QuickHoverTooltip';
 import type { ActiveSnapshotComment } from './SnapshotCommentModal';
 
 type OrganizationsEditorProps = {
   activeDropdownOrgId: string | null;
   isNew: boolean;
   latestSnapshotAvailable: boolean;
+  newBalances: Array<{ orgId: string; index: number }>;
   recentlyAddedOrgId: string | null;
   organizations: OrganizationDraft[];
   orgRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
@@ -54,11 +62,43 @@ const organizationSortOptions: AppSelectOption[] = [
   { value: 'name', label: 'Name A–Z', description: 'Sorts organizations alphabetically' },
   { value: 'original', label: 'Snapshot order', description: 'Uses the saved organization order' },
 ];
+const balanceViewOptions: AppSelectOption[] = [
+  { value: 'tag-order', label: 'Order by tags', description: 'Keeps matching tag sets together without extra headings' },
+  { value: 'currency-order', label: 'Order by currency', description: 'Base and secondary currencies appear first' },
+  { value: 'original', label: 'Snapshot order', description: 'Uses the saved balance order inside each organization' },
+];
+
+const balanceViewOptionsForSettings = (settings: AppSettings) => ({
+  baseCurrency: settings.baseCurrency,
+  secondaryCurrency: settings.secondaryCurrency,
+  currencies: settings.currencies,
+  tags: settings.tags || [],
+});
+
+const buildBalanceOrders = (
+  organizations: readonly OrganizationDraft[],
+  view: SnapshotBalanceView,
+  settings: AppSettings,
+) => Object.fromEntries(organizations.map(organization => [
+  organization.id,
+  sortSnapshotBalanceRows(organization.balances, view, balanceViewOptionsForSettings(settings))
+    .map(row => row.originalIndex),
+]));
+
+const balanceOrderIsValid = (order: readonly number[] | undefined, balanceCount: number) => (
+  order?.length === balanceCount
+  && new Set(order).size === balanceCount
+  && order.every(index => index >= 0 && index < balanceCount)
+);
+const balanceOrdersMatch = (left: readonly number[] | undefined, right: readonly number[]) => (
+  left?.length === right.length && left.every((index, position) => index === right[position])
+);
 
 export function OrganizationsEditor({
   activeDropdownOrgId,
   isNew,
   latestSnapshotAvailable,
+  newBalances,
   recentlyAddedOrgId,
   organizations,
   orgRefs,
@@ -78,6 +118,13 @@ export function OrganizationsEditor({
     settings.organizations.filter(organization => !organization.archivedAt).map(organization => organization.name)
   ), [settings.organizations]);
   const [organizationSort, setOrganizationSort] = useState<SnapshotOrganizationSort>(readSnapshotOrganizationSort);
+  const [balanceView, setBalanceView] = useState<SnapshotBalanceView>(() => readSnapshotBalanceView(
+    undefined,
+    (settings.tags || []).length > 0 ? 'tag-order' : 'currency-order',
+  ));
+  const [balanceOrders, setBalanceOrders] = useState<Record<string, number[]>>(() => (
+    buildBalanceOrders(organizations, balanceView, settings)
+  ));
   const [organizationOrder, setOrganizationOrder] = useState<string[]>(() => (
     sortSnapshotOrganizations(
       organizations,
@@ -88,6 +135,7 @@ export function OrganizationsEditor({
   const organizationIds = organizations.map(organization => organization.id).join('\u0000');
   const organizationsRef = useRef(organizations);
   const organizationSortRef = useRef(organizationSort);
+  const focusedOrganizationIdRef = useRef<string | null>(null);
   organizationsRef.current = organizations;
   organizationSortRef.current = organizationSort;
 
@@ -102,6 +150,31 @@ export function OrganizationsEditor({
     ));
     // Balance edits intentionally do not trigger a reorder. Membership changes do.
   }, [configuredOrganizationOrder, organizationIds]);
+
+  const organizationBalanceMembership = organizations
+    .map(organization => `${organization.id}:${organization.balances.length}`)
+    .join('\u0000');
+  useEffect(() => {
+    setBalanceOrders(currentOrders => {
+      const nextOrders: Record<string, number[]> = {};
+      let changed = Object.keys(currentOrders).length !== organizations.length;
+      organizations.forEach(organization => {
+        const currentOrder = currentOrders[organization.id];
+        if (balanceOrderIsValid(currentOrder, organization.balances.length)) {
+          nextOrders[organization.id] = currentOrder;
+          return;
+        }
+        nextOrders[organization.id] = sortSnapshotBalanceRows(
+          organization.balances,
+          balanceView,
+          balanceViewOptionsForSettings(settings),
+        ).map(row => row.originalIndex);
+        changed = true;
+      });
+      return changed ? nextOrders : currentOrders;
+    });
+    // Tag and currency edits intentionally keep rows in place. Membership changes recalculate the order.
+  }, [balanceView, organizationBalanceMembership, organizations, settings]);
 
   const displayedOrganizations = useMemo(
     () => {
@@ -130,6 +203,25 @@ export function OrganizationsEditor({
     setOrganizationOrder(
       sortSnapshotOrganizations(organizations, sort, configuredOrganizationOrder).map(organization => organization.id),
     );
+  };
+  const applyBalanceOrderForOrganization = (organizationId: string) => {
+    const organization = organizations.find(candidate => candidate.id === organizationId);
+    if (!organization) return;
+    const nextOrder = sortSnapshotBalanceRows(
+      organization.balances,
+      balanceView,
+      balanceViewOptionsForSettings(settings),
+    ).map(row => row.originalIndex);
+    setBalanceOrders(currentOrders => balanceOrdersMatch(currentOrders[organizationId], nextOrder)
+      ? currentOrders
+      : { ...currentOrders, [organizationId]: nextOrder });
+  };
+  const focusOrganization = (organizationId: string) => {
+    const previouslyFocusedOrganizationId = focusedOrganizationIdRef.current;
+    focusedOrganizationIdRef.current = organizationId;
+    if (previouslyFocusedOrganizationId && previouslyFocusedOrganizationId !== organizationId) {
+      applyBalanceOrderForOrganization(previouslyFocusedOrganizationId);
+    }
   };
   const uniqueConfiguredOrganizations = useMemo(() => {
     const seenNames = new Set<string>();
@@ -168,6 +260,7 @@ export function OrganizationsEditor({
     value: currency,
     meta: currency.toUpperCase() === baseCurrency ? 'BASE' : undefined
   })), [baseCurrency, settings.currencies]);
+  const hasBalances = organizations.some(organization => organization.balances.length > 0);
 
   return (
     <section className="snapshot-organizations-section">
@@ -183,39 +276,79 @@ export function OrganizationsEditor({
           </div>
         </div>
         <div className="snapshot-organizations-controls">
+          {hasBalances && (
+            <div className="snapshot-balances-view">
+              <div className="snapshot-sort-control-row">
+                <Tags size={16} aria-hidden="true" />
+                <QuickHoverTooltip
+                  text="Choose how balances are ordered within each organization"
+                  className="snapshot-sort-tooltip"
+                  dismissOnPointerDown
+                  showOnFocus={false}
+                >
+                  <AppSelect
+                    id="snapshot-balance-view"
+                    ariaLabel="Balance display order"
+                    value={balanceView}
+                    options={balanceViewOptions}
+                    placeholder="Arrange balances"
+                    onChange={value => {
+                      const nextView = value as SnapshotBalanceView;
+                      setBalanceView(nextView);
+                      setBalanceOrders(buildBalanceOrders(organizations, nextView, settings));
+                      saveSnapshotBalanceView(nextView);
+                    }}
+                    width="190px"
+                    dropdownWidth={290}
+                    dropdownAlign="right"
+                    height="38px"
+                  />
+                </QuickHoverTooltip>
+              </div>
+            </div>
+          )}
           {organizations.length > 1 && (
             <div className="snapshot-organizations-sort">
-              <button
-                className={`btn snapshot-organizations-sort-apply${organizationSortNeedsApply ? ' is-pending' : ''}`}
-                type="button"
-                title={organizationSortNeedsApply
-                  ? 'Balances changed — apply the selected organization order'
-                  : 'Organization order is up to date'}
-                aria-label={organizationSortNeedsApply
-                  ? 'Apply updated organization sorting'
-                  : 'Organization sorting is up to date'}
-                onClick={() => applyOrganizationSort(organizationSort)}
-                disabled={!organizationSortNeedsApply}
-              >
-                <ArrowDownWideNarrow size={17} aria-hidden="true" />
-              </button>
-              <AppSelect
-                id="snapshot-organization-sort"
-                ariaLabel="Organization display order"
-                value={organizationSort}
-                options={organizationSortOptions}
-                placeholder="Sort organizations"
-                onChange={value => {
-                  const nextSort = value as SnapshotOrganizationSort;
-                  setOrganizationSort(nextSort);
-                  applyOrganizationSort(nextSort);
-                  saveSnapshotOrganizationSort(nextSort);
-                }}
-                width="190px"
-                dropdownWidth={270}
-                dropdownAlign="right"
-                height="38px"
-              />
+              <div className="snapshot-sort-control-row">
+                <button
+                  className={`btn snapshot-organizations-sort-apply${organizationSortNeedsApply ? ' is-pending' : ''}`}
+                  type="button"
+                  title={organizationSortNeedsApply
+                    ? 'Balances changed — apply the selected organization order'
+                    : 'Organization order is up to date'}
+                  aria-label={organizationSortNeedsApply
+                    ? 'Apply updated organization sorting'
+                    : 'Organization sorting is up to date'}
+                  onClick={() => applyOrganizationSort(organizationSort)}
+                  disabled={!organizationSortNeedsApply}
+                >
+                  <ArrowDownWideNarrow size={17} aria-hidden="true" />
+                </button>
+                <QuickHoverTooltip
+                  text="Choose how organization cards are ordered"
+                  className="snapshot-sort-tooltip"
+                  dismissOnPointerDown
+                  showOnFocus={false}
+                >
+                  <AppSelect
+                    id="snapshot-organization-sort"
+                    ariaLabel="Organization display order"
+                    value={organizationSort}
+                    options={organizationSortOptions}
+                    placeholder="Sort organizations"
+                    onChange={value => {
+                      const nextSort = value as SnapshotOrganizationSort;
+                      setOrganizationSort(nextSort);
+                      applyOrganizationSort(nextSort);
+                      saveSnapshotOrganizationSort(nextSort);
+                    }}
+                    width="180px"
+                    dropdownWidth={270}
+                    dropdownAlign="right"
+                    height="38px"
+                  />
+                </QuickHoverTooltip>
+              </div>
             </div>
           )}
           <button
@@ -257,6 +390,10 @@ export function OrganizationsEditor({
           const normalizedOrganizationName = normalizeOrganizationName(org.name);
           const archivedOrganization = archivedOrganizationsByName.get(normalizedOrganizationName);
           const country = getCountryByAlpha3(org.country);
+          const storedBalanceOrder = balanceOrders[org.id];
+          const balanceRows = balanceOrderIsValid(storedBalanceOrder, org.balances.length)
+            ? storedBalanceOrder.map(originalIndex => ({ balance: org.balances[originalIndex], originalIndex }))
+            : sortSnapshotBalanceRows(org.balances, balanceView, balanceViewOptionsForSettings(settings));
           const organizationOptions: AppSelectOption[] = uniqueConfiguredOrganizations.map(organization => {
             const optionCountry = getCountryByAlpha3(organization.country);
             const optionName = normalizeOrganizationName(organization.name);
@@ -280,6 +417,7 @@ export function OrganizationsEditor({
             <div
               key={org.id}
               ref={el => { orgRefs.current[org.id] = el; }}
+              onFocusCapture={() => focusOrganization(org.id)}
               className={`glass-panel snapshot-organization-card${recentlyAddedOrgId === org.id ? ' organization-card-new' : ''}`}
               style={{
                 zIndex: isCurrentOrgDropdownOpen ? 10 : 1,
@@ -358,13 +496,20 @@ export function OrganizationsEditor({
                       </tr>
                     </thead>
                     <tbody>
-                      {org.balances.map((balance, index) => (
-                        <tr key={index}>
+                      {balanceRows.map(({ balance, originalIndex }) => {
+                        const isNewBalance = newBalances.some(candidate => (
+                          candidate.orgId === org.id && candidate.index === originalIndex
+                        ));
+                        return (
+                          <tr
+                            key={`balance-${originalIndex}`}
+                            className={`snapshot-balance-row${isNewBalance ? ' snapshot-balance-new' : ''}`}
+                          >
                           <td style={cellStyle}>
                             <MultiTagSelect
                               selectedTags={balance.tags || []}
                               availableTags={settings.tags || []}
-                              onChange={(newTags: string[]) => onUpdateBalance(org.id, index, 'tags', newTags)}
+                              onChange={(newTags: string[]) => onUpdateBalance(org.id, originalIndex, 'tags', newTags)}
                               onOpen={() => onActiveDropdownChange(org.id)}
                               onClose={() => onActiveDropdownChange(null)}
                             />
@@ -372,19 +517,19 @@ export function OrganizationsEditor({
                           <td style={cellStyle}>
                             <AmountInput
                               value={balance.amount}
-                              onChange={value => onUpdateBalance(org.id, index, 'amount', value)}
+                              onChange={value => onUpdateBalance(org.id, originalIndex, 'amount', value)}
                               maximumFractionDigits={8}
-                              ariaLabel={`${org.name || 'Organization'} balance ${index + 1} amount`}
+                              ariaLabel={`${org.name || 'Organization'} balance ${originalIndex + 1} amount`}
                               navigationGroup="snapshot-balances"
                             />
                           </td>
                           <td style={cellStyle}>
                             <AppSelect
-                              id={`snapshot-balance-${org.id}-${index}-currency`}
-                              name={`snapshot-balance-${org.id}-${index}-currency`}
-                              ariaLabel={`Balance ${index + 1} currency`}
+                              id={`snapshot-balance-${org.id}-${originalIndex}-currency`}
+                              name={`snapshot-balance-${org.id}-${originalIndex}-currency`}
+                              ariaLabel={`Balance ${originalIndex + 1} currency`}
                               value={balance.currency}
-                              onChange={value => onUpdateBalance(org.id, index, 'currency', value)}
+                              onChange={value => onUpdateBalance(org.id, originalIndex, 'currency', value)}
                               options={settings.currencies.includes(balance.currency) || !balance.currency
                                 ? configuredCurrencyOptions
                                 : [...configuredCurrencyOptions, { value: balance.currency, description: 'Not in current settings' }]}
@@ -404,14 +549,14 @@ export function OrganizationsEditor({
                                 style={{ ...getIconStyle(!!balance.comment), padding: '6px' }}
                                 title="Balance Note"
                                 aria-label={`Edit note for ${balance.currency || 'balance'}`}
-                                onClick={() => onOpenComment({ type: 'balance', orgId: org.id, index, text: balance.comment || '', initialText: balance.comment || '', title: `${balance.currency || 'Balance'} Note` })}
+                                onClick={() => onOpenComment({ type: 'balance', orgId: org.id, index: originalIndex, text: balance.comment || '', initialText: balance.comment || '', title: `${balance.currency || 'Balance'} Note` })}
                               >
                                 <MessageSquare size={14} />
                               </button>
                               <button
                                 className="btn"
                                 style={{ padding: '6px' }}
-                                onClick={() => onRemoveBalance(org.id, index)}
+                                onClick={() => onRemoveBalance(org.id, originalIndex)}
                                 title="Remove balance"
                                 aria-label={`Remove ${balance.currency || 'balance'}`}
                               >
@@ -419,8 +564,9 @@ export function OrganizationsEditor({
                               </button>
                             </div>
                           </td>
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
