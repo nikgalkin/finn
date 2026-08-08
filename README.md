@@ -12,7 +12,7 @@ Finn grew out of the friction of maintaining an increasingly complex financial s
 
 <p align="center">
   <a href="https://youtu.be/GE5R8mZ9T-0">
-    <img src="https://img.youtube.com/vi/GE5R8mZ9T-0/maxresdefault.jpg" alt="Watch the Finn product tour on YouTube" width="720">
+    <img src="https://img.youtube.com/vi/GE5R8mZ9T-0/maxresdefault.jpg" alt="Watch the Finn product tour on YouTube" width="480">
   </a>
 </p>
 
