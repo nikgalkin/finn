@@ -3,6 +3,6 @@ export function adjacentFieldIndex(
   fieldCount: number,
   direction: 1 | -1,
 ): number | null {
-  if (currentIndex < 0 || currentIndex >= fieldCount) return null;
+  if (currentIndex < 0 || currentIndex >= fieldCount || fieldCount < 2) return null;
   return (currentIndex + direction + fieldCount) % fieldCount;
 }

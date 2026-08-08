@@ -5,7 +5,9 @@ type QuickHoverTooltipProps = {
   text: string;
   children: ReactNode;
   className?: string;
+  dismissOnPointerDown?: boolean;
   placement?: 'anchor' | 'pointer';
+  showOnFocus?: boolean;
   style?: CSSProperties;
 };
 
@@ -22,11 +24,20 @@ const TOOLTIP_WIDTH = 320;
 const TOOLTIP_GAP = 12;
 const VIEWPORT_PADDING = 12;
 
-export function QuickHoverTooltip({ text, children, className = '', placement = 'anchor', style }: QuickHoverTooltipProps) {
+export function QuickHoverTooltip({
+  text,
+  children,
+  className = '',
+  dismissOnPointerDown = false,
+  placement = 'anchor',
+  showOnFocus = true,
+  style,
+}: QuickHoverTooltipProps) {
   const anchorRef = useRef<HTMLSpanElement | null>(null);
   const tooltipRef = useRef<HTMLSpanElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const pointerRef = useRef<TooltipPoint | null>(null);
+  const pointerDownRef = useRef(false);
   const [position, setPosition] = useState<TooltipPosition | null>(null);
 
   const close = () => {
@@ -42,6 +53,7 @@ export function QuickHoverTooltip({ text, children, className = '', placement = 
     pointerRef.current = point ?? null;
     timerRef.current = window.setTimeout(() => {
       timerRef.current = null;
+      if (dismissOnPointerDown && anchorRef.current?.querySelector('[aria-expanded="true"]')) return;
       const rect = anchorRef.current?.getBoundingClientRect();
       if (!rect) return;
       const latestPoint = pointerRef.current;
@@ -92,7 +104,16 @@ export function QuickHoverTooltip({ text, children, className = '', placement = 
         }
       }}
       onMouseLeave={close}
-      onFocusCapture={() => open(0)}
+      onPointerDownCapture={() => {
+        if (!dismissOnPointerDown) return;
+        pointerDownRef.current = true;
+        close();
+      }}
+      onPointerUpCapture={() => { pointerDownRef.current = false; }}
+      onPointerCancel={() => { pointerDownRef.current = false; }}
+      onFocusCapture={() => {
+        if (showOnFocus && !pointerDownRef.current) open(0);
+      }}
       onBlurCapture={close}
     >
       {children}

@@ -12,7 +12,6 @@ import (
 
 	appassets "finn"
 	_ "github.com/ncruces/go-sqlite3/driver"
-	_ "github.com/ncruces/go-sqlite3/embed"
 )
 
 func resolveDatabasePath(filename string) string {

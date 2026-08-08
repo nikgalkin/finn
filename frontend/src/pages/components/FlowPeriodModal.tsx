@@ -421,7 +421,7 @@ export function FlowPeriodModal({
                 <>
                   <div className="cash-flow-field cash-flow-period-counterparty">
                     <span>{draft.direction === 'in' ? 'From' : 'To'}</span>
-                    <AppSelect ariaLabel={`Movement ${index + 1} ${draft.direction === 'in' ? 'from' : 'to'}`} value={draft.counterparty} onChange={counterparty => updateDraft(draft.clientID, { counterparty, taxRate: draft.direction === 'in' ? defaultTaxRate(counterparty) : 0 })} options={counterpartySelectOptions} placeholder={draft.direction === 'in' ? 'Source' : 'Recipient'} searchable searchPlaceholder="Find counterparty…" width="100%" dropdownWidth={260} height="36px" textAlign="left" />
+                    <AppSelect ariaLabel={`Movement ${index + 1} ${draft.direction === 'in' ? 'from' : 'to'}`} value={draft.counterparty} onChange={counterparty => updateDraft(draft.clientID, { counterparty, taxRate: draft.direction === 'in' ? defaultTaxRate(counterparty) : 0 })} options={counterpartySelectOptions} placeholder={draft.direction === 'in' ? 'Source' : 'Recipient'} allowCustom searchPlaceholder="Find counterparty…" width="100%" dropdownWidth={260} height="36px" textAlign="left" />
                   </div>
                   <div className="cash-flow-field cash-flow-period-account">
                     <span className="cash-flow-label-with-help">Own account · tag <HelpTooltip text={TAG_FIELD_HELP} ariaLabel="Own account and tag help" width={330} /></span>

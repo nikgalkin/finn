@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   Database,
+  Landmark,
   PackageOpen,
   Percent,
   Scale,
@@ -33,6 +34,8 @@ const ReturnCalculatorModal = lazy(() => import('./components/tools/FinancialCal
   .then(module => ({ default: module.ReturnCalculatorModal })));
 const FxComparatorCalculatorModal = lazy(() => import('./components/tools/FinancialCalculatorModals')
   .then(module => ({ default: module.FxComparatorCalculatorModal })));
+const DepositComparatorCalculatorModal = lazy(() => import('./components/tools/FinancialCalculatorModals')
+  .then(module => ({ default: module.DepositComparatorCalculatorModal })));
 
 type ToolId =
   | 'sql-editor'
@@ -42,7 +45,8 @@ type ToolId =
   | 'growth-goal'
   | 'rebalancer'
   | 'return-calculator'
-  | 'fx-comparator';
+  | 'fx-comparator'
+  | 'deposit-comparator';
 
 type ToolDefinition = {
   id: ToolId;
@@ -96,7 +100,7 @@ const CALCULATORS: ToolDefinition[] = [
   {
     id: 'rebalancer',
     name: 'Portfolio Rebalancer',
-    description: 'Turn target allocations and new cash into specific buy and sell amounts.',
+    description: 'Set the allocation you want and get the exact amounts to buy and sell to reach it.',
     icon: Scale,
     accent: '#a78bfa',
     badge: 'beta'
@@ -104,7 +108,7 @@ const CALCULATORS: ToolDefinition[] = [
   {
     id: 'return-calculator',
     name: 'Return Calculator',
-    description: 'Calculate money-weighted annual return from dated investments and withdrawals.',
+    description: 'Enter what went in, what came out and when, and get the annual return that explains it.',
     icon: Percent,
     accent: '#60a5fa',
     badge: 'beta'
@@ -115,6 +119,13 @@ const CALCULATORS: ToolDefinition[] = [
     description: 'Compare two exchange rates and fees to see exactly how much currency each deal buys.',
     icon: ArrowLeftRight,
     accent: '#14b8a6'
+  },
+  {
+    id: 'deposit-comparator',
+    name: 'Deposit Comparator',
+    description: 'Weigh two deposits against each other across currencies, rates, compounding and tax.',
+    icon: Landmark,
+    accent: '#f0b429'
   }
 ];
 
@@ -258,6 +269,16 @@ export default function Tools() {
           />
         )}>
           <FxComparatorCalculatorModal onClose={() => setOpenTool(null)} />
+        </Suspense>
+      )}
+      {openTool === 'deposit-comparator' && (
+        <Suspense fallback={(
+          <ToolModalLoader
+            label="Loading Deposit Comparator"
+            onClose={() => setOpenTool(null)}
+          />
+        )}>
+          <DepositComparatorCalculatorModal onClose={() => setOpenTool(null)} />
         </Suspense>
       )}
     </div>

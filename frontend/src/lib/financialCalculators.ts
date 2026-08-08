@@ -131,6 +131,7 @@ type RebalanceSuggestion = RebalanceItem & {
   currentPercent: number;
   targetAmount: number;
   difference: number;
+  driftPercent: number;
 };
 
 type RebalanceResult = {
@@ -139,6 +140,30 @@ type RebalanceResult = {
   portfolioTotal: number;
   targetPercentTotal: number;
   unallocatedCash: number;
+  tradeVolume: number;
+  largestDriftPercent: number;
+};
+
+const roundPercent = (value: number) => Math.round(value * 100) / 100;
+
+export const normalizeTargetPercents = (targets: number[]): number[] => {
+  const values = targets.map(nonNegative);
+  if (values.length === 0) return [];
+
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const rounded = (total > 0
+    ? values.map(value => value / total * 100)
+    : values.map(() => 100 / values.length)
+  ).map(roundPercent);
+  const residual = roundPercent(100 - rounded.reduce((sum, value) => sum + value, 0));
+  if (residual === 0) return rounded;
+
+  const largestIndex = rounded.reduce(
+    (best, value, index) => value > rounded[best] ? index : best,
+    0
+  );
+  rounded[largestIndex] = roundPercent(rounded[largestIndex] + residual);
+  return rounded;
 };
 
 export const calculateRebalance = (
@@ -157,13 +182,23 @@ export const calculateRebalance = (
   const targetPercentTotal = normalizedItems.reduce((sum, item) => sum + item.targetPercent, 0);
   const desired = normalizedItems.map(item => {
     const targetAmount = portfolioTotal * item.targetPercent / 100;
+    const currentPercent = currentTotal > 0 ? item.currentAmount / currentTotal * 100 : 0;
     return {
       ...item,
-      currentPercent: currentTotal > 0 ? item.currentAmount / currentTotal * 100 : 0,
+      currentPercent,
       targetAmount,
-      difference: targetAmount - item.currentAmount
+      difference: targetAmount - item.currentAmount,
+      driftPercent: currentPercent - item.targetPercent
     };
   });
+  const largestDriftPercent = desired.reduce(
+    (largest, item) => Math.max(largest, Math.abs(item.driftPercent)),
+    0
+  );
+  const tradeVolumeOf = (suggestions: RebalanceSuggestion[]) => suggestions.reduce(
+    (sum, item) => sum + Math.abs(item.difference),
+    0
+  );
 
   if (!buyOnly) {
     return {
@@ -171,7 +206,9 @@ export const calculateRebalance = (
       currentTotal,
       portfolioTotal,
       targetPercentTotal,
-      unallocatedCash: 0
+      unallocatedCash: 0,
+      tradeVolume: tradeVolumeOf(desired),
+      largestDriftPercent
     };
   }
 
@@ -189,7 +226,9 @@ export const calculateRebalance = (
     currentTotal,
     portfolioTotal,
     targetPercentTotal,
-    unallocatedCash: Math.max(0, cash - amountToAllocate)
+    unallocatedCash: Math.max(0, cash - amountToAllocate),
+    tradeVolume: tradeVolumeOf(suggestions),
+    largestDriftPercent
   };
 };
 
@@ -200,9 +239,18 @@ type DatedCashFlow = {
 
 type ReturnCalculation = {
   annualizedReturnPercent: number | null;
+  simpleReturnPercent: number | null;
   netProfit: number;
   totalInvested: number;
   totalReturned: number;
+  periodDays: number;
+};
+
+export type ReturnFlowKind = 'open' | 'deposit' | 'withdrawal' | 'close';
+
+export const signReturnFlow = (kind: ReturnFlowKind, amount: number) => {
+  const magnitude = Math.abs(finiteOrZero(amount));
+  return kind === 'open' || kind === 'deposit' ? -magnitude : magnitude;
 };
 
 const daysBetween = (start: number, end: number) => (end - start) / 86_400_000;
@@ -214,11 +262,16 @@ export const calculateXirr = (cashFlows: DatedCashFlow[]): ReturnCalculation => 
     .sort((left, right) => left.timestamp - right.timestamp);
   const totalInvested = flows.reduce((sum, flow) => sum + (flow.amount < 0 ? -flow.amount : 0), 0);
   const totalReturned = flows.reduce((sum, flow) => sum + (flow.amount > 0 ? flow.amount : 0), 0);
+  const netProfit = flows.reduce((sum, flow) => sum + flow.amount, 0);
   const result: ReturnCalculation = {
     annualizedReturnPercent: null,
-    netProfit: flows.reduce((sum, flow) => sum + flow.amount, 0),
+    simpleReturnPercent: totalInvested > 0 ? netProfit / totalInvested * 100 : null,
+    netProfit,
     totalInvested,
-    totalReturned
+    totalReturned,
+    periodDays: flows.length < 2
+      ? 0
+      : daysBetween(flows[0].timestamp, flows[flows.length - 1].timestamp)
   };
 
   if (flows.length < 2 || totalInvested === 0 || totalReturned === 0) return result;
@@ -433,5 +486,151 @@ export const compareFxDealsForTarget = (
       ? 0
       : Math.abs(difference) / baseline * 100,
     betterDeal: materiallyEqual ? 'equal' : difference > 0 ? 'A' : 'B'
+  };
+};
+
+export type DepositCompounding = 'daily' | 'monthly' | 'quarterly' | 'annually' | 'maturity';
+
+const DEPOSIT_PERIODS_PER_YEAR: Record<Exclude<DepositCompounding, 'maturity'>, number> = {
+  daily: 365,
+  monthly: 12,
+  quarterly: 4,
+  annually: 1
+};
+
+type DepositInput = {
+  principal: number;
+  annualRatePercent: number;
+  months: number;
+  compounding?: DepositCompounding;
+  taxRatePercent?: number;
+  taxFreeInterest?: number;
+};
+
+type DepositResult = {
+  principal: number;
+  years: number;
+  grossInterest: number;
+  taxableInterest: number;
+  tax: number;
+  netInterest: number;
+  maturityValue: number;
+  netAnnualRatePercent: number;
+};
+
+const annualizePercent = (from: number, to: number, years: number) => {
+  if (from <= 0 || years <= 0) return 0;
+  if (to <= 0) return -100;
+  return ((to / from) ** (1 / years) - 1) * 100;
+};
+
+export const calculateDeposit = ({
+  principal,
+  annualRatePercent,
+  months,
+  compounding = 'monthly',
+  taxRatePercent = 0,
+  taxFreeInterest = 0
+}: DepositInput): DepositResult => {
+  const amount = nonNegative(principal);
+  const years = nonNegative(months) / 12;
+  const annualRate = finiteOrZero(annualRatePercent) / 100;
+  const periodsPerYear = compounding === 'maturity' ? 0 : DEPOSIT_PERIODS_PER_YEAR[compounding];
+  const grossValue = periodsPerYear === 0
+    ? amount * (1 + annualRate * years)
+    : amount * (1 + annualRate / periodsPerYear) ** (periodsPerYear * years);
+  const grossInterest = grossValue - amount;
+  const taxableInterest = Math.max(0, grossInterest - nonNegative(taxFreeInterest));
+  const tax = taxableInterest * nonNegative(taxRatePercent) / 100;
+  const netInterest = grossInterest - tax;
+  const maturityValue = amount + netInterest;
+
+  return {
+    principal: amount,
+    years,
+    grossInterest,
+    taxableInterest,
+    tax,
+    netInterest,
+    maturityValue,
+    netAnnualRatePercent: annualizePercent(amount, maturityValue, years)
+  };
+};
+
+type DepositOfferInput = Omit<DepositInput, 'principal'> & {
+  investment: number;
+  entryRate?: number;
+  exitRate?: number;
+};
+
+type DepositOfferResult = DepositResult & {
+  investment: number;
+  maturityValueInBase: number;
+  profitInBase: number;
+  netAnnualReturnPercent: number;
+};
+
+export const calculateDepositOffer = ({
+  investment,
+  entryRate = 1,
+  exitRate = 1,
+  ...deposit
+}: DepositOfferInput): DepositOfferResult => {
+  const invested = nonNegative(investment);
+  const entry = nonNegative(entryRate);
+  const exit = nonNegative(exitRate);
+  const result = calculateDeposit({
+    ...deposit,
+    principal: entry > 0 ? invested / entry : 0
+  });
+  const maturityValueInBase = result.maturityValue * exit;
+
+  return {
+    ...result,
+    investment: invested,
+    maturityValueInBase,
+    profitInBase: maturityValueInBase - invested,
+    netAnnualReturnPercent: annualizePercent(invested, maturityValueInBase, result.years)
+  };
+};
+
+type DepositComparison = {
+  offerA: DepositOfferResult;
+  offerB: DepositOfferResult;
+  difference: number;
+  differencePercent: number;
+  betterOffer: 'A' | 'B' | 'equal';
+  breakEvenExitRateA: number | null;
+  breakEvenExitRateB: number | null;
+};
+
+export const compareDepositOffers = (
+  offerAInput: DepositOfferInput,
+  offerBInput: DepositOfferInput
+): DepositComparison => {
+  const offerA = calculateDepositOffer(offerAInput);
+  const offerB = calculateDepositOffer(offerBInput);
+  const rawDifference = offerA.maturityValueInBase - offerB.maturityValueInBase;
+  const comparisonScale = Math.max(
+    1,
+    Math.abs(offerA.maturityValueInBase),
+    Math.abs(offerB.maturityValueInBase)
+  );
+  const materiallyEqual = Math.abs(rawDifference) <= Number.EPSILON * comparisonScale * 16;
+  const difference = materiallyEqual ? 0 : rawDifference;
+  const baseline = Math.min(offerA.maturityValueInBase, offerB.maturityValueInBase);
+
+  return {
+    offerA,
+    offerB,
+    difference,
+    differencePercent: materiallyEqual || baseline <= 0 ? 0 : Math.abs(difference) / baseline * 100,
+    betterOffer: materiallyEqual ? 'equal' : difference > 0 ? 'A' : 'B',
+    breakEvenExitRateA: offerA.maturityValue > 0
+      ? offerB.maturityValueInBase / offerA.maturityValue
+      : null,
+    breakEvenExitRateB: offerB.maturityValue > 0
+      ? offerA.maturityValueInBase / offerB.maturityValue
+      : null
   };
 };

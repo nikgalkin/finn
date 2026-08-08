@@ -63,6 +63,7 @@ export default function SnapshotEdit() {
   const [fetchingRates, setFetchingRates] = useState<'latest' | 'periodStart' | null>(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [newBalances, setNewBalances] = useState<Array<{ orgId: string; index: number }>>([]);
   const [recentlyAddedOrgId, setRecentlyAddedOrgId] = useState<string | null>(null);
   const [cashFlowEditor, setCashFlowEditor] = useState<{ month: string; entries: FlowEntry[]; previousEntries: ReturnType<typeof copyFlowPeriodEntries> } | null>(null);
   const [cashFlowLoading, setCashFlowLoading] = useState(false);
@@ -154,6 +155,7 @@ export default function SnapshotEdit() {
 
   const handleRestoreDraft = () => {
     if (draftToRestore) {
+      setNewBalances([]);
       setData(draftToRestore.data);
       setCurrentMonth(draftToRestore.currentMonth);
       setDurationSeconds(draftToRestore.durationSeconds || 0);
@@ -567,6 +569,7 @@ export default function SnapshotEdit() {
 
   const copyFromPrevious = () => {
     if (latestSnapshot) {
+      setNewBalances([]);
       const cleanData = stripCommentsFromSnapshot(latestSnapshot);
       const organizations = cleanData.organizations
         .filter(org => {
@@ -586,6 +589,7 @@ export default function SnapshotEdit() {
   };
 
   const fillFromSettings = () => {
+    setNewBalances([]);
     const uniqueOrganizations = settings.organizations.filter((organization, index, organizations) => (
       !organization.archivedAt
       && organizations.findIndex(candidate => !candidate.archivedAt && candidate.name.trim().toLocaleLowerCase() === organization.name.trim().toLocaleLowerCase()) === index
@@ -654,6 +658,7 @@ export default function SnapshotEdit() {
 
   const removeOrganization = (id: string) => {
     if (confirm('Remove this organization?')) {
+      setNewBalances(current => current.filter(balance => balance.orgId !== id));
       setData({
         ...data,
         organizations: data.organizations.filter(o => o.id !== id)
@@ -662,6 +667,11 @@ export default function SnapshotEdit() {
   };
 
   const addBalance = (orgId: string) => {
+    const organization = data.organizations.find(candidate => candidate.id === orgId);
+    if (!organization) return;
+    const index = organization.balances.length;
+    setNewBalances(current => [...current, { orgId, index }]);
+
     setData({
       ...data,
       organizations: data.organizations.map(o => {
@@ -712,6 +722,11 @@ export default function SnapshotEdit() {
         return o;
       })
     });
+    setNewBalances(current => current.flatMap(balance => {
+      if (balance.orgId !== orgId) return [balance];
+      if (balance.index === index) return [];
+      return [{ ...balance, index: balance.index > index ? balance.index - 1 : balance.index }];
+    }));
   };
 
   const updateRate = (currency: string, value: string | number) => {
@@ -838,6 +853,7 @@ export default function SnapshotEdit() {
         activeDropdownOrgId={activeDropdownOrgId}
         isNew={isNew}
         latestSnapshotAvailable={!!latestSnapshot}
+        newBalances={newBalances}
         recentlyAddedOrgId={recentlyAddedOrgId}
         organizations={data.organizations}
         orgRefs={orgRefs}

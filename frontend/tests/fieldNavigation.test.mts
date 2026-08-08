@@ -16,3 +16,8 @@ test('ignores a field outside the navigation group', () => {
   assert.equal(adjacentFieldIndex(-1, 4, 1), null);
   assert.equal(adjacentFieldIndex(4, 4, -1), null);
 });
+
+test('stays put when the group holds a single field', () => {
+  assert.equal(adjacentFieldIndex(0, 1, 1), null);
+  assert.equal(adjacentFieldIndex(0, 1, -1), null);
+});

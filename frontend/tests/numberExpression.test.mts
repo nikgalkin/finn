@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeNumberExpressionInput, parseNumberExpression } from '../src/lib/numberExpression.ts';
+import { normalizeNumberExpressionInput, parseNumberExpression, substituteExpressionBase } from '../src/lib/numberExpression.ts';
 
 test('keeps every character the expression parser understands', () => {
   assert.equal(normalizeNumberExpressionInput('(1 200,5 + 350) * 2 / 4 - 1'), '(1 200,5 + 350) * 2 / 4 - 1');
@@ -72,6 +72,18 @@ test('keeps shorthand and monthly annual-rate calculations', () => {
   assert.equal(parseNumberExpression('2mm + 3b'), 2_003_000_000_000);
   assert.equal(parseNumberExpression('100 + 12%'), 101);
   assert.equal(parseNumberExpression('100 - 12%'), 99);
+});
+
+test('appends to the exact value behind a shortened one', () => {
+  assert.equal(substituteExpressionBase('75.65+0.0085', '75.65', '75.6515'), '75.6515+0.0085');
+  assert.equal(parseNumberExpression(substituteExpressionBase('75.65+0.0085', '75.65', '75.6515')), 75.66);
+  assert.equal(substituteExpressionBase('75.65-12%', '75.65', '75.6515'), '75.6515-12%');
+});
+
+test('leaves a retyped amount alone instead of restoring the hidden tail', () => {
+  assert.equal(substituteExpressionBase('75.75', '75.65', '75.6515'), '75.75');
+  assert.equal(substituteExpressionBase('175.65', '75.65', '75.6515'), '175.65');
+  assert.equal(substituteExpressionBase('75.65+1', '', '75.6515'), '75.65+1');
 });
 
 test('rejects JavaScript syntax that is not arithmetic', () => {

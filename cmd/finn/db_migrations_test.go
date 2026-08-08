@@ -46,8 +46,8 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM flow_entries").Scan(&flowCount); err != nil {
 		t.Fatal(err)
 	}
-	if flowCount != 49 {
-		t.Fatalf("flow entry count = %d, want 49", flowCount)
+	if flowCount != 69 {
+		t.Fatalf("flow entry count = %d, want 69", flowCount)
 	}
 
 	var salaryCount, rentCount, transferCount, carCount, bonusCount int
@@ -106,13 +106,13 @@ func TestSQLMigrationsBootstrapDemoData(t *testing.T) {
 		}
 		var deposit float64
 		for _, organization := range snapshot.Organizations {
-			if organization.Name != "Alfabank" || len(organization.Balances) == 0 {
+			if organization.Name != "Acorn Vault" || len(organization.Balances) == 0 {
 				continue
 			}
 			deposit = numberValue(organization.Balances[0].Amount)
 		}
 		if deposit == 0 {
-			t.Fatalf("snapshot %d has no Alfabank deposit", snapshotIndex)
+			t.Fatalf("snapshot %d has no Acorn Vault deposit", snapshotIndex)
 		}
 		if snapshotIndex > 0 {
 			monthlyReturn := deposit/previousDeposit - 1

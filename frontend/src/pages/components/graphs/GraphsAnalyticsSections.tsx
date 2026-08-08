@@ -2,6 +2,7 @@ import { Fragment, memo, useCallback, useMemo, useState, type CSSProperties, typ
 import { Activity, ArrowLeftRight, ArrowRight, BarChart3, Check, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import {
+  formatAllocationPercent,
   formatCompact,
   formatExchangeRate,
   formatFriendlyTime,
@@ -170,7 +171,7 @@ const renderCurrencySegmentLabel = (currency: string) => ({ x, y, width, height,
       dominantBaseline="central"
       style={{ pointerEvents: 'none', letterSpacing: '0.01em' }}
     >
-      {currency} · {percent.toFixed(0)}%
+      {currency} · {formatAllocationPercent(percent)}
     </text>
   );
 };
@@ -392,7 +393,7 @@ type TitledContentProps = { children: ReactNode; icon: ReactNode; title: ReactNo
 type ChartCardProps = TitledContentProps & { help: string; onTitleClick?: () => void; panel?: boolean; style?: CSSProperties };
 
 const ChartCard = ({ children, help, icon, onTitleClick, title, panel = true, style }: ChartCardProps) => (
-  <div className={panel ? 'glass-panel' : undefined} style={{ ...CARD_STYLE, ...style }}>
+  <div className={`graphs-chart-card${panel ? ' glass-panel' : ''}`} style={{ ...CARD_STYLE, ...style }}>
     <ChartTitle icon={icon} help={help} onClick={onTitleClick}>{title}</ChartTitle>
     {children}
   </div>
