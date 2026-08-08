@@ -12,8 +12,12 @@ Finn grew out of the friction of maintaining an increasingly complex financial s
 
 <p align="center">
   <a href="https://youtu.be/GE5R8mZ9T-0">
-    <img src="https://img.youtube.com/vi/GE5R8mZ9T-0/maxresdefault.jpg" alt="Watch the Finn product tour on YouTube" width="720">
+    <img src="docs/media/demo-cover.jpg" alt="Watch the Finn product tour on YouTube" width="720">
   </a>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/GE5R8mZ9T-0">▶ Watch the tour on YouTube</a>
 </p>
 
 A tour of the app: monthly snapshots, multi-currency balances, and the analytics that show where a change in net worth actually came from
