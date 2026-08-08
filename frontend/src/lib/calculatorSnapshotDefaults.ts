@@ -1,5 +1,5 @@
 import type { FlowEntry, ParsedSnapshot } from '../types.ts';
-import type { FxQuoteDirection } from './financialCalculators.ts';
+import type { FxQuoteDirection, ReturnFlowKind } from './financialCalculators.ts';
 import {
   calculateCurrencyTotals,
   calculateOrganizationTotal,
@@ -17,6 +17,7 @@ type SnapshotRebalanceRow = {
 type SnapshotReturnFlow = {
   id: string;
   date: string;
+  kind: ReturnFlowKind;
   amount: number;
 };
 
@@ -140,7 +141,8 @@ export const buildSnapshotReturnFlows = (
       return {
         id: `flow-${entry.id}`,
         date: monthMiddleDate(entry.month),
-        amount: roundMoney(entry.direction === 'in' ? -converted : converted)
+        kind: (entry.direction === 'in' ? 'deposit' : 'withdrawal') as ReturnFlowKind,
+        amount: roundMoney(Math.abs(converted))
       };
     })
     .filter(flow => Number.isFinite(flow.amount) && flow.amount !== 0)
@@ -150,15 +152,29 @@ export const buildSnapshotReturnFlows = (
     {
       id: `snapshot-open-${previous.id}`,
       date: monthEndDate(previous.month),
-      amount: -previousTotal
+      kind: 'open',
+      amount: previousTotal
     },
     ...externalFlows,
     {
       id: `snapshot-close-${latest.id}`,
       date: monthEndDate(latest.month),
+      kind: 'close',
       amount: latestTotal
     }
   ];
+};
+
+export const getSnapshotConversionRate = (
+  snapshot: ParsedSnapshot | null,
+  fromCurrency: string,
+  toCurrency: string
+) => {
+  if (!snapshot || !fromCurrency || !toCurrency) return null;
+  if (fromCurrency === toCurrency) return 1;
+
+  const rate = convertAmount(1, fromCurrency, toCurrency, snapshot.data.rates);
+  return Number.isFinite(rate) && rate > 0 ? rate : null;
 };
 
 export const getSnapshotFxQuote = (

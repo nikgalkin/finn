@@ -8,6 +8,16 @@ No daily expense tracking. No budgets. No mandatory transaction history. Just sn
 
 Finn grew out of the friction of maintaining an increasingly complex financial setup in Google Sheets. Each new financial organization or currency made the spreadsheet harder to extend, so Finn was created as a simple, local alternative that can adapt as financial needs change
 
+## 🎬 Demo
+
+<p align="center">
+  <a href="https://youtu.be/GE5R8mZ9T-0">
+    <img src="https://img.youtube.com/vi/GE5R8mZ9T-0/maxresdefault.jpg" alt="Watch the Finn product tour on YouTube" width="720">
+  </a>
+</p>
+
+A tour of the app: monthly snapshots, multi-currency balances, and the analytics that show where a change in net worth actually came from
+
 ## ✨ Features
 
 * **Monthly snapshots:** Save balances across your organizations and accounts once a month
@@ -44,6 +54,6 @@ When enabled, Cash Flow also provides:
 * [Optional Cash Flow](docs/cash-flow.md) — enable the journal and import movements from CSV
 * [Backups and recovery](docs/backups.md) — configure targets, encryption, retention, and restore a backup
 * [Local AI Assistant](docs/local-ai.md) — connect a local model or prepare a prompt for another AI tool
-* [Tools](docs/tools.md) — run data-health checks, inspect backups, export data, or make protected direct fixes with the SQL editor
+* [Tools](docs/tools.md) — run data-health checks, inspect backups, export data, make protected direct fixes with the SQL editor, or model growth, rebalancing, returns, exchange deals and deposits with the financial calculators
 * [Development](docs/development.md) — prerequisites, project structure, tech stack, and local startup
 * [Release pipeline](docs/releases.md) — CI checks, automatic versioning, tags, artifacts, and release publication

@@ -1,21 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  calculateDeposit,
+  calculateDepositOffer,
   calculateFxDeal,
   calculateFxSpendForTarget,
   calculateGoalContribution,
   calculateGrowthProjection,
   calculateRebalance,
   calculateXirr,
+  compareDepositOffers,
   compareFxDeals,
   compareFxDealsForTarget,
+  normalizeTargetPercents,
+  signReturnFlow,
   suggestGoalTarget,
-  suggestMonthlyContribution
+  suggestMonthlyContribution,
+  type DepositCompounding
 } from '../src/lib/financialCalculators.ts';
 import {
   buildSnapshotCurrencyRebalanceRows,
   buildSnapshotRebalanceRows,
   buildSnapshotReturnFlows,
+  getSnapshotConversionRate,
   getSnapshotCurrencyHolding,
   getSnapshotFxQuote,
   getSnapshotPortfolioTotal
@@ -112,6 +119,40 @@ test('buy-only rebalance never recommends a sale', () => {
   assert.equal(result.suggestions[1].difference, 20);
 });
 
+test('reports drift and the volume a rebalance would trade', () => {
+  const result = calculateRebalance([
+    { id: 'stocks', label: 'Stocks', currentAmount: 80, targetPercent: 50 },
+    { id: 'bonds', label: 'Bonds', currentAmount: 20, targetPercent: 50 }
+  ], 0);
+
+  assert.equal(result.suggestions[0].driftPercent, 30);
+  assert.equal(result.suggestions[1].driftPercent, -30);
+  assert.equal(result.largestDriftPercent, 30);
+  assert.equal(result.tradeVolume, 60);
+});
+
+test('buy-only trade volume counts only the cash that gets allocated', () => {
+  const result = calculateRebalance([
+    { id: 'stocks', label: 'Stocks', currentAmount: 80, targetPercent: 50 },
+    { id: 'bonds', label: 'Bonds', currentAmount: 20, targetPercent: 50 }
+  ], 20, true);
+
+  assert.equal(result.tradeVolume, 20);
+  assert.equal(result.largestDriftPercent, 30);
+});
+
+test('normalizes target percentages to exactly one hundred', () => {
+  assert.deepEqual(normalizeTargetPercents([60, 25, 15]), [60, 25, 15]);
+  assert.deepEqual(normalizeTargetPercents([1, 1, 1]), [33.34, 33.33, 33.33]);
+  assert.deepEqual(normalizeTargetPercents([700_000, 200_000, 100_000]), [70, 20, 10]);
+  assert.deepEqual(normalizeTargetPercents([0, 0]), [50, 50]);
+  assert.deepEqual(normalizeTargetPercents([]), []);
+  assert.equal(
+    normalizeTargetPercents([3, 3, 3, 7]).reduce((sum, value) => sum + value, 0),
+    100
+  );
+});
+
 test('calculates an annualized XIRR for dated cash flows', () => {
   const result = calculateXirr([
     { date: '2025-01-01', amount: -1_000 },
@@ -121,6 +162,15 @@ test('calculates an annualized XIRR for dated cash flows', () => {
   assert.ok(result.annualizedReturnPercent !== null);
   assert.ok(Math.abs(result.annualizedReturnPercent - 10) < 0.0001);
   assert.equal(result.netProfit, 100);
+  assert.equal(result.simpleReturnPercent, 10);
+  assert.equal(result.periodDays, 365);
+});
+
+test('signs return flow rows from their kind rather than the typed sign', () => {
+  assert.equal(signReturnFlow('open', 1_000), -1_000);
+  assert.equal(signReturnFlow('deposit', -1_000), -1_000);
+  assert.equal(signReturnFlow('withdrawal', -250), 250);
+  assert.equal(signReturnFlow('close', 1_150), 1_150);
 });
 
 test('compares FX quotes including basis and fees', () => {
@@ -199,6 +249,106 @@ test('chooses the better FX offer even when received amounts round to the same c
   assert.ok(comparison.difference > 0);
 });
 
+const assertClose = (actual: number | null, expected: number, tolerance = 1e-6) => {
+  assert.ok(
+    actual !== null && Math.abs(actual - expected) <= tolerance,
+    `expected ${actual} to be within ${tolerance} of ${expected}`
+  );
+};
+
+test('compounds deposit interest on the chosen schedule', () => {
+  const schedule = (compounding: DepositCompounding) => calculateDeposit({
+    principal: 100_000,
+    annualRatePercent: 12,
+    months: 12,
+    compounding
+  });
+  const daily = schedule('daily');
+  const monthly = schedule('monthly');
+  const atMaturity = schedule('maturity');
+
+  assertClose(daily.maturityValue, 100_000 * (1 + 0.12 / 365) ** 365);
+  assertClose(monthly.maturityValue, 100_000 * 1.01 ** 12);
+  assertClose(atMaturity.maturityValue, 112_000);
+  assertClose(atMaturity.netAnnualRatePercent, 12);
+  assert.ok(daily.netAnnualRatePercent > monthly.netAnnualRatePercent);
+  assert.ok(monthly.netAnnualRatePercent > atMaturity.netAnnualRatePercent);
+});
+
+test('taxes only the interest above the tax-free amount', () => {
+  const deposit = (taxFreeInterest: number) => calculateDeposit({
+    principal: 100_000,
+    annualRatePercent: 12,
+    months: 12,
+    compounding: 'maturity',
+    taxRatePercent: 13,
+    taxFreeInterest
+  });
+  const taxed = deposit(10_000);
+  const covered = deposit(20_000);
+
+  assertClose(taxed.grossInterest, 12_000);
+  assertClose(taxed.taxableInterest, 2_000);
+  assertClose(taxed.tax, 260);
+  assertClose(taxed.maturityValue, 111_740);
+  assert.equal(covered.tax, 0);
+  assertClose(covered.maturityValue, 112_000);
+});
+
+test('converts a foreign deposit in at the entry rate and out at the maturity rate', () => {
+  const offer = calculateDepositOffer({
+    investment: 100_000,
+    annualRatePercent: 4,
+    months: 12,
+    compounding: 'maturity',
+    entryRate: 100,
+    exitRate: 110
+  });
+
+  assert.equal(offer.principal, 1_000);
+  assertClose(offer.maturityValue, 1_040);
+  assertClose(offer.maturityValueInBase, 114_400);
+  assertClose(offer.profitInBase, 14_400);
+  assertClose(offer.netAnnualRatePercent, 4);
+  assertClose(offer.netAnnualReturnPercent, 14.4);
+});
+
+test('compares deposits and reports the rate that would tie them', () => {
+  const local = {
+    investment: 100_000,
+    annualRatePercent: 10,
+    months: 12,
+    compounding: 'maturity' as const
+  };
+  const foreign = {
+    investment: 100_000,
+    annualRatePercent: 0,
+    months: 12,
+    compounding: 'maturity' as const,
+    entryRate: 100,
+    exitRate: 100
+  };
+  const comparison = compareDepositOffers(local, foreign);
+
+  assert.equal(comparison.betterOffer, 'A');
+  assertClose(comparison.difference, 10_000);
+  assertClose(comparison.differencePercent, 10);
+  assertClose(comparison.breakEvenExitRateB, 110);
+
+  const tied = compareDepositOffers(local, { ...foreign, exitRate: 110 });
+  assert.equal(tied.betterOffer, 'equal');
+  assert.equal(tied.difference, 0);
+});
+
+test('reads a deposit conversion rate from the latest snapshot', () => {
+  const latest = snapshot(2, '2026-02', 90, 100_000, 10_000);
+
+  assert.equal(getSnapshotConversionRate(latest, 'USD', 'RUB'), 90);
+  assert.equal(getSnapshotConversionRate(latest, 'RUB', 'RUB'), 1);
+  assert.equal(getSnapshotConversionRate(latest, 'EUR', 'RUB'), null);
+  assert.equal(getSnapshotConversionRate(null, 'USD', 'RUB'), null);
+});
+
 test('uses the latest snapshot for portfolio and rebalance defaults', () => {
   const latest = snapshot(2, '2026-02', 90, 100_000, 10_000);
   const rows = buildSnapshotRebalanceRows(latest, 'RUB');
@@ -255,11 +405,16 @@ test('builds return defaults from the latest snapshot period and external flows'
   }];
   const flows = buildSnapshotReturnFlows([latest, previous], entries, 'RUB');
 
-  assert.equal(flows[0].amount, -900_000);
-  assert.equal(flows[1].amount, -90_000);
+  assert.deepEqual(flows.map(flow => flow.kind), ['open', 'deposit', 'close']);
+  assert.equal(flows[0].amount, 900_000);
+  assert.equal(flows[1].amount, 90_000);
   assert.equal(flows[2].amount, 1_050_000);
   assert.equal(flows[0].date, '2026-01-31');
   assert.equal(flows[2].date, '2026-02-28');
+  assert.deepEqual(
+    flows.map(flow => signReturnFlow(flow.kind, flow.amount)),
+    [-900_000, -90_000, 1_050_000]
+  );
 });
 
 test('keeps the FX deal direction while choosing a readable quote', () => {

@@ -4,8 +4,10 @@
 from the **⋯** menu in the header, or press <kbd>T</kbd>. Each tool is a tile; clicking one opens it
 in a modal.
 
-It currently holds four tools: **Data Health**, **Backup Inspector**, **Export Center**, and the
-**SQL editor**.
+The tiles come in two groups. **Data tools** read and change your Finn data: **Data Health**,
+**Backup Inspector**, **Export Center**, and the **SQL editor**. **Financial calculators** answer
+questions about money and never write anything back: **Growth & Goal Planner**, **Portfolio
+Rebalancer**, **Return Calculator**, **FX Deal Comparator**, and **Deposit Comparator**.
 
 ## Data Health
 
@@ -311,5 +313,135 @@ UPDATE flow_entries SET amount = 1250.00 WHERE id = 42;
 Always dry run first and read the row count before applying — `WHERE` clauses are easy to get wrong.
 
 [authorizer]: https://sqlite.org/c3ref/set_authorizer.html
+
+## Financial calculators
+
+The five calculators are models, not records. None of them writes to the database, so anything you
+type is thrown away when the modal closes. What they do read is your latest snapshot: the amounts,
+the exchange rates and — in the Return Calculator — your Cash Flow entries, so you start from your
+own numbers instead of an empty form. Each has a snapshot button in the toolbar that reloads those
+defaults after you have changed things.
+
+The Rebalancer, Return Calculator and Deposit Comparator each carry a collapsed **How to use it**
+panel holding the same steps described below. Expand it from its header and it stays expanded for
+that calculator, per browser.
+
+Amount fields accept expressions and shortcuts (`1,5m + 200k`), same as everywhere else in Finn. A
+line under a field always says where its value came from — a snapshot month, a fetched rate, or your
+own edit; what a field *means* lives behind the **?** next to its label.
+
+### Growth & Goal Planner
+
+Two directions of the same compound-growth model, switched with **Forecast** / **Goal**.
+
+* **Forecast** takes a starting capital, a monthly contribution, an expected return and a horizon,
+  and reports what you end up with.
+* **Goal** takes a target instead of a contribution and solves for the monthly contribution that
+  reaches it.
+
+Starting capital defaults to your whole portfolio valued in the chosen currency, or to just the
+holdings already in that currency — the toggle picks which. Contributions land at the end of each
+month and growth compounds monthly. The **In today's money** figure discounts the result by the
+inflation you entered. Taxes and fees are not modelled here; use the Deposit Comparator when tax
+matters.
+
+### Portfolio Rebalancer
+
+Turns an allocation you *want* into the trades that get you there.
+
+1. Choose a grouping. Rows are filled from the latest snapshot, either by **organization** or by
+   **currency**. Tags are deliberately not offered: one balance can carry several tags, so the
+   shares would not add up. **Target** starts equal to your current allocation, which means the
+   suggestions are empty until you change something — that is the expected starting point, not a
+   bug.
+2. Set the targets. Three buttons do the arithmetic: **Match current** writes today's shares,
+   **Equal split** divides evenly, and **Scale to 100%** keeps the proportions you typed and
+   rescales them. The bar above the table always shows the running total, and warns while it is not
+   100%.
+3. Optionally enter **new cash to invest**. With **Buy only** ticked, that cash is spread across the
+   underweight rows in proportion to what each one is short, and nothing is ever recommended for
+   sale; anything that does not fit shows up as **Cash left over**.
+4. Read the trades. **Largest drift** is the biggest gap between a current and a target share, in
+   percentage points — the quickest measure of how far the portfolio has wandered.
+
+### Return Calculator
+
+Answers "what annual return did I actually earn", accounting for money moving in and out mid-period.
+A plain start-to-end percentage cannot do that: adding a large deposit shortly before the end
+inflates the final value without earning anything.
+
+Each row is one movement of money on the day it happened, and its **row type** decides how it enters
+the maths, so amounts are always typed as positive numbers:
+
+| Row type | Meaning |
+| --- | --- |
+| Opening value | What the portfolio was worth at the start of the period |
+| Money in | A deposit or purchase you funded |
+| Money out | A withdrawal |
+| Final value | What the portfolio is worth at the end |
+
+Growth inside the portfolio is never a row — that is the unknown being solved for.
+
+Defaults come from your two most recent snapshots plus every non-transfer Cash Flow entry between
+them, converted to the chosen currency, with incoming amounts already net of their tax rate.
+
+The headline result is **XIRR**, the annual rate that makes those dated amounts add up to the final
+value. **Total over the period** is the same profit expressed against everything you put in, without
+annualising, which is the more honest number when the period is far from a year.
+
+### FX Deal Comparator
+
+Compares two exchange quotes over the same trade. Enter the amount you want to spend — or switch to
+**Receive** to fix the amount you need and compare what each offer costs — then a rate and a fee
+percentage per offer.
+
+The quote direction follows whichever way reads naturally for the pair, so you enter "how much 1 USD
+costs in RUB" rather than a fraction. **Fetch Latest** pulls a live rate into Offer A;
+**Reset to reference** goes back to the rate stored in your snapshot. The comparison strip shows the
+effective price of each offer with its fee folded in, which is the number that actually decides the
+winner.
+
+### Deposit Comparator
+
+Weighs two deposits against each other when they differ in currency, rate, compounding or tax — the
+"is a 16% rouble deposit better than a 4% dollar one" question.
+
+Both offers receive **the same amount**, so nothing wins on size. A deposit in another currency is
+bought at the snapshot rate, earns interest in its own currency, and is sold back at the **rate at
+maturity** you specify; every result is then stated in the comparison currency.
+
+Per offer you set:
+
+* **Annual rate** and how often **interest is added to the balance** — daily, monthly, quarterly,
+  annually, or once at maturity as simple interest.
+* **Tax on interest** and a **tax-free interest** amount. Tax applies once, at the end, to interest
+  above the tax-free amount, so setting the allowance to zero gives a plain flat tax.
+* **Maturity rate**, which starts unchanged from the snapshot — that is, assuming the currency does
+  not move. Change it to test an expectation. The quote is stated in whichever direction reads above
+  1, the same rule the transfer rates in Cash Flow follow, so a small-unit currency is quoted as
+  `per 1 RUB` rather than as a string of leading zeros. Rates are held to two decimals throughout,
+  entry and exit alike, so leaving the field untouched really does mean no currency movement.
+
+Each card leads with the **interest earned**, stated in the comparison currency and net of tax and
+the currency move, with the deposit's own net annual rate and the full amount you end up holding
+beside it. Under that sits one line about currency risk, and nothing else. **Show the working**
+unfolds the arithmetic — deposit, purchase rate, interest before and after tax, and the maturity
+value — all in the deposit's own currency, so you can check the deposit on its own terms before the
+conversion. Both cards unfold together, and both keep the same rows above the fold, so the two sets
+of figures always line up against each other.
+
+The verdict at the bottom names the winner, the gap in money, and both net annual returns side by
+side in the comparison currency.
+
+The line worth reading is **Ties Offer … at**: the rate the foreign currency has to reach for the two
+deposits to finish level, and how far that is from today. It converts a guess about the future into
+a threshold you can judge. In the demo data, a 16% rouble deposit against a 4% dollar deposit over a
+year needs the dollar to gain roughly 11% for the two to tie.
+
+Interest between capitalisation dates is compounded on a fractional period rather than being held
+back to the next whole one, so a term that does not divide evenly by the schedule is very slightly
+optimistic compared with a bank that only capitalises on completed periods. Daily compounding uses a
+365-day year and a month is always a twelfth of one, so terms are measured in whole months rather
+than against a calendar.
 
 [Back to the README](../README.md)

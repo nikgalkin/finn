@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowLeftRight,
   ArrowRightLeft,
+  ChevronDown,
   CircleCheck,
   Database,
+  Landmark,
   Plus,
   RefreshCw,
   Scale,
@@ -16,16 +18,22 @@ import {
   calculateGrowthProjection,
   calculateRebalance,
   calculateXirr,
+  compareDepositOffers,
   compareFxDeals,
   compareFxDealsForTarget,
+  normalizeTargetPercents,
+  signReturnFlow,
   suggestGoalTarget,
   suggestMonthlyContribution,
-  type RebalanceItem
+  type DepositCompounding,
+  type RebalanceItem,
+  type ReturnFlowKind
 } from '../../../lib/financialCalculators';
 import {
   buildSnapshotCurrencyRebalanceRows,
   buildSnapshotRebalanceRows,
   buildSnapshotReturnFlows,
+  getSnapshotConversionRate,
   getSnapshotCurrencyHolding,
   getSnapshotFxQuote,
   getSnapshotPortfolioTotal
@@ -35,12 +43,14 @@ import {
   getFetchedCurrencyQuote,
   type FetchedCurrencyQuote,
 } from '../../../lib/exchangeRates';
+import { orientExchangeRate } from '../../../lib/finance';
 import { parseNumberExpression } from '../../../lib/numberExpression';
 import { useFlowEntries } from '../../../hooks/useFlowEntries';
 import { useSettings } from '../../../hooks/useSettings';
 import { useSnapshots } from '../../../hooks/useSnapshots';
 import { AppSelect } from '../AppSelect';
 import { AmountInput } from '../AmountInput';
+import { HelpTooltip } from '../HelpTooltip';
 import { Spinner } from '../PageLoader';
 import { SegmentedControl } from '../SegmentedControl';
 import { ToolModal } from './ToolModal';
@@ -62,18 +72,129 @@ type CalculatorFieldProps = {
   onChange: (value: NumericValue) => void;
   suffix?: string;
   hint?: string;
+  help?: ReactNode;
+  maximumFractionDigits?: number;
 };
 
-function CalculatorField({ label, value, onChange, suffix, hint }: CalculatorFieldProps) {
+function CalculatorField({
+  label,
+  value,
+  onChange,
+  suffix,
+  hint,
+  help,
+  maximumFractionDigits = 2
+}: CalculatorFieldProps) {
   return (
     <label className="calculator-field">
-      <span>{label}</span>
+      <span>
+        <span title={label}>{label}</span>
+        {help && <HelpTooltip text={help} ariaLabel={`${label} help`} width={300} />}
+      </span>
       <div className="calculator-input">
-        <AmountInput value={value} onChange={onChange} maximumFractionDigits={2} ariaLabel={label} />
+        <AmountInput
+          value={value}
+          onChange={onChange}
+          maximumFractionDigits={maximumFractionDigits}
+          ariaLabel={label}
+        />
         {suffix && <b>{suffix}</b>}
       </div>
-      {hint && <small>{hint}</small>}
+      {hint && <small title={hint}>{hint}</small>}
     </label>
+  );
+}
+
+function ChoiceField<Value extends string>({
+  label,
+  value,
+  onChange,
+  options
+}: {
+  label: string;
+  value: Value;
+  onChange: (value: Value) => void;
+  options: { value: Value; label: string }[];
+}) {
+  const selectOptions = useMemo(
+    () => options.map(option => ({ value: option.value, label: option.label })),
+    [options]
+  );
+
+  return (
+    <label className="calculator-field">
+      <span><span title={label}>{label}</span></span>
+      <AppSelect
+        ariaLabel={label}
+        value={value}
+        onChange={next => onChange(next as Value)}
+        options={selectOptions}
+        placeholder={label}
+        width="100%"
+        dropdownMatchTriggerWidth
+        height="34px"
+        textAlign="left"
+      />
+    </label>
+  );
+}
+
+const panelStorageKey = (id: string) => `finn:calculator-panel:${id}`;
+
+const readPanelExpanded = (id: string) => {
+  try {
+    return window.localStorage.getItem(panelStorageKey(id)) === 'expanded';
+  } catch {
+    return false;
+  }
+};
+
+const writePanelExpanded = (id: string, expanded: boolean) => {
+  try {
+    window.localStorage.setItem(panelStorageKey(id), expanded ? 'expanded' : 'collapsed');
+  } catch {
+    return;
+  }
+};
+
+function useExpandablePanel(id: string) {
+  const [expanded, setExpanded] = useState(() => readPanelExpanded(id));
+
+  return {
+    expanded,
+    toggle: () => setExpanded(current => {
+      writePanelExpanded(id, !current);
+      return !current;
+    })
+  };
+}
+
+function CalculatorGuide({
+  id,
+  steps,
+  actions
+}: {
+  id: string;
+  steps: ReactNode[];
+  actions?: ReactNode;
+}) {
+  const { expanded, toggle } = useExpandablePanel(id);
+
+  return (
+    <div className={`calculator-guide${expanded ? ' is-expanded' : ''}`}>
+      <div className="calculator-guide-copy">
+        <button type="button" className="calculator-guide-toggle" aria-expanded={expanded} onClick={toggle}>
+          <ChevronDown size={13} />
+          How to use it
+        </button>
+        {expanded && (
+          <ol>
+            {steps.map((step, index) => <li key={index}><span>{step}</span></li>)}
+          </ol>
+        )}
+      </div>
+      {actions && <div className="calculator-guide-actions">{actions}</div>}
+    </div>
   );
 }
 
@@ -97,7 +218,7 @@ function CurrencyField({
 
   return (
     <label className="calculator-field calculator-currency-field">
-      <span>{label}</span>
+      <span><span title={label}>{label}</span></span>
       <AppSelect
         ariaLabel={label}
         value={value}
@@ -163,11 +284,13 @@ function SnapshotSourceButton({
 function ResultMetric({
   label,
   value,
+  aside,
   tone = 'neutral',
   primary = false
 }: {
   label: string;
   value: string;
+  aside?: ReactNode;
   tone?: 'neutral' | 'positive' | 'negative' | 'accent';
   primary?: boolean;
 }) {
@@ -175,6 +298,7 @@ function ResultMetric({
     <div className={`calculator-result is-${tone}${primary ? ' is-primary' : ''}`}>
       <span>{label}</span>
       <strong>{value}</strong>
+      {aside && <div className="calculator-result-aside">{aside}</div>}
     </div>
   );
 }
@@ -295,10 +419,11 @@ export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) 
               value={startingCapital}
               onChange={setStartingCapitalOverride}
               suffix={currency}
+              help={`Whole portfolio converts every holding into ${currency} at the snapshot rates. ${currency} held counts only what is already in ${currency}, leaving other currencies out.`}
               hint={startingCapitalOverride === null && latestSnapshot
                 ? capitalSource === 'portfolio'
-                  ? `Whole portfolio valued in ${currency} · ${latestSnapshot.month}`
-                  : `${currency} held without converting other currencies`
+                  ? `Portfolio · ${latestSnapshot.month}`
+                  : `${currency} held · ${latestSnapshot.month}`
                 : undefined}
             />
             {mode === 'forecast'
@@ -309,7 +434,7 @@ export function GrowthGoalCalculatorModal({ onClose }: { onClose: () => void }) 
                   onChange={setMonthlyContributionOverride}
                   suffix={currency}
                   hint={monthlyContributionOverride === null
-                    ? 'Suggested as 1% of current capital'
+                    ? '1% of current capital'
                     : undefined}
                 />
               )
@@ -422,9 +547,15 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
     [additionalCash, buyOnly, items]
   );
   const targetsValid = Math.abs(result.targetPercentTotal - 100) < 0.01;
+  const balanced = result.tradeVolume < 0.01;
 
   const updateRow = (id: string, patch: Partial<RebalanceDraft>) => {
     setRows(current => current.map(row => row.id === id ? { ...row, ...patch } : row));
+  };
+
+  const applyTargets = (weights: number[]) => {
+    const percents = normalizeTargetPercents(weights);
+    setRows(current => current.map((row, index) => ({ ...row, targetPercent: percents[index] ?? 0 })));
   };
 
   return (
@@ -473,36 +604,69 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
         />
       </div>
 
-      <div className="rebalance-source-guide">
+      <CalculatorGuide
+        id="rebalancer"
+        steps={[
+          <>Pick a grouping — the rows below are filled from the <b>{latestSnapshot?.month || 'latest'}</b> snapshot, and <b>Target</b> starts at your current allocation, so nothing needs trading yet.</>,
+          <>Change <b>Target</b> to the allocation you want. The three buttons below fill it for you; the total has to reach 100%.</>,
+          <>Optionally enter new cash you are about to invest, and keep <b>Buy only</b> on if you would rather not sell anything.</>,
+          <>Follow the <b>Buy</b> and <b>Sell</b> amounts at the bottom. Nothing is written back to your data — this is a plan, not a transaction.</>
+        ]}
+        actions={(
+          <SegmentedControl
+            compact
+            value={grouping}
+            onChange={value => {
+              setGrouping(value);
+              loadSnapshotRows(currency, value, false);
+            }}
+            options={[
+              { value: 'organizations', label: 'Organizations' },
+              { value: 'currencies', label: 'Currencies' }
+            ]}
+          />
+        )}
+      />
+
+      <div className={`rebalance-targets-bar${targetsValid ? '' : ' is-incomplete'}`}>
         <div>
-          <strong>Build allocation from the latest snapshot</strong>
+          <strong>
+            Target allocation · {formatValue(result.targetPercentTotal)}%
+          </strong>
           <span>
-            Choose a grouping, set the desired Target percentages to 100%, then review the suggested trades.
-            Tags are not imported because one balance can carry several tags.
+            {targetsValid
+              ? 'Targets add up to 100%, so the suggested trades are complete.'
+              : `${formatValue(Math.abs(100 - result.targetPercentTotal))}% ${result.targetPercentTotal > 100 ? 'over' : 'still unallocated'} — the trades below are incomplete until the total is 100%.`}
           </span>
         </div>
-        <SegmentedControl
-          compact
-          value={grouping}
-          onChange={value => {
-            setGrouping(value);
-            loadSnapshotRows(currency, value, false);
-          }}
-          options={[
-            { value: 'organizations', label: 'Organizations' },
-            { value: 'currencies', label: 'Currencies' }
-          ]}
-        />
-      </div>
-
-      {!targetsValid && (
-        <div className="tool-message is-warning">
-          <div>
-            <strong>Targets add up to {formatValue(result.targetPercentTotal)}%</strong>
-            <span>Adjust the target percentages to exactly 100% before using the suggested trades.</span>
-          </div>
+        <div className="rebalance-target-actions">
+          <button
+            type="button"
+            className="btn"
+            title="Set every target to the share it holds today"
+            onClick={() => applyTargets(items.map(item => item.currentAmount))}
+          >
+            Match current
+          </button>
+          <button
+            type="button"
+            className="btn"
+            title="Split the portfolio evenly across the rows"
+            onClick={() => applyTargets(items.map(() => 1))}
+          >
+            Equal split
+          </button>
+          <button
+            type="button"
+            className="btn"
+            title="Keep the proportions you typed and scale them to 100%"
+            disabled={targetsValid}
+            onClick={() => applyTargets(items.map(item => item.targetPercent))}
+          >
+            Scale to 100%
+          </button>
         </div>
-      )}
+      </div>
 
       <div className="rebalance-editor">
         <div className="rebalance-heading">
@@ -552,10 +716,22 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
         <div className="calculator-summary">
           <ResultMetric label="Current portfolio" value={formatMoney(result.currentTotal, currency)} />
           <ResultMetric label="After new cash" value={formatMoney(result.portfolioTotal, currency)} />
+          <ResultMetric
+            label={buyOnly ? 'To buy in total' : 'To trade in total'}
+            value={formatMoney(result.tradeVolume, currency)}
+            tone={balanced ? 'neutral' : 'accent'}
+          />
+          <ResultMetric label="Largest drift" value={formatRate(result.largestDriftPercent)} />
           {buyOnly && result.unallocatedCash > 0 && (
             <ResultMetric label="Cash left over" value={formatMoney(result.unallocatedCash, currency)} />
           )}
         </div>
+        {balanced && (
+          <p className="rebalance-balanced-note">
+            Every row already sits on its target, so there is nothing to trade. Change a target
+            percentage or add new cash to see suggestions.
+          </p>
+        )}
         <div className="rebalance-result-list">
           {result.suggestions.map(item => (
             <div className="rebalance-result-row" key={item.id}>
@@ -576,6 +752,7 @@ export function RebalancerCalculatorModal({ onClose }: { onClose: () => void }) 
 type CashFlowDraft = {
   id: string;
   date: string;
+  kind: ReturnFlowKind;
   amount: NumericValue;
 };
 
@@ -584,6 +761,20 @@ const yearAgoIso = () => {
   const value = new Date();
   value.setFullYear(value.getFullYear() - 1);
   return value.toISOString().slice(0, 10);
+};
+
+const RETURN_FLOW_KINDS: { value: ReturnFlowKind; label: string }[] = [
+  { value: 'open', label: 'Opening value' },
+  { value: 'deposit', label: 'Money in' },
+  { value: 'withdrawal', label: 'Money out' },
+  { value: 'close', label: 'Final value' }
+];
+
+const formatPeriod = (days: number) => {
+  if (!Number.isFinite(days) || days <= 0) return '—';
+  if (days < 60) return `${formatValue(days, 0)} days`;
+  if (days < 730) return `${formatValue(days / 30.4375, 1)} months`;
+  return `${formatValue(days / 365.25, 1)} years`;
 };
 
 export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
@@ -598,8 +789,8 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
   const { entries: flowEntries, loaded: flowsLoaded } = useFlowEntries(true);
   const [currencyOverride, setCurrencyOverride] = useState('');
   const [flows, setFlows] = useState<CashFlowDraft[]>([
-    { id: 'start', date: yearAgoIso(), amount: -1_000_000 },
-    { id: 'end', date: todayIso(), amount: 1_150_000 }
+    { id: 'start', date: yearAgoIso(), kind: 'open', amount: 1_000_000 },
+    { id: 'end', date: todayIso(), kind: 'close', amount: 1_150_000 }
   ]);
   const snapshotInitialized = useRef(false);
   const currency = currencyOverride || baseCurrency;
@@ -622,7 +813,7 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
 
   const result = useMemo(() => calculateXirr(flows.map(flow => ({
     date: flow.date,
-    amount: numeric(flow.amount)
+    amount: signReturnFlow(flow.kind, numeric(flow.amount))
   }))), [flows]);
 
   const updateFlow = (id: string, patch: Partial<CashFlowDraft>) => {
@@ -632,7 +823,7 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
   return (
     <ToolModal
       title="Return Calculator"
-      subtitle="Calculate money-weighted annual return from dated investments and withdrawals"
+      subtitle="Work out the annual return behind a set of dated deposits, withdrawals and values"
       icon={Percent}
       accent="#60a5fa"
       onClose={onClose}
@@ -643,6 +834,7 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
           onClick={() => setFlows(current => [...current, {
             id: crypto.randomUUID(),
             date: todayIso(),
+            kind: 'deposit',
             amount: 0
           }])}
         >
@@ -668,15 +860,28 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
           onClick={() => loadSnapshotFlows(currency)}
         />
       </div>
-      <p className="calculator-note return-calculator-note">
-        Investments and deposits are negative. Withdrawals and the final portfolio value are positive.
-        {previousSnapshot && latestSnapshot && snapshotFlows.length >= 2
-          ? ` Defaults use ${previousSnapshot.month} → ${latestSnapshot.month} and ${snapshotFlows.length - 2} recorded external flow${snapshotFlows.length - 2 === 1 ? '' : 's'}.`
-          : ''}
-      </p>
+      <CalculatorGuide
+        id="return"
+        steps={[
+          <>Every row is one movement of money between you and the portfolio, on the day it happened. Pick the row type and type a <b>positive</b> amount — the sign is applied for you.</>,
+          <>Open with <b>Opening value</b> (what the portfolio was worth at the start) and close with <b>Final value</b> (what it is worth today).</>,
+          <>In between, add <b>Money in</b> for deposits and <b>Money out</b> for withdrawals. Growth inside the portfolio is never a row — that is exactly what the calculator solves for.</>,
+          <>The result is XIRR: the annual rate that makes those dated amounts add up to the final value, so <b>when</b> money arrived matters as much as how much.</>
+        ]}
+      />
+
+      {previousSnapshot && latestSnapshot && snapshotFlows.length >= 2 && (
+        <p className="calculator-note return-calculator-note">
+          Prefilled from {previousSnapshot.month} → {latestSnapshot.month} with{' '}
+          {snapshotFlows.length - 2} recorded external flow{snapshotFlows.length - 2 === 1 ? '' : 's'}
+          {' '}from Cash Flow, valued in {currency}.
+        </p>
+      )}
 
       <div className="return-flow-editor">
-        <div className="return-flow-heading"><span>Date</span><span>Signed amount</span><span /></div>
+        <div className="return-flow-heading">
+          <span>Date</span><span>Row type</span><span>Amount</span><span />
+        </div>
         {flows.map(flow => (
           <div className="return-flow-row" key={flow.id}>
             <input
@@ -687,6 +892,17 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
               value={flow.date}
               aria-label="Cash flow date"
               onChange={event => updateFlow(flow.id, { date: event.target.value })}
+            />
+            <AppSelect
+              ariaLabel={`Row type for ${flow.date}`}
+              value={flow.kind}
+              onChange={value => updateFlow(flow.id, { kind: value as ReturnFlowKind })}
+              options={RETURN_FLOW_KINDS}
+              placeholder="Row type"
+              width="100%"
+              dropdownMatchTriggerWidth
+              height="34px"
+              textAlign="left"
             />
             <AmountInput
               value={flow.amount}
@@ -710,24 +926,33 @@ export function ReturnCalculatorModal({ onClose }: { onClose: () => void }) {
       <div className="calculator-summary return-summary">
         <ResultMetric
           primary
-          label="Annualized MWR / XIRR"
+          label="Annualized (XIRR)"
           value={formatRate(result.annualizedReturnPercent)}
           tone={result.annualizedReturnPercent === null ? 'neutral' : result.annualizedReturnPercent >= 0 ? 'positive' : 'negative'}
         />
+        <ResultMetric
+          label="Total over the period"
+          value={formatRate(result.simpleReturnPercent)}
+          tone={result.simpleReturnPercent === null ? 'neutral' : result.simpleReturnPercent >= 0 ? 'positive' : 'negative'}
+        />
+        <ResultMetric label="Period" value={formatPeriod(result.periodDays)} />
         <ResultMetric
           label="Net profit"
           value={formatMoney(result.netProfit, currency)}
           tone={result.netProfit >= 0 ? 'positive' : 'negative'}
         />
-        <ResultMetric label="Total invested" value={formatMoney(result.totalInvested, currency)} />
-        <ResultMetric label="Total returned / value" value={formatMoney(result.totalReturned, currency)} />
+        <ResultMetric label="Opening value + money in" value={formatMoney(result.totalInvested, currency)} />
+        <ResultMetric label="Final value + money out" value={formatMoney(result.totalReturned, currency)} />
       </div>
 
       {result.annualizedReturnPercent === null && (
         <div className="tool-message is-warning">
           <div>
             <strong>A return cannot be calculated yet</strong>
-            <span>Add at least one negative investment and one positive withdrawal or final value on different dates.</span>
+            <span>
+              At least one row has to put money in (Opening value or Money in) and one has to take it
+              back out (Final value or Money out), on two different dates.
+            </span>
           </div>
         </div>
       )}
@@ -992,9 +1217,9 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
         </div>
       </div>
 
-      <div className="calculator-shell fx-deals">
-        <section className={`calculator-panel fx-deal is-offer-a${betterDeal === 'A' ? ' is-best' : ''}`}>
-          <div className="fx-deal-heading">
+      <div className="calculator-shell offer-cards">
+        <section className={`calculator-panel offer-card is-offer-a${betterDeal === 'A' ? ' is-best' : ''}`}>
+          <div className="offer-card-heading">
             <h3>Offer A</h3>
             <span className={betterDeal === 'A' ? 'is-best-badge' : undefined}>
               {betterDeal === 'A' && <CircleCheck size={12} />}
@@ -1030,8 +1255,8 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
           </small>
         </section>
 
-        <section className={`calculator-panel fx-deal is-offer-b${betterDeal === 'B' ? ' is-best' : ''}`}>
-          <div className="fx-deal-heading">
+        <section className={`calculator-panel offer-card is-offer-b${betterDeal === 'B' ? ' is-best' : ''}`}>
+          <div className="offer-card-heading">
             <h3>Offer B</h3>
             <span className={betterDeal === 'B' ? 'is-best-badge' : undefined}>
               {betterDeal === 'B' && <CircleCheck size={12} />}
@@ -1068,17 +1293,17 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
         </section>
       </div>
 
-      <div className="fx-rate-comparison">
-        <div className="fx-rate-comparison-heading">
+      <div className="offer-comparison">
+        <div className="offer-comparison-heading">
           <strong>{usesCostQuote ? 'Effective price comparison' : 'Effective rate comparison'}</strong>
           <span>Includes offer fees</span>
         </div>
-        <div className="fx-rate-comparison-values">
-          <div className="fx-rate-value is-offer-a">
+        <div className="offer-comparison-values">
+          <div className="offer-comparison-value is-offer-a">
             <span>Offer A</span>
             <strong>{formatValue(comparison.dealA.effectiveRate, 6)}</strong>
           </div>
-          <div className="fx-rate-gap">
+          <div className="offer-comparison-gap">
             <span>Difference</span>
             <strong>
               {effectiveRateDifference === null ? '—' : formatValue(effectiveRateDifference, 6)}
@@ -1090,14 +1315,14 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
                 : `${formatValue(effectiveRateDifferencePercent)}%`}
             </em>
           </div>
-          <div className="fx-rate-value is-offer-b">
+          <div className="offer-comparison-value is-offer-b">
             <span>Offer B</span>
             <strong>{formatValue(comparison.dealB.effectiveRate, 6)}</strong>
           </div>
         </div>
       </div>
 
-      <div className={`fx-comparison-result${betterDeal === 'equal' ? '' : ' has-winner'}`}>
+      <div className={`offer-verdict${betterDeal === 'equal' ? '' : ' has-winner'}`}>
         <ArrowLeftRight size={18} />
         <div>
           <strong>{winner}</strong>
@@ -1119,6 +1344,337 @@ export function FxComparatorCalculatorModal({ onClose }: { onClose: () => void }
                 {amountMode === 'spend' ? ' for the same budget' : ' for the same target'}
               </span>
             )}
+        </div>
+      </div>
+    </ToolModal>
+  );
+}
+
+type DepositOfferDraft = {
+  currency: string;
+  annualRate: NumericValue;
+  compounding: DepositCompounding;
+  taxRate: NumericValue;
+  taxFreeInterest: NumericValue;
+  exitRate: NumericValue | null;
+};
+
+type DepositSide = 'A' | 'B';
+
+const DEPOSIT_COMPOUNDING_OPTIONS: { value: DepositCompounding; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'annually', label: 'Annually' },
+  { value: 'maturity', label: 'At maturity' }
+];
+
+const INITIAL_DEPOSIT_OFFERS: Record<DepositSide, DepositOfferDraft> = {
+  A: { currency: '', annualRate: 16, compounding: 'monthly', taxRate: 13, taxFreeInterest: 0, exitRate: null },
+  B: { currency: '', annualRate: 4, compounding: 'monthly', taxRate: 13, taxFreeInterest: 0, exitRate: null }
+};
+
+export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => void }) {
+  const {
+    settings,
+    baseCurrency,
+    currencies,
+    currenciesLoading,
+    latestSnapshot,
+    snapshotLoading
+  } = useCalculatorCurrencies();
+  const [currencyOverride, setCurrencyOverride] = useState('');
+  const [investmentOverride, setInvestmentOverride] = useState<NumericValue | null>(null);
+  const [termMonths, setTermMonths] = useState<NumericValue>(12);
+  const [offers, setOffers] = useState(INITIAL_DEPOSIT_OFFERS);
+  const currency = currencyOverride || baseCurrency;
+  const snapshotHolding = getSnapshotCurrencyHolding(latestSnapshot, currency);
+  const investment = investmentOverride ?? (snapshotHolding || 100_000);
+  const fallbackSecondCurrency = (
+    settings.secondaryCurrency
+    && settings.secondaryCurrency !== currency
+    && currencies.includes(settings.secondaryCurrency)
+      ? settings.secondaryCurrency
+      : ''
+  ) || currencies.find(option => option !== currency) || currency;
+
+  const patchOffer = (side: DepositSide, patch: Partial<DepositOfferDraft>) => {
+    setOffers(current => ({ ...current, [side]: { ...current[side], ...patch } }));
+  };
+
+  const resolveOffer = (side: DepositSide) => {
+    const draft = offers[side];
+    const offerCurrency = draft.currency || (side === 'A' ? currency : fallbackSecondCurrency);
+    const snapshotRate = getSnapshotConversionRate(latestSnapshot, offerCurrency, currency);
+    const orientation = orientExchangeRate(offerCurrency, currency, snapshotRate ?? 1);
+    const quotedRate = Math.round(orientation.rate * 100) / 100;
+    const quotedExitRate = draft.exitRate ?? quotedRate;
+    const toBaseRate = (quoted: number) => orientation.inverted
+      ? quoted > 0 ? 1 / quoted : 0
+      : quoted;
+    return {
+      draft,
+      currency: offerCurrency,
+      isForeign: offerCurrency !== currency,
+      snapshotRate,
+      orientation,
+      quotedRate,
+      quotedExitRate,
+      entryRate: toBaseRate(quotedRate),
+      exitRate: toBaseRate(numeric(quotedExitRate))
+    };
+  };
+
+  const sides = { A: resolveOffer('A'), B: resolveOffer('B') };
+  const toInput = (side: DepositSide) => ({
+    investment: numeric(investment),
+    months: numeric(termMonths),
+    annualRatePercent: numeric(sides[side].draft.annualRate),
+    compounding: sides[side].draft.compounding,
+    taxRatePercent: numeric(sides[side].draft.taxRate),
+    taxFreeInterest: numeric(sides[side].draft.taxFreeInterest),
+    entryRate: sides[side].entryRate,
+    exitRate: sides[side].exitRate
+  });
+  const comparison = compareDepositOffers(toInput('A'), toInput('B'));
+  const results = { A: comparison.offerA, B: comparison.offerB };
+  const breakEven = { A: comparison.breakEvenExitRateA, B: comparison.breakEvenExitRateB };
+  const returnGap = Math.abs(
+    comparison.offerA.netAnnualReturnPercent - comparison.offerB.netAnnualReturnPercent
+  );
+
+  const { expanded: workingExpanded, toggle: toggleWorking } = useExpandablePanel('deposit-working');
+
+  const resetRates = () => {
+    patchOffer('A', { exitRate: null });
+    patchOffer('B', { exitRate: null });
+  };
+
+  const renderOffer = (side: DepositSide) => {
+    const {
+      draft,
+      currency: offerCurrency,
+      isForeign,
+      snapshotRate,
+      orientation,
+      quotedRate,
+      quotedExitRate
+    } = sides[side];
+    const result = results[side];
+    const isBest = comparison.betterOffer === side;
+    const rateUnit = `${orientation.toCurrency} per 1 ${orientation.fromCurrency}`;
+    const mathBreakEven = breakEven[side];
+    const breakEvenRate = mathBreakEven === null || mathBreakEven <= 0
+      ? null
+      : Math.round((orientation.inverted ? 1 / mathBreakEven : mathBreakEven) * 100) / 100;
+
+    return (
+      <section className={`calculator-panel offer-card is-offer-${side.toLowerCase()}${isBest ? ' is-best' : ''}`}>
+        <div className="offer-card-heading">
+          <h3>Offer {side}</h3>
+          <span className={isBest ? 'is-best-badge' : undefined}>
+            {isBest && <CircleCheck size={12} />}
+            {comparison.betterOffer === 'equal'
+              ? 'Same result'
+              : isBest ? 'Best offer' : `${side === 'A' ? 'First' : 'Second'} deposit`}
+          </span>
+        </div>
+        <div className="calculator-field-grid">
+          <CurrencyField
+            label="Deposit currency"
+            value={offerCurrency}
+            onChange={value => patchOffer(side, { currency: value, exitRate: null })}
+            options={currencies}
+            disabled={currenciesLoading}
+          />
+          <CalculatorField
+            label="Annual rate"
+            value={draft.annualRate}
+            onChange={annualRate => patchOffer(side, { annualRate })}
+            suffix="%"
+          />
+          <ChoiceField
+            label="Interest added"
+            value={draft.compounding}
+            onChange={compounding => patchOffer(side, { compounding })}
+            options={DEPOSIT_COMPOUNDING_OPTIONS}
+          />
+          <CalculatorField
+            label="Tax on interest"
+            value={draft.taxRate}
+            onChange={taxRate => patchOffer(side, { taxRate })}
+            suffix="%"
+          />
+          <CalculatorField
+            label="Tax-free interest"
+            value={draft.taxFreeInterest}
+            onChange={taxFreeInterest => patchOffer(side, { taxFreeInterest })}
+            suffix={offerCurrency}
+            help={`Interest up to this amount is not taxed. The tax rate applies only to whatever is left above it, once, at the end of the term. Leave it at zero for a plain flat tax on all interest.`}
+          />
+          {isForeign && (
+            <CalculatorField
+              label="Rate at maturity"
+              value={quotedExitRate}
+              onChange={value => patchOffer(side, { exitRate: value })}
+              suffix={orientation.toCurrency}
+              help={`How much 1 ${orientation.fromCurrency} is worth in ${orientation.toCurrency} when the deposit closes. Left alone it repeats today's rate, which assumes the currency does not move.`}
+              hint={`per 1 ${orientation.fromCurrency} · ${draft.exitRate !== null
+                ? 'expected'
+                : snapshotRate === null
+                  ? 'type one'
+                  : latestSnapshot?.month}`}
+            />
+          )}
+        </div>
+        <ResultMetric
+          primary
+          tone={result.profitInBase < 0 ? 'negative' : isBest ? 'positive' : 'neutral'}
+          label={`Interest earned in ${currency}`}
+          value={formatMoney(result.profitInBase, currency)}
+          aside={(
+            <div className="offer-facts">
+              <div>
+                <span>Net rate in {offerCurrency}</span>
+                <b>{formatRate(result.netAnnualRatePercent)}</b>
+              </div>
+              <div>
+                <span>In hand at maturity</span>
+                <b>{formatMoney(result.maturityValueInBase, currency)}</b>
+              </div>
+            </div>
+          )}
+        />
+        <div className={`offer-breakeven${isForeign ? '' : ' is-quiet'}`}>
+          <span>{isForeign ? `Ties Offer ${side === 'A' ? 'B' : 'A'} at` : 'Currency risk'}</span>
+          <b>
+            {!isForeign
+              ? `None — already in ${currency}`
+              : breakEvenRate === null
+                ? '—'
+                : (
+                  <>
+                    {formatValue(breakEvenRate)} {rateUnit}
+                    {quotedRate > 0 && (
+                      <small>
+                        {breakEvenRate >= quotedRate ? '+' : ''}
+                        {formatValue((breakEvenRate / quotedRate - 1) * 100)}% vs today
+                      </small>
+                    )}
+                  </>
+                )}
+          </b>
+        </div>
+        <button
+          type="button"
+          className="offer-breakdown-toggle"
+          aria-expanded={workingExpanded}
+          onClick={toggleWorking}
+        >
+          <ChevronDown size={12} />
+          {workingExpanded ? 'Hide the working' : `Show the working in ${offerCurrency}`}
+        </button>
+        {workingExpanded && (
+          <dl className="offer-breakdown is-working">
+            <div><dt>Deposit</dt><dd>{formatMoney(result.principal, offerCurrency)}</dd></div>
+            {isForeign && (
+              <div><dt>Bought at</dt><dd>{formatValue(quotedRate)} {rateUnit}</dd></div>
+            )}
+            <div><dt>Interest before tax</dt><dd>{formatMoney(result.grossInterest, offerCurrency)}</dd></div>
+            <div><dt>Tax withheld</dt><dd>{formatMoney(result.tax, offerCurrency)}</dd></div>
+            <div><dt>Interest after tax</dt><dd>{formatMoney(result.netInterest, offerCurrency)}</dd></div>
+            {isForeign && (
+              <div><dt>At maturity</dt><dd>{formatMoney(result.maturityValue, offerCurrency)}</dd></div>
+            )}
+          </dl>
+        )}
+      </section>
+    );
+  };
+
+  return (
+    <ToolModal
+      title="Deposit Comparator"
+      subtitle="Compare two deposits across currencies, rates, compounding and tax"
+      icon={Landmark}
+      accent="#f0b429"
+      onClose={onClose}
+    >
+      <div className="calculator-toolbar">
+        <CurrencyField
+          label="Compare in"
+          value={currency}
+          onChange={value => {
+            setCurrencyOverride(value);
+            setInvestmentOverride(null);
+            resetRates();
+          }}
+          options={currencies}
+          disabled={currenciesLoading}
+        />
+        <CalculatorField
+          label="Amount to deposit"
+          value={investment}
+          onChange={setInvestmentOverride}
+          suffix={currency}
+          hint={investmentOverride === null && snapshotHolding
+            ? `${currency} held · ${latestSnapshot?.month}`
+            : undefined}
+        />
+        <CalculatorField label="Term" value={termMonths} onChange={setTermMonths} suffix="months" />
+        <SnapshotSourceButton
+          month={latestSnapshot?.month}
+          loading={snapshotLoading}
+          label="Reset rates"
+          onClick={() => {
+            setInvestmentOverride(null);
+            resetRates();
+          }}
+        />
+      </div>
+
+      <CalculatorGuide
+        id="deposit"
+        steps={[
+          <>The same <b>amount</b> goes into both offers, so whatever wins, wins on merit. A deposit in another currency is bought at today’s rate and sold back at maturity, and every result is stated in <b>{currency}</b>.</>,
+          <>Per offer, set the rate, how often interest is <b>added to the balance</b>, and the tax. Tax is charged on interest above the tax-free amount, once, at the end.</>,
+          <>Leave the <b>maturity rate</b> untouched to assume the currency does not move. Change it to test a specific expectation.</>,
+          <>Read <b>Ties Offer …at</b>: that is the rate the currency has to reach for the two offers to end up equal. Anything beyond it and the foreign deposit wins.</>
+        ]}
+      />
+
+      <div className="calculator-shell offer-cards">
+        {renderOffer('A')}
+        {renderOffer('B')}
+      </div>
+
+      <div className={`offer-verdict${comparison.betterOffer === 'equal' ? '' : ' has-winner'}`}>
+        <Landmark size={18} />
+        <div>
+          <strong>
+            {comparison.betterOffer === 'equal'
+              ? 'Both deposits end up the same'
+              : `Offer ${comparison.betterOffer} keeps more ${currency}`}
+          </strong>
+          <span>
+            {comparison.betterOffer === 'equal'
+              ? `Both return ${formatMoney(comparison.offerA.maturityValueInBase, currency)} after ${formatValue(numeric(termMonths))} months.`
+              : `${formatMoney(Math.abs(comparison.difference), currency)} more after ${formatValue(numeric(termMonths))} months · ${formatValue(comparison.differencePercent)}% ahead.`}
+          </span>
+        </div>
+        <div className="offer-verdict-rates">
+          <div className="is-offer-a">
+            <span>Offer A</span>
+            <b>{formatRate(comparison.offerA.netAnnualReturnPercent)}</b>
+          </div>
+          <div className="offer-verdict-gap">
+            <span>a year in {currency}</span>
+            <b>{formatRate(returnGap)}</b>
+          </div>
+          <div className="is-offer-b">
+            <span>Offer B</span>
+            <b>{formatRate(comparison.offerB.netAnnualReturnPercent)}</b>
+          </div>
         </div>
       </div>
     </ToolModal>
