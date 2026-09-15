@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nikgalkin/finn/blob/master/docs/ds-protocol.schema.json",
+  "title": "Finn datasource plugin protocol v1",
+  "description": "The wire contract between Finn and a datasource plugin. Finn writes a Request to the plugin's stdin and reads a Response from its stdout. This schema is the normative contract; the Go module github.com/nikgalkin/finn/dsproto is one convenience wrapper over it.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "description": "Written to stdin for every command.",
+      "required": ["protocol", "command", "source"],
+      "properties": {
+        "protocol": { "const": 1 },
+        "command": { "enum": ["manifest", "fetch"] },
+        "source": {
+          "type": "string",
+          "description": "The name the source carries in config.yml."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "The opaque cursor the plugin returned last time. Empty on the first run."
+        },
+        "config": {
+          "type": "object",
+          "description": "The plugin's own config block from config.yml, passed through unchanged."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "How long the plugin has before its process group is killed."
+        },
+        "now": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The clock Finn stamped the request with, so a dry run and a real run agree on what this month means."
+        },
+        "known_currencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The user's currencies, base currency first. Balances are never sent."
+        },
+        "known_accounts": { "type": "array", "items": { "type": "string" } },
+        "known_tags": { "type": "array", "items": { "type": "string" } },
+        "known_categories": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "response": {
+      "type": "object",
+      "description": "Printed to stdout. Manifest, fetch and failure share one envelope.",
+      "required": ["protocol", "ok"],
+      "properties": {
+        "protocol": { "const": 1 },
+        "ok": { "type": "boolean" },
+        "error": {
+          "type": "string",
+          "description": "Required when ok is false, and the process must also exit non-zero."
+        },
+
+        "name": { "type": "string", "description": "manifest: the plugin's own name." },
+        "version": { "type": "string", "description": "manifest: the plugin's version." },
+        "kinds": {
+          "type": "array",
+          "items": { "enum": ["flow", "balance", "raw"] },
+          "description": "manifest: the item kinds this plugin can produce."
+        },
+        "uses_cursor": { "type": "boolean" },
+        "config_keys": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/configKey" },
+          "description": "manifest: what the plugin reads, shown in the confirmation dialog before the first run."
+        },
+
+        "cursor": {
+          "type": "string",
+          "description": "fetch: written in the same transaction as the items, so it never runs ahead of them."
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "items": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": { "$ref": "#/$defs/item" },
+          "description": "fetch: may be omitted when there is nothing new."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "ok": { "const": false } }, "required": ["ok"] },
+          "then": { "required": ["error"] }
+        }
+      ]
+    },
+
+    "configKey": {
+      "type": "object",
+      "required": ["key"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" },
+        "secret": {
+          "type": "boolean",
+          "description": "A secret belongs in the env block of config.yml, never in argv."
+        },
+        "env": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
+
+    "item": {
+      "type": "object",
+      "required": ["external_id", "kind"],
+      "properties": {
+        "external_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The idempotency key. Unique per source for all time, and unique within one response."
+        },
+        "kind": { "enum": ["flow", "balance", "raw"] },
+        "occurred_at": {
+          "type": "string",
+          "description": "RFC3339. Anything else is cleared with a note rather than failing the item."
+        },
+        "raw": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The original text. Required for a raw item, and kept as provenance for the others."
+        },
+        "note": {
+          "type": "string",
+          "description": "Why this could not be parsed, or a warning about the draft."
+        },
+        "draft": {
+          "description": "The proposal. A flow draft is revalidated by Finn and, if invalid, stored for repair rather than dropped.",
+          "oneOf": [
+            { "$ref": "#/$defs/flowDraft" },
+            { "$ref": "#/$defs/balanceDraft" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "flow" } }, "required": ["kind"] },
+          "then": { "required": ["draft"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "balance" } }, "required": ["kind"] },
+          "then": { "required": ["draft"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "raw" } }, "required": ["kind"] },
+          "then": { "required": ["raw"] }
+        }
+      ]
+    },
+
+    "flowDraft": {
+      "type": "object",
+      "description": "A proposed cash flow movement. Field names match Finn's own flow entry API.",
+      "required": ["month"],
+      "properties": {
+        "month": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+        "entryType": { "enum": ["external", "transfer"], "default": "external" },
+        "direction": { "enum": ["in", "out"] },
+        "counterparty": { "type": "string" },
+        "account": { "type": "string" },
+        "tag": { "type": "string" },
+        "currency": { "type": "string" },
+        "amount": { "type": "number", "exclusiveMinimum": 0 },
+        "taxRate": { "type": "number", "minimum": 0, "maximum": 100 },
+        "category": { "type": "string" },
+        "comment": { "type": "string" },
+        "toAccount": { "type": "string" },
+        "toTag": { "type": "string" },
+        "toCurrency": { "type": "string" },
+        "toAmount": { "type": "number", "minimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "entryType": { "const": "transfer" } }, "required": ["entryType"] },
+          "then": { "required": ["account", "toAccount", "currency", "toCurrency", "amount", "toAmount"] },
+          "else": { "required": ["direction", "counterparty", "currency", "amount"] }
+        }
+      ]
+    },
+
+    "balanceDraft": {
+      "type": "object",
+      "description": "A proposed balance reading. Carried by protocol v1; Finn 1.10 stores and shows these but does not apply them to a snapshot.",
+      "required": ["month", "organization", "currency", "amount"],
+      "properties": {
+        "month": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+        "organization": { "type": "string" },
+        "currency": { "type": "string" },
+        "amount": { "type": "number" },
+        "tag": { "type": "string" },
+        "comment": { "type": "string" }
+      }
+    }
+  },
+
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" }
+  ]
+}

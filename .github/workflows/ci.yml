@@ -110,6 +110,13 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # dsproto is a separate module, so ./... in the root does not reach it.
+      - name: Test the plugin protocol module
+        run: go test ./dsproto/...
+
+      - name: Vet the plugin protocol module
+        run: go vet ./dsproto/...
+
       - name: Test version calculation
         run: |
           test "$(./bin/next-version.sh '#major' v1.8.0 feat-v1.8.1)" = "v1.8.1"

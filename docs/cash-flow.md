@@ -16,6 +16,16 @@ The classification lives in Settings and nothing else stores it, so it always de
 
 Removing a tag from the list in Settings does not clear its classification: snapshots keep the tag string, so the flag has to outlive the tag it describes.
 
+## Bringing movements in
+
+There are two ways to add movements you did not type by hand, and they answer different questions.
+
+**CSV import** is for data you already have in a file - an export from a bank, an old spreadsheet. You pick the file, check the preview and import the lot.
+
+**[Datasources](datasources.md)** are for data that keeps arriving. An external plugin fetches it on demand and the proposals wait in an Inbox until you accept them one by one. The reference plugin lets you add a movement by sending a message to a Telegram bot from your phone; the message reaches Finn the next time you press Fetch.
+
+The two share their vocabulary on purpose: both revalidate every movement through the same rules, and both flag one that matches an existing entry as a duplicate. Datasources are off by default and add nothing until a plugin is registered in `config.yml`.
+
 ## CSV import format
 
 Cash Flow accepts UTF-8 CSV files separated with semicolons (`;`). Decimal values may use either a dot or a comma. Each row represents one movement. The preview marks rows that already exist or repeat within the file; exact duplicates are skipped by default and can be explicitly included with the import checkbox.

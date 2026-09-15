@@ -1,0 +1,10 @@
+// The dsproto contract is a separate module so plugin authors do not inherit
+// Finn's dependencies. go.work wires the two together for local development
+// without a replace directive, which would follow the module into anyone's
+// build; go.work is ignored once a module is downloaded.
+go 1.25.0
+
+use (
+	.
+	./dsproto
+)

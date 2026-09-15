@@ -14,6 +14,8 @@ type Config struct {
 	App      AppConfig    `mapstructure:"app"`
 	Database DBConfig     `mapstructure:"database"`
 	Backup   BackupConfig `mapstructure:"backup"`
+	// Filled in by loadDatasourcesFromFile rather than by viper, see LoadConfig.
+	Datasources DatasourcesConfig `mapstructure:"-"`
 }
 
 type AppConfig struct {
@@ -115,6 +117,18 @@ func LoadConfig(explicitPath string) *Config {
 	if _, generated := rawBackupKey(config.Backup.CipherKey); config.Backup.CipherKey != "" && !generated {
 		log.Println("ℹ️  Backup: backup.cipher_key looks like a passphrase, so it is stretched with Argon2id. 'finn backup generate-key' produces a stronger key.")
 	}
+
+	// The datasources section is read from the file directly rather than through
+	// viper, which lowercases keys and would corrupt environment variable names.
+	if configFile := v.ConfigFileUsed(); configFile != "" {
+		datasources, err := loadDatasourcesFromFile(configFile)
+		if err != nil {
+			log.Printf("⚠️  Datasources: %s could not be read, the section is ignored: %v\n", configFile, err)
+		} else {
+			config.Datasources = datasources
+		}
+	}
+	normalizeDatasourcesConfig(&config.Datasources)
 
 	return &config
 }

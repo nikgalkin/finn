@@ -32,7 +32,7 @@ A tour of the app: monthly snapshots, multi-currency balances, and the analytics
 * **Flexible timeframes:** Switch between `6M`, `1Y`, `ALL`, or a custom month range
 * **Adaptive currency scaling:** Automatically cross-convert low-nominal currencies so charts remain readable
 * **Math in inputs:** Enter expressions such as `15000 + 5000` directly in a balance field
-* **Local and private:** Store all data locally in SQLite, with no cloud sync or telemetry. The only outbound request is the optional exchange-rate fetch, which asks a public currency API for the rates of the currencies you track and never sends your balances
+* **Local and private:** Store all data locally in SQLite, with no cloud sync or telemetry. Finn itself makes one outbound request, the optional exchange-rate fetch, which asks a public currency API for the rates of the currencies you track and never sends your balances. Datasources are the one way that changes: they are off by default, each one is a program you install and register by hand, and every one of them states in its own documentation what it talks to — a Telegram source, for example, means your amounts and counterparties travel through Telegram's servers
 * **Multi-target backups:** Create raw backups or ones encrypted with authenticated AES-256-GCM in multiple local or cloud-synced folders, each with its own retention policy
 * **Local AI assistant:** Analyze selected snapshots and precomputed metrics with a local model, or copy the prepared prompt to another AI tool
 * **Data utilities:** Scan data health, inspect and verify restore points, and export selected periods as portable JSON or a CSV bundle
@@ -49,6 +49,7 @@ When enabled, Cash Flow also provides:
 * **Estimated capital return:** Reconcile balance changes, external flows, and FX impact into an approximate earnings amount and rate, including breakdowns by balance tag. Movements participate through either a tag set directly on the movement or the balance tags of its assigned account
 * **Earnings or unrecorded spending:** Mark tags such as `cash` or `checking` as non-yielding, and analytics reads their unexplained change as estimated spending instead of capital earnings
 * **CSV import:** Import existing movements through a validated preview with duplicate detection
+* **Datasources and Inbox:** Run an external plugin on demand to pull movements in from elsewhere. Nothing it returns touches your data: proposals wait in an Inbox until you check, fix, and accept them
 
 ## 📚 Documentation
 
@@ -56,6 +57,8 @@ When enabled, Cash Flow also provides:
 * [Example configuration](demo/config.yml) — use the sample app, database, and backup settings as a starting point
 * [Usage guide and screenshots](docs/usage.md) — configure currencies, create snapshots, and work with charts
 * [Optional Cash Flow](docs/cash-flow.md) — enable the journal and import movements from CSV
+* [Datasources and Inbox](docs/datasources.md) — register a plugin, run it on demand, and accept what it proposes
+* [Plugin protocol](docs/plugin-protocol.md) — write a datasource plugin in any language
 * [Backups and recovery](docs/backups.md) — configure targets, encryption, retention, and restore a backup
 * [Local AI Assistant](docs/local-ai.md) — connect a local model or prepare a prompt for another AI tool
 * [Tools](docs/tools.md) — run data-health checks, inspect backups, export data, make protected direct fixes with the SQL editor, or model growth, rebalancing, returns, exchange deals and deposits with the financial calculators

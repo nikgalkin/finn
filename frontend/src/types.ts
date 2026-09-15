@@ -83,6 +83,113 @@ export type FlowEntry = {
   toAmount: number;
 };
 
+/** A movement as a datasource proposed it, before anybody accepted it. */
+export type FlowEntryDraft = Omit<FlowEntry, 'id'>;
+
+export type DatasourceManifest = {
+  name: string;
+  version: string;
+  kinds: string[];
+  usesCursor: boolean;
+  configKeys?: Array<{
+    key: string;
+    required?: boolean;
+    secret?: boolean;
+    env?: string;
+    note?: string;
+  }>;
+};
+
+export type DatasourceSource = {
+  name: string;
+  path: string;
+  sha256?: string;
+  pinned: boolean;
+  confirmed: boolean;
+  orphaned: boolean;
+  disabled: boolean;
+  runnable: boolean;
+  timeoutSeconds: number;
+  configError?: string;
+  binaryError?: string;
+  manifestError?: string;
+  manifest?: DatasourceManifest;
+  cursor?: string;
+  lastRunAt?: string;
+  lastStatus?: string;
+  lastError?: string;
+  pendingCount: number;
+};
+
+export type DatasourceSources = {
+  enabled: boolean;
+  demo: boolean;
+  sources: DatasourceSource[];
+  pending: number;
+};
+
+export type DatasourceSummary = {
+  available: boolean;
+  pending: number;
+};
+
+/**
+ * `detached` is not stored anywhere: it is what an accepted item computes to
+ * once the movement it created is gone.
+ */
+export type DsInboxStatus = 'pending' | 'accepted' | 'rejected' | 'invalid' | 'detached';
+
+export type DsInboxKind = 'flow' | 'balance' | 'raw';
+
+export type DsInboxItem = {
+  id: number;
+  source: string;
+  externalId: string;
+  kind: DsInboxKind;
+  status: DsInboxStatus;
+  month?: string;
+  occurredAt?: string;
+  receivedAt: string;
+  raw?: string;
+  draft?: FlowEntryDraft;
+  note?: string;
+  flowEntryId?: number;
+  runId?: number;
+  duplicate?: boolean;
+};
+
+export type DsFetchSummary = {
+  runId: number;
+  source: string;
+  status: 'ok' | 'error';
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  exitCode: number;
+  stdoutBytes: number;
+  itemsTotal: number;
+  itemsNew: number;
+  itemsSkipped: number;
+  cursor?: string;
+  warnings?: string[];
+  error?: string;
+  stderrTail?: string;
+};
+
+export type DsAcceptOutcome = {
+  id: number;
+  status: 'accepted' | 'duplicate' | 'invalid' | 'skipped' | 'missing';
+  flowEntryId?: number;
+  error?: string;
+};
+
+export type DsAcceptResult = {
+  accepted: number;
+  skipped: number;
+  failed: number;
+  results: DsAcceptOutcome[];
+};
+
 export type LocalAISettings = {
   enabled: boolean;
   provider: 'lmstudio' | 'openai-compatible';

@@ -4,6 +4,7 @@ import {
   ArrowDownUp,
   BarChart3,
   Bot,
+  Inbox,
   Keyboard,
   MessageSquare,
   MoreHorizontal,
@@ -24,6 +25,7 @@ type NavDestination = {
 const BAR_DESTINATIONS: NavDestination[] = [
   { route: '/assistant', label: 'Assistant', icon: Bot, hotkey: 'A' },
   { route: '/flow', label: 'Flow', icon: ArrowDownUp, hotkey: 'W' },
+  { route: '/ds-inbox', label: 'Inbox', icon: Inbox, hotkey: 'I' },
   { route: '/graphs', label: 'Graphs', icon: BarChart3, hotkey: 'G' },
   { route: '/feed', label: 'Feed', icon: MessageSquare, hotkey: 'F' }
 ];
@@ -36,10 +38,12 @@ const MENU_DESTINATIONS: NavDestination[] = [
 
 type HeaderNavProps = {
   cashFlowEnabled: boolean;
+  datasourcesAvailable: boolean;
+  inboxPendingCount: number;
   onShowHotkeys: () => void;
 };
 
-export function HeaderNav({ cashFlowEnabled, onShowHotkeys }: HeaderNavProps) {
+export function HeaderNav({ cashFlowEnabled, datasourcesAvailable, inboxPendingCount, onShowHotkeys }: HeaderNavProps) {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -71,7 +75,13 @@ export function HeaderNav({ cashFlowEnabled, onShowHotkeys }: HeaderNavProps) {
     };
   }, [menuOpen]);
 
-  const destinations = BAR_DESTINATIONS.filter(item => item.route !== '/flow' || cashFlowEnabled);
+  // The Inbox only exists once datasources are configured, so its slot is not
+  // held open for people who have never registered a plugin.
+  const destinations = BAR_DESTINATIONS.filter(item => {
+    if (item.route === '/flow') return cashFlowEnabled;
+    if (item.route === '/ds-inbox') return datasourcesAvailable;
+    return true;
+  });
   const activeMenuDestination = MENU_DESTINATIONS.find(item => item.route === location.pathname);
 
   return (
@@ -87,11 +97,16 @@ export function HeaderNav({ cashFlowEnabled, onShowHotkeys }: HeaderNavProps) {
             <Link
               to={item.route}
               className={`btn app-nav-item${active ? ' is-active' : ''}`}
-              aria-label={item.label}
+              aria-label={item.route === '/ds-inbox' && inboxPendingCount > 0
+                ? `${item.label}, ${inboxPendingCount} waiting`
+                : item.label}
               aria-current={active ? 'page' : undefined}
             >
               <Icon size={18} />
               <span>{item.label}</span>
+              {item.route === '/ds-inbox' && inboxPendingCount > 0 && (
+                <span className="app-nav-badge" aria-hidden="true">{inboxPendingCount > 99 ? '99+' : inboxPendingCount}</span>
+              )}
             </Link>
           </QuickHoverTooltip>
         );

@@ -13,6 +13,7 @@ import { useSettings } from './hooks/useSettings';
 import { pruneExpiredSnapshotDrafts } from './lib/snapshotDraftStorage';
 import { requestUnsavedNavigation } from './lib/unsavedNavigation';
 import { useVisualPreferences } from './hooks/useVisualPreferences';
+import { useDatasourceInbox } from './hooks/useDatasourceInbox';
 import { HistoryScrollRestoration } from './lib/historyEntryState';
 
 const loadDeferredRoutes = () => import('./pages/routeChunks/DeferredRoutes');
@@ -21,6 +22,7 @@ const CommentFeed = lazy(() => loadDeferredRoutes().then(module => ({ default: m
 const GraphsPage = lazy(() => loadDeferredRoutes().then(module => ({ default: module.GraphsPage })));
 const Settings = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Settings })));
 const CashFlow = lazy(() => loadDeferredRoutes().then(module => ({ default: module.CashFlow })));
+const DsInbox = lazy(() => loadDeferredRoutes().then(module => ({ default: module.DsInbox })));
 const AIChat = lazy(() => loadDeferredRoutes().then(module => ({ default: module.AIChat })));
 const Tools = lazy(() => loadDeferredRoutes().then(module => ({ default: module.Tools })));
 const StyleLab = lazy(() => import('./pages/StyleLab'));
@@ -56,6 +58,7 @@ function App() {
   const [shutdownComplete, setShutdownComplete] = useState(false);
   const [shutdownBackup, setShutdownBackup] = useState<BackupReport | null>(null);
   const visualPreferences = useVisualPreferences();
+  const datasourceInbox = useDatasourceInbox();
   const location = useLocation();
   const navigate = useNavigate();
   const AppBrand = logoMarks[visualPreferences.logo];
@@ -221,6 +224,8 @@ function App() {
         </div>
         <HeaderNav
           cashFlowEnabled={Boolean(settings.cashFlow?.enabled)}
+          datasourcesAvailable={datasourceInbox.available}
+          inboxPendingCount={datasourceInbox.pending}
           onShowHotkeys={() => setShowHotkeysHelp(true)}
         />
       </header>
@@ -236,6 +241,7 @@ function App() {
             <Route path="/feed" element={<CommentFeed />} />
             <Route path="/graphs" element={<GraphsPage />} />
             <Route path="/flow" element={<CashFlow />} />
+            <Route path="/ds-inbox" element={<DsInbox />} />
             <Route path="/assistant" element={<AIChat />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/style-lab" element={<StyleLab />} />

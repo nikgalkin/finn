@@ -17,3 +17,30 @@ backup:
     - name: google_drive
       path: "/Users/user/Library/CloudStorage/GoogleDrive-main/My Drive/FinnBackups"
       retention: 10
+
+# Datasources are external programs Finn runs on demand to propose Cash Flow
+# movements. They are off by default, and this file is the only place a plugin
+# can be registered: neither the UI nor the HTTP API can add one.
+#
+# Nothing a plugin returns reaches Cash Flow on its own — proposals wait in the
+# Inbox until a person accepts them. See docs/datasources.md.
+#
+# datasources:
+#   enabled: true
+#   plugins:
+#     - name: telegram
+#       # Absolute path only. $VARS and a leading ~ are expanded; a bare command
+#       # name is refused and never looked up in PATH.
+#       path: "$HOME/.finn/plugins/finn-ds-telegram"
+#       # Pins the exact binary. Get it with: finn ds hash <path>
+#       # Without it the plugin still runs, but the UI marks it unpinned.
+#       sha256: "9f2b0c00000000000000000000000000000000000000000000000000000c41a0"
+#       timeout_seconds: 30
+#       # The only variables the plugin receives, on top of a minimal PATH, HOME
+#       # and TMPDIR. Secrets belong here and never in argv, which any process of
+#       # your user can read out of ps.
+#       env:
+#         FINN_DS_TELEGRAM_TOKEN: "123456:AA..."
+#       # Passed to the plugin verbatim. These keys are the plugin's own.
+#       config:
+#         allowed_chat_ids: [12345678]

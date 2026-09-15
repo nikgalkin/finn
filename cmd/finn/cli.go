@@ -69,7 +69,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.Flags().BoolVarP(&appOpts.demo, "demo", "d", false, "Run with an isolated sample database")
 	rootCmd.Flags().BoolVar(&appOpts.forceDemo, "demo-force", false, "Replace the demo database with fresh sample data")
 
-	rootCmd.AddCommand(newVersionCommand(), newBackupCommand(&appOpts))
+	rootCmd.AddCommand(newVersionCommand(), newBackupCommand(&appOpts), newDatasourceCommand(&appOpts))
 	return rootCmd
 }
 
