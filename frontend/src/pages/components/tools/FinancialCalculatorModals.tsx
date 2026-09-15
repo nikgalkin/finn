@@ -1356,6 +1356,7 @@ type DepositOfferDraft = {
   compounding: DepositCompounding;
   taxRate: NumericValue;
   taxFreeInterest: NumericValue;
+  entryRate: NumericValue | null;
   exitRate: NumericValue | null;
 };
 
@@ -1370,8 +1371,8 @@ const DEPOSIT_COMPOUNDING_OPTIONS: { value: DepositCompounding; label: string }[
 ];
 
 const INITIAL_DEPOSIT_OFFERS: Record<DepositSide, DepositOfferDraft> = {
-  A: { currency: '', annualRate: 16, compounding: 'monthly', taxRate: 13, taxFreeInterest: 0, exitRate: null },
-  B: { currency: '', annualRate: 4, compounding: 'monthly', taxRate: 13, taxFreeInterest: 0, exitRate: null }
+  A: { currency: '', annualRate: 16, compounding: 'monthly', taxRate: 13, taxFreeInterest: 0, entryRate: null, exitRate: null },
+  B: { currency: '', annualRate: 4, compounding: 'monthly', taxRate: 13, taxFreeInterest: 0, entryRate: null, exitRate: null }
 };
 
 export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => void }) {
@@ -1407,7 +1408,7 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
     const offerCurrency = draft.currency || (side === 'A' ? currency : fallbackSecondCurrency);
     const snapshotRate = getSnapshotConversionRate(latestSnapshot, offerCurrency, currency);
     const orientation = orientExchangeRate(offerCurrency, currency, snapshotRate ?? 1);
-    const quotedRate = Math.round(orientation.rate * 100) / 100;
+    const quotedRate = offerCurrency === currency ? 1 : draft.entryRate ?? Math.round(orientation.rate * 100) / 100;
     const quotedExitRate = draft.exitRate ?? quotedRate;
     const toBaseRate = (quoted: number) => orientation.inverted
       ? quoted > 0 ? 1 / quoted : 0
@@ -1420,7 +1421,7 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
       orientation,
       quotedRate,
       quotedExitRate,
-      entryRate: toBaseRate(quotedRate),
+      entryRate: toBaseRate(numeric(quotedRate)),
       exitRate: toBaseRate(numeric(quotedExitRate))
     };
   };
@@ -1446,8 +1447,8 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
   const { expanded: workingExpanded, toggle: toggleWorking } = useExpandablePanel('deposit-working');
 
   const resetRates = () => {
-    patchOffer('A', { exitRate: null });
-    patchOffer('B', { exitRate: null });
+    patchOffer('A', { entryRate: null, exitRate: null });
+    patchOffer('B', { entryRate: null, exitRate: null });
   };
 
   const renderOffer = (side: DepositSide) => {
@@ -1483,7 +1484,7 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
           <CurrencyField
             label="Deposit currency"
             value={offerCurrency}
-            onChange={value => patchOffer(side, { currency: value, exitRate: null })}
+            onChange={value => patchOffer(side, { currency: value, entryRate: null, exitRate: null })}
             options={currencies}
             disabled={currenciesLoading}
           />
@@ -1512,21 +1513,33 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
             suffix={offerCurrency}
             help={`Interest up to this amount is not taxed. The tax rate applies only to whatever is left above it, once, at the end of the term. Leave it at zero for a plain flat tax on all interest.`}
           />
-          {isForeign && (
+        </div>
+        {isForeign && (
+          <div className="calculator-field-grid deposit-rate-fields">
+            <CalculatorField
+              label="Rate at purchase"
+              value={quotedRate}
+              onChange={value => patchOffer(side, { entryRate: value })}
+              suffix={orientation.toCurrency}
+              help={`How much 1 ${orientation.fromCurrency} costs in ${orientation.toCurrency} when you buy the deposit currency. Defaults to the latest snapshot rate; enter your actual purchase rate to override it.`}
+              hint={`per 1 ${orientation.fromCurrency} · ${draft.entryRate !== null
+                ? 'custom'
+                : snapshotRate === null
+                  ? 'type one'
+                  : latestSnapshot?.month}`}
+            />
             <CalculatorField
               label="Rate at maturity"
               value={quotedExitRate}
               onChange={value => patchOffer(side, { exitRate: value })}
               suffix={orientation.toCurrency}
-              help={`How much 1 ${orientation.fromCurrency} is worth in ${orientation.toCurrency} when the deposit closes. Left alone it repeats today's rate, which assumes the currency does not move.`}
+              help={`How much 1 ${orientation.fromCurrency} is worth in ${orientation.toCurrency} when the deposit closes. Left alone it repeats the purchase rate, which assumes the currency does not move.`}
               hint={`per 1 ${orientation.fromCurrency} · ${draft.exitRate !== null
                 ? 'expected'
-                : snapshotRate === null
-                  ? 'type one'
-                  : latestSnapshot?.month}`}
+                : 'same as purchase'}`}
             />
-          )}
-        </div>
+          </div>
+        )}
         <ResultMetric
           primary
           tone={result.profitInBase < 0 ? 'negative' : isBest ? 'positive' : 'neutral'}
@@ -1555,10 +1568,10 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
                 : (
                   <>
                     {formatValue(breakEvenRate)} {rateUnit}
-                    {quotedRate > 0 && (
+                    {numeric(quotedRate) > 0 && (
                       <small>
-                        {breakEvenRate >= quotedRate ? '+' : ''}
-                        {formatValue((breakEvenRate / quotedRate - 1) * 100)}% vs today
+                        {breakEvenRate >= numeric(quotedRate) ? '+' : ''}
+                        {formatValue((breakEvenRate / numeric(quotedRate) - 1) * 100)}% vs purchase
                       </small>
                     )}
                   </>
@@ -1578,7 +1591,7 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
           <dl className="offer-breakdown is-working">
             <div><dt>Deposit</dt><dd>{formatMoney(result.principal, offerCurrency)}</dd></div>
             {isForeign && (
-              <div><dt>Bought at</dt><dd>{formatValue(quotedRate)} {rateUnit}</dd></div>
+              <div><dt>Bought at</dt><dd>{formatValue(numeric(quotedRate))} {rateUnit}</dd></div>
             )}
             <div><dt>Interest before tax</dt><dd>{formatMoney(result.grossInterest, offerCurrency)}</dd></div>
             <div><dt>Tax withheld</dt><dd>{formatMoney(result.tax, offerCurrency)}</dd></div>
@@ -1636,7 +1649,7 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
       <CalculatorGuide
         id="deposit"
         steps={[
-          <>The same <b>amount</b> goes into both offers, so whatever wins, wins on merit. A deposit in another currency is bought at today’s rate and sold back at maturity, and every result is stated in <b>{currency}</b>.</>,
+          <>The same <b>amount</b> goes into both offers. A deposit in another currency is bought at the <b>purchase rate</b> and sold back at maturity, and every result is stated in <b>{currency}</b>.</>,
           <>Per offer, set the rate, how often interest is <b>added to the balance</b>, and the tax. Tax is charged on interest above the tax-free amount, once, at the end.</>,
           <>Leave the <b>maturity rate</b> untouched to assume the currency does not move. Change it to test a specific expectation.</>,
           <>Read <b>Ties Offer …at</b>: that is the rate the currency has to reach for the two offers to end up equal. Anything beyond it and the foreign deposit wins.</>

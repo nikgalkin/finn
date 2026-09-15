@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ArrowLeftRight, Calendar, Edit, MessageSquare, TrendingUp } from 'lucide-react';
-import { getCurrencyColor, getTagColor } from '../types';
+import { ArrowLeft, ArrowLeftRight, ArrowUpRight, Calendar, Edit, MessageSquare, TrendingUp } from 'lucide-react';
+import { API_URL, getCurrencyColor, getTagColor } from '../types';
 import type { CommentItem, FlowDecomposition } from '../lib/finance';
-import type { ParsedSnapshot } from '../types';
+import type { ParsedSnapshot, Snapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { useFlowEntries } from '../hooks/useFlowEntries';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { SnapshotDiffModal } from './components/SnapshotDiffModal';
-import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments } from '../lib/finance';
+import { calculateFlowDecomposition, calculateTotals, convertAmount, extractComments, normalizeSnapshotRates } from '../lib/finance';
+import { CommentModal } from './components/SnapshotCommentModal';
 import { isTextInputTarget } from '../lib/hotkeys';
 import { toNumber } from '../lib/number';
 import { DELTA_NEGATIVE_COLOR, DELTA_NEUTRAL_COLOR, DELTA_POSITIVE_COLOR, formatPercent, formatSignedMoney } from '../lib/format';
@@ -487,13 +488,20 @@ const buildFeedPeriods = (snapshots: ParsedSnapshot[], feedItems: FeedItem[], mo
 export default function CommentFeed() {
   const { settings } = useSettings();
   const baseCurrency = settings.baseCurrency || 'RUB';
-  const { snapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
+  const { snapshots, setSnapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
   const navigate = useNavigate();
   const [mode, setMode] = useState<FeedMode>('all');
+  const [commentEditor, setCommentEditor] = useState<{
+    snapshot: ParsedSnapshot;
+    comment: CommentItem;
+    text: string;
+  } | null>(null);
+  const [commentSaving, setCommentSaving] = useState(false);
+  const [commentError, setCommentError] = useState('');
   const diffHistory = useSnapshotDiffHistory('comment-feed-diff', snapshots);
   const diffModalData = diffHistory.data;
   const { entries: flowEntries } = useFlowEntries(Boolean(settings.cashFlow?.enabled && diffModalData));
-  useEscapeToDashboard({ blocked: Boolean(diffModalData) });
+  useEscapeToDashboard({ blocked: Boolean(diffModalData || commentEditor) });
 
   const feedItems = useMemo(() => buildHighlightItems(snapshots, baseCurrency), [snapshots, baseCurrency]);
   const commentCount = feedItems.filter(item => item.kind === 'comment').length;
@@ -528,6 +536,62 @@ export default function CommentFeed() {
     navigate(`/snapshot/${item.month}`);
   };
 
+  const editComment = (item: FeedItem) => {
+    const snapshot = snapshots.find(snapshot => snapshot.month === item.month);
+    if (!snapshot || !item.comment) return;
+    setCommentError('');
+    setCommentEditor({ snapshot, comment: item.comment, text: item.comment.text });
+  };
+
+  const closeComment = () => {
+    if (commentSaving) return;
+    if (commentEditor && commentEditor.text !== commentEditor.comment.text
+      && !window.confirm('Discard unsaved comment changes?')) return;
+    setCommentEditor(null);
+    setCommentError('');
+  };
+
+  const saveComment = async () => {
+    if (!commentEditor || commentSaving) return;
+    const { snapshot, comment, text } = commentEditor;
+    if (text === comment.text) {
+      setCommentEditor(null);
+      return;
+    }
+    setCommentSaving(true);
+    setCommentError('');
+    try {
+      const expectedBalance = comment.type === 'balance'
+        ? snapshot.data.organizations.find(org => org.id === comment.orgId)?.balances[comment.balanceIndex!]
+        : undefined;
+      const response = await fetch(`${API_URL}/snapshots/${snapshot.month}/comment`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          snapshotID: snapshot.id,
+          type: comment.type,
+          orgId: comment.orgId,
+          balanceIndex: comment.balanceIndex,
+          expectedBalance,
+          originalText: comment.text,
+          text
+        })
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || 'Could not save the comment.');
+      }
+      const saved = await response.json() as Snapshot;
+      const parsed = normalizeSnapshotRates({ ...saved, data: JSON.parse(saved.data) }, baseCurrency);
+      setSnapshots(current => current.map(item => item.id === parsed.id ? parsed : item));
+      setCommentEditor(null);
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : 'Could not save the comment.');
+    } finally {
+      setCommentSaving(false);
+    }
+  };
+
   const renderFeedItem = (item: FeedItem) => {
     const isHighlight = item.kind === 'highlight';
     const badgeColor = isHighlight ? HIGHLIGHT_BADGE_COLOR : getToneColor(item.tone);
@@ -535,60 +599,69 @@ export default function CommentFeed() {
 
     return (
       <article key={item.id} className="glass-panel" style={{ padding: '16px 18px', borderLeft: `3px solid ${getToneColor(item.tone)}` }}>
-        <div className="flex justify-between gap-4" style={{ alignItems: 'flex-start' }}>
-          <div style={{ minWidth: 0 }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px', fontSize: '15px', margin: 0, marginBottom: '6px' }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
-                {isHighlight ? renderColoredEntities(item.title, item.entities) : renderItemTitle(item)}
-                {!isHighlight && renderCommentTags(item.comment)}
-              </span>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: badgeColor,
-                background: 'rgba(255,255,255,0.03)',
-                border: `1px solid ${badgeBorderColor}`,
-                borderLeftWidth: '1px',
-                padding: '2px 6px',
-                borderRadius: '4px',
-                lineHeight: 1.2,
-                marginLeft: '3px',
-                position: 'relative'
-              }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute',
-                    left: '-8px',
-                    top: '-1px',
-                    bottom: '-1px',
-                    width: '1px',
-                    background: 'var(--glass-border)'
-                  }}
-                />
-                {isHighlight ? 'HIGHLIGHT' : 'COMMENT'}
-              </span>
-            </h3>
+        <div className="flex justify-between gap-4" style={{ alignItems: 'center', marginBottom: '6px' }}>
+          <h3 style={{ display: 'flex', minWidth: 0, alignItems: 'center', flexWrap: 'wrap', gap: '7px', fontSize: '15px', lineHeight: '22px', margin: 0 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+              {isHighlight ? renderColoredEntities(item.title, item.entities) : renderItemTitle(item)}
+              {!isHighlight && renderCommentTags(item.comment)}
+            </span>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color: badgeColor,
+              background: 'rgba(255,255,255,0.03)',
+              border: `1px solid ${badgeBorderColor}`,
+              borderLeftWidth: '1px',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              lineHeight: 1.2,
+              marginLeft: '3px',
+              position: 'relative'
+            }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  left: '-8px',
+                  top: '-1px',
+                  bottom: '-1px',
+                  width: '1px',
+                  background: 'var(--glass-border)'
+                }}
+              />
+              {isHighlight ? 'HIGHLIGHT' : 'COMMENT'}
+            </span>
+          </h3>
 
-            <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.5 }}>
-              {isHighlight ? renderColoredEntities(item.text, item.entities) : item.text}
-            </div>
-            {item.meta && (
-              <div style={{ marginTop: '6px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                {isHighlight ? renderColoredEntities(item.meta, item.entities) : item.meta}
-              </div>
+          <div className="feed-item-actions" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+            {item.comment && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => editComment(item)}
+              >
+                <Edit size={12} /> Edit comment
+              </button>
             )}
+            <button
+              type="button"
+              className="btn"
+              title={item.targetOrgName ? `Open ${item.month} snapshot at ${item.targetOrgName}` : `Open ${item.month} snapshot`}
+              style={{ color: 'var(--text-secondary)' }}
+              onClick={() => openSnapshot(item)}
+            >
+              <ArrowUpRight size={12} /> Open snapshot
+            </button>
           </div>
-
-          <button
-            className="btn"
-            title={item.targetOrgName ? 'Edit focused snapshot' : 'Edit'}
-            style={{ padding: '8px', flexShrink: 0, color: 'var(--text-secondary)' }}
-            onClick={() => openSnapshot(item)}
-          >
-            <Edit size={16} />
-          </button>
         </div>
+        <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-primary)', fontSize: '14px', lineHeight: 1.5 }}>
+          {isHighlight ? renderColoredEntities(item.text, item.entities) : item.text}
+        </div>
+        {item.meta && (
+          <div style={{ marginTop: '6px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            {isHighlight ? renderColoredEntities(item.meta, item.entities) : item.meta}
+          </div>
+        )}
       </article>
     );
   };
@@ -662,6 +735,20 @@ export default function CommentFeed() {
             </section>
           ))}
         </div>
+      )}
+
+      {commentEditor && (
+        <CommentModal
+          title="Edit comment"
+          description={`${commentEditor.snapshot.month} · ${getCommentTitle(commentEditor.comment)}`}
+          text={commentEditor.text}
+          onChange={text => setCommentEditor(current => current ? { ...current, text } : current)}
+          onClose={closeComment}
+          onSave={() => void saveComment()}
+          saveLabel="Save comment"
+          saving={commentSaving}
+          error={commentError}
+        />
       )}
 
       {diffModalData && (

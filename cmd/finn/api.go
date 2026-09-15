@@ -122,6 +122,7 @@ func setupAPI(r *gin.Engine, db *sql.DB, requestShutdown func(), runShutdownBack
 
 	setupAIAPI(api, db)
 	setupFlowAPI(api, db)
+	setupSnapshotCommentAPI(api, db)
 
 	api.POST("/shutdown", func(c *gin.Context) {
 		if c.Query("skip_backup") == "true" {

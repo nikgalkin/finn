@@ -40,6 +40,8 @@ type TaggedCapitalReturnBreakdown = {
 
 export type CommentItem = {
   type: 'snapshot' | 'org' | 'balance';
+  orgId?: string;
+  balanceIndex?: number;
   orgName?: string;
   currency?: string;
   tags?: string[];
@@ -454,13 +456,15 @@ export const extractComments = (snapshot: ParsedSnapshot): CommentItem[] => {
 
   snapshot.data.organizations.forEach(org => {
     if (org.comment) {
-      items.push({ type: 'org', orgName: org.name, text: org.comment });
+      items.push({ type: 'org', orgId: org.id, orgName: org.name, text: org.comment });
     }
 
-    org.balances.forEach((balance: Balance) => {
+    org.balances.forEach((balance: Balance, balanceIndex) => {
       if (balance.comment) {
         items.push({
           type: 'balance',
+          orgId: org.id,
+          balanceIndex,
           orgName: org.name,
           currency: balance.currency,
           tags: balance.tags,

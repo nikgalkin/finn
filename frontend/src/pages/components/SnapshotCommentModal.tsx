@@ -77,6 +77,7 @@ export function CommentModal({
           style={{ resize: 'none', paddingTop: '12px', minHeight: '150px' }}
           placeholder={placeholder}
           value={text}
+          disabled={saving}
           onChange={event => onChange(event.target.value)}
           onKeyDown={event => {
             if (event.key === 'Enter' && !event.shiftKey && !saving) {

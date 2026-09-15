@@ -12,11 +12,11 @@ import { SnapshotCommentModal } from './components/SnapshotCommentModal';
 import type { ActiveSnapshotComment } from './components/SnapshotCommentModal';
 import { SnapshotEditorHeader } from './components/SnapshotEditorHeader';
 import { FlowPeriodModal } from './components/FlowPeriodModal';
-import type { FlowPeriodDraft } from './components/FlowPeriodModal';
+import type { FlowPeriodDraft } from '../lib/cashFlow';
 import { useSnapshotDraft } from './hooks/useSnapshotDraft';
 import { stripCommentsFromSnapshot, useSnapshotEditorData } from './hooks/useSnapshotEditorData';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
-import { copyFlowPeriodEntries } from '../lib/cashFlow';
+import { copyFlowPeriodEntries, serializeFlowPeriodEntries } from '../lib/cashFlow';
 import { fetchLatestCurrencyRates } from '../lib/exchangeRates';
 import { normalizeRates } from '../lib/finance';
 import { normalizeSnapshotAmounts } from '../lib/snapshotAmounts';
@@ -311,21 +311,7 @@ export default function SnapshotEdit() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          entries: drafts.map(draft => ({
-            id: draft.id,
-            entryType: draft.entryType,
-            direction: draft.direction,
-            counterparty: draft.counterparty,
-            account: draft.account,
-            currency: draft.currency,
-            amount: Number(draft.amount),
-            taxRate: draft.entryType === 'external' && draft.direction === 'in' ? Number(draft.taxRate) : 0,
-            category: draft.category,
-            comment: draft.comment,
-            toAccount: draft.toAccount,
-            toCurrency: draft.toCurrency,
-            toAmount: Number(draft.toAmount || 0)
-          }))
+          entries: serializeFlowPeriodEntries(drafts)
         })
       });
       if (!response.ok) {

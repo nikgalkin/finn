@@ -101,6 +101,7 @@ func TestAPIRejectsForeignOrigins(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/snapshots"},
 		{method: http.MethodGet, path: "/api/snapshots/2026-07"},
+		{method: http.MethodPatch, path: "/api/snapshots/2026-07/comment"},
 		{method: http.MethodDelete, path: "/api/snapshots/2026-07"},
 		{method: http.MethodGet, path: "/api/settings"},
 		{method: http.MethodGet, path: "/api/rates"},
