@@ -2,6 +2,22 @@ import type { FlowEntry } from '../types';
 
 export type FlowPeriodSeed = Omit<FlowEntry, 'id' | 'month'>;
 
+export type FlowPeriodDraft = Omit<FlowPeriodSeed, 'amount' | 'taxRate' | 'toAmount'> & {
+  clientID: string;
+  id?: number;
+  amount: number | string;
+  taxRate: number | string;
+  toAmount: number | string;
+};
+
+export const serializeFlowPeriodEntries = (drafts: FlowPeriodDraft[]) => drafts
+  .map(({ clientID: _clientID, ...draft }) => ({
+    ...draft,
+    amount: Number(draft.amount),
+    taxRate: draft.entryType === 'external' && draft.direction === 'in' ? Number(draft.taxRate) : 0,
+    toAmount: Number(draft.toAmount || 0)
+  }));
+
 type FlowCurrencySummary = {
   incoming: number;
   incomingNet: number;

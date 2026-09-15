@@ -1032,6 +1032,8 @@ main > .page-loader { animation: none; }
 
 .btn:hover { background: rgba(255, 255, 255, 0.1); }
 
+.feed-item-actions > .btn { height: 22px; padding: 0 6px; gap: 4px; font-size: 11px; line-height: 1; }
+
 .btn:disabled { cursor: not-allowed; opacity: 0.45; }
 
 .btn:disabled:hover { background: var(--glass-bg); }
@@ -5614,6 +5616,10 @@ main > .page-loader { animation: none; }
 .offer-cards { margin-bottom: 14px; }
 
 .offer-card > .calculator-field-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+
+.offer-card .calculator-field > span { min-height: 18px; }
+
+.offer-card > .deposit-rate-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 9px; }
 
 .offer-card .calculator-field:not(:has(> small))::after {
   font-size: 9px;

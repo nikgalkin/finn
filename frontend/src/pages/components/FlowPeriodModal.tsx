@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowDown, ArrowRightLeft, ArrowUp, Copy, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
 import { getCurrencyColor, getTagColor } from '../../types';
-import type { AppSettings, FlowDirection, FlowEntry, FlowEntryType } from '../../types';
-import type { FlowPeriodSeed } from '../../lib/cashFlow';
+import type { AppSettings, FlowEntry } from '../../types';
+import type { FlowPeriodDraft, FlowPeriodSeed } from '../../lib/cashFlow';
 import { AmountFieldHelp, AmountInput } from './AmountInput';
 import { AppSelect, type AppSelectOption } from './AppSelect';
 import { HelpTooltip } from './HelpTooltip';
@@ -13,25 +13,6 @@ import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 import { useCloseOnEscape } from '../../hooks/useCloseOnEscape';
 import { CommentModal } from './SnapshotCommentModal';
 import { formatFlowNumber, formatMonth } from '../../lib/format';
-
-export type FlowPeriodDraft = {
-  clientID: string;
-  id?: number;
-  entryType: FlowEntryType;
-  direction: FlowDirection;
-  counterparty: string;
-  account: string;
-  tag: string;
-  currency: string;
-  amount: number | string;
-  taxRate: number | string;
-  category: string;
-  comment: string;
-  toAccount: string;
-  toTag: string;
-  toCurrency: string;
-  toAmount: number | string;
-};
 
 type FlowPeriodModalProps = {
   month: string;

@@ -6,10 +6,9 @@ import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { API_URL, getTagColor } from '../types';
 import type { FlowDirection, FlowEntry } from '../types';
-import { calculateFlowTax, copyFlowPeriodEntries, summarizeFlowEntries } from '../lib/cashFlow';
-import type { FlowPeriodSeed } from '../lib/cashFlow';
+import { calculateFlowTax, copyFlowPeriodEntries, serializeFlowPeriodEntries, summarizeFlowEntries } from '../lib/cashFlow';
+import type { FlowPeriodDraft, FlowPeriodSeed } from '../lib/cashFlow';
 import { FlowPeriodModal } from './components/FlowPeriodModal';
-import type { FlowPeriodDraft } from './components/FlowPeriodModal';
 import { PageLoader } from './components/PageLoader';
 import { QuickHoverTooltip } from './components/QuickHoverTooltip';
 import { CommentModal } from './components/SnapshotCommentModal';
@@ -433,23 +432,7 @@ export default function CashFlow() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          entries: drafts.map(draft => ({
-            id: draft.id,
-            entryType: draft.entryType,
-            direction: draft.direction,
-            counterparty: draft.counterparty,
-            account: draft.account,
-            tag: draft.tag,
-            currency: draft.currency,
-            amount: Number(draft.amount),
-            taxRate: draft.entryType === 'external' && draft.direction === 'in' ? Number(draft.taxRate) : 0,
-            category: draft.category,
-            comment: draft.comment,
-            toAccount: draft.toAccount,
-            toTag: draft.toTag,
-            toCurrency: draft.toCurrency,
-            toAmount: Number(draft.toAmount || 0)
-          }))
+          entries: serializeFlowPeriodEntries(drafts)
         })
       });
       if (!response.ok) throw new Error(await readError(response));
