@@ -2825,10 +2825,10 @@ main > .page-loader { animation: none; }
   position: relative;
   display: grid;
   flex: 0 0 82px;
-  grid-template-columns: 25px 112px repeat(9, minmax(90px, 1fr)) 38px;
+  grid-template-columns: 25px 112px repeat(9, minmax(90px, 1fr)) 54px;
   gap: 8px;
   align-items: end;
-  min-width: 1180px;
+  min-width: 1196px;
   margin-bottom: 9px;
   padding: 11px;
   border: 1px solid var(--glass-border);
@@ -2958,15 +2958,28 @@ main > .page-loader { animation: none; }
   background: rgba(var(--surface-rgb), 0.35);
 }
 
-.cash-flow-period-remove {
+.cash-flow-period-row-actions {
   grid-column: 12;
+  display: flex;
+  gap: 6px;
+}
+
+.cash-flow-period-row-actions .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  width: 24px;
   height: 36px;
   padding: 0;
+  border-color: transparent;
+  background: transparent;
 }
+
+.cash-flow-period-row-actions .btn:not(.btn-danger) { color: var(--text-secondary); }
+
+.cash-flow-period-row-actions .btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); color: var(--text-primary); }
+
+.cash-flow-period-row-actions .btn-danger:hover:not(:disabled) { background: rgba(var(--danger-rgb), 0.1); color: var(--danger); }
 
 .cash-flow-comment-button,
 .cash-flow-table-comment {
@@ -4816,7 +4829,7 @@ main > .page-loader { animation: none; }
 
   .cash-flow-period-row-number { position: absolute; top: 10px; left: 12px; }
 
-  .cash-flow-period-remove { position: absolute; top: 8px; right: 10px; }
+  .cash-flow-period-row-actions { position: absolute; top: 8px; right: 10px; }
 
   .cash-flow-source-setting-row,
   .cash-flow-source-setting-labels { grid-template-columns: minmax(0, 1fr) 82px 36px; }

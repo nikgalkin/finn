@@ -17,6 +17,11 @@ export const formatNumber = (value: number) => Math.round(normalizeDisplayNumber
 
 export const formatMoney = (value: number, suffix: string) => `${formatNumber(value)} ${suffix}`;
 
+export const formatIncomeMultiple = (value: number) => `${new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1
+}).format(value)}×`;
+
 export const formatSigned = (value: number) => {
   const normalized = normalizeDisplayNumber(value, 0.5);
   return `${normalized > 0 ? '+' : ''}${formatNumber(normalized)}`;

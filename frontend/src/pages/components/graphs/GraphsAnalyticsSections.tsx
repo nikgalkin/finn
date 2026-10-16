@@ -1,4 +1,5 @@
 import { Fragment, memo, useCallback, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Activity, ArrowLeftRight, ArrowRight, BarChart3, Check, ChevronDown, ChevronRight, Clock, Landmark, Layers, LineChart as LineChartIcon, Percent, TrendingUp, X } from 'lucide-react';
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, ScatterChart, Scatter, CartesianGrid, XAxis, YAxis, ZAxis, Tooltip, ResponsiveContainer, Legend, Cell, LabelList, ReferenceLine } from 'recharts';
 import {
@@ -6,6 +7,7 @@ import {
   formatCompact,
   formatExchangeRate,
   formatFriendlyTime,
+  formatIncomeMultiple,
   formatMoney,
   formatNativeAmount,
   formatNumber,
@@ -17,6 +19,7 @@ import {
   getPercentDeltaColor
 } from '../../../lib/format';
 import type { TaggedReturnKind } from '../../../lib/finance';
+import type { IncomeMultipleIssue, IncomeMultiplePoint } from '../../../lib/netWorthIncome';
 import { getCurrencyColor, getTagColor } from '../../../types';
 import { HelpTooltip } from '../HelpTooltip';
 import { ModalPortal } from '../ModalPortal';
@@ -88,6 +91,8 @@ type GraphsAnalyticsSectionsProps = {
   decompositionData: ChartDatum[];
   hiddenSeries: HiddenLegendSeries;
   netWorthData: ChartDatum[];
+  incomeMultiplePoints: IncomeMultiplePoint[];
+  hasFlowEntries: boolean;
   orgTrendData: ChartDatum[];
   organizationCurrencyBreakdown: OrganizationCurrencyBreakdown[];
   organizationCurrencyMonth?: string;
@@ -260,6 +265,96 @@ const NetWorthTooltip = ({ active, payload, label, baseCurrency }: any) => {
   );
 };
 
+const incomeIssueText = (issue: IncomeMultipleIssue) => {
+  switch (issue.kind) {
+    case 'no_history': return 'No Cash Flow entries by this month';
+    case 'missing_cash_flow': return `No Cash Flow entries in ${issue.month}`;
+    case 'missing_snapshot': return `No snapshot in ${issue.month}`;
+    case 'missing_income_snapshot': return `No ${issue.month} snapshot to convert recorded ${issue.currency} income; windows containing it are unavailable`;
+    case 'missing_income_rate': return issue.currency
+      ? `Cannot convert recorded ${issue.currency} income with the ${issue.month} snapshot rates; windows containing it are unavailable`
+      : `Income could not be converted reliably for ${issue.month}`;
+    case 'missing_net_worth_rate': return issue.currency
+      ? `Balance in ${issue.currency} lacks a usable historical rate for ${issue.month}`
+      : `Net worth could not be converted reliably for ${issue.month}`;
+    case 'zero_average': return 'Average recorded income is zero or negative';
+  }
+};
+
+const incomeMonthCount = (count: number) => `${count} ${count === 1 ? 'month' : 'months'}`;
+
+const IncomeMultipleTooltip = ({ active, label, points, baseCurrency }: {
+  active?: boolean;
+  label?: string;
+  points: IncomeMultiplePoint[];
+  baseCurrency: string;
+}) => {
+  if (!active || !label) return null;
+  const point = points.find(item => item.month === label);
+  if (!point) return null;
+  return (
+    <GraphTooltip title={point.month} titleValue={point.multiple === null ? '—' : `${formatIncomeMultiple(point.multiple)} monthly income`} style={{ minWidth: '245px', maxWidth: '320px' }}>
+      <div className="graph-tooltip-meta">
+        {point.netWorth !== null && <><span>Net worth</span><strong>{formatMoney(point.netWorth, baseCurrency)}</strong></>}
+        {point.averageIncome !== null && <><span>Average after-tax income</span><strong>{formatMoney(point.averageIncome, baseCurrency)}</strong></>}
+        {point.windowStart && <><span>Window</span><strong>{point.windowStart} – {point.windowEnd} · {incomeMonthCount(point.windowMonths)}</strong></>}
+      </div>
+      {point.multiple === null && <div className="graph-tooltip-note">
+        {point.issues.map((issue, index) => <div key={`${issue.kind}-${issue.month}-${issue.currency || ''}-${index}`}>{incomeIssueText(issue)}</div>)}
+      </div>}
+      {(point.shortHistory || point.provisional) && <div className="graph-tooltip-note">
+        {point.shortHistory && `Based on ${incomeMonthCount(point.windowMonths)}`}{point.shortHistory && point.provisional && ' · '}{point.provisional && 'Provisional'}
+      </div>}
+    </GraphTooltip>
+  );
+};
+
+const IncomeMultipleCard = ({ points, baseCurrency, hasFlowEntries }: {
+  points: IncomeMultiplePoint[];
+  baseCurrency: string;
+  hasFlowEntries: boolean;
+}) => {
+  const latest = points.at(-1);
+  const hasValue = points.some(point => point.multiple !== null);
+  const help = 'Net worth divided by average monthly after-tax income from all recorded external incoming Cash Flow entries. Transfers are excluded; expenses are not subtracted. The window covers up to 12 calendar months, using each month’s historical rates. It starts no earlier than the first snapshot; a shorter history uses all months since the later of the first snapshot and first Cash Flow entry. Months without entries make affected values unavailable. The journal may be incomplete, so values can change when it is filled in. A pay rise can lower this ratio even as net worth rises. This is not an estimate of how long savings would last without work.';
+
+  return (
+    <ChartCard panel={false} icon={<LineChartIcon size={16} style={{ color: '#60a5fa' }} />} help={help}
+      title="Net worth in monthly incomes" style={{ height: 'auto', minHeight: '320px' }}>
+      {!hasFlowEntries ? (
+        <div style={{ margin: 'auto 0', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          No Cash Flow entries yet. <Link to="/flow">Open Cash Flow</Link> to record income.
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '8px 4px', marginBottom: '12px', minWidth: 0, fontSize: '13px' }}>
+            <strong style={{ overflowWrap: 'anywhere' }}>{latest?.multiple == null ? '—' : formatIncomeMultiple(latest.multiple)}</strong>
+            {latest?.averageIncome != null && <span>Average income {formatMoney(latest.averageIncome, baseCurrency)} · {incomeMonthCount(latest.windowMonths)}</span>}
+            {latest?.shortHistory && <span style={{ color: 'var(--text-secondary)' }}>Based on {incomeMonthCount(latest.windowMonths)}</span>}
+          </div>
+          {latest?.multiple === null && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+            {latest.issues.map(incomeIssueText).join(' · ')}
+          </div>}
+          {!hasValue && <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: '0 0 8px' }}>No ratio is available in this range. Hover over a month to see why.</p>}
+          <div style={{ width: '100%', height: '230px', minHeight: '230px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={points} margin={{ top: 10, right: 16, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="month" stroke="var(--text-secondary)" style={{ fontSize: '11px' }} />
+                <YAxis width={54} stroke="var(--text-secondary)" tickFormatter={value => `${formatCompact(Number(value))}×`} style={{ fontSize: '11px' }} />
+                <Tooltip filterNull={false} content={<IncomeMultipleTooltip points={points} baseCurrency={baseCurrency} />} />
+                <ReferenceLine y={0} stroke="rgba(148, 163, 184, 0.65)" />
+                <Line type="linear" dataKey="multiple" name="Monthly incomes" stroke="#60a5fa" strokeWidth={2.5}
+                  connectNulls={false} dot={{ r: 4, fill: '#60a5fa' }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </ChartCard>
+  );
+};
+
 type DecompositionSeries = { key: string; label: string; color: string };
 
 const DecompositionTooltip = ({ active, payload, label, baseCurrency, item }: any) => {
@@ -429,6 +524,8 @@ export function GraphsAnalyticsSections({
   decompositionData,
   hiddenSeries,
   netWorthData,
+  incomeMultiplePoints,
+  hasFlowEntries,
   orgTrendData,
   organizationCurrencyBreakdown,
   organizationCurrencyMonth,
@@ -1169,6 +1266,21 @@ export function GraphsAnalyticsSections({
                 </ScatterChart>
               </ResponsiveContainer>
             </ChartCard>
+        </CollapsibleSection>
+      )}
+
+      {cashFlowEnabled && (
+        <CollapsibleSection
+          icon={<LineChartIcon size={16} style={{ color: '#60a5fa' }} />}
+          title="Experimental"
+          help="Exploratory analytics based on recorded Cash Flow and monthly snapshots."
+          contentStyle={{ padding: '20px' }}
+        >
+          <IncomeMultipleCard
+            points={incomeMultiplePoints}
+            baseCurrency={baseCurrency}
+            hasFlowEntries={hasFlowEntries}
+          />
         </CollapsibleSection>
       )}
 

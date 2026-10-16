@@ -7,6 +7,7 @@ import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
 import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount, monthsBetween, type TaggedReturnKind } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
+import { calculateNetWorthIncome } from '../lib/netWorthIncome';
 import { useFlowEntries } from '../hooks/useFlowEntries';
 import { GraphsAnalyticsSections, type HiddenLegendSeries, type LegendGroup } from './components/graphs/GraphsAnalyticsSections';
 import { PageLoader } from './components/PageLoader';
@@ -93,7 +94,7 @@ const buildBreakdownSeries = (
 export default function GraphsPage() {
   const { settings } = useSettings();
   const baseCurrency = settings.baseCurrency || 'RUB';
-  const { snapshots, loading } = useSnapshots({ sort: 'asc', baseCurrency });
+  const { snapshots, loading, error: snapshotError } = useSnapshots({ sort: 'asc', baseCurrency });
   const cashFlowEnabled = Boolean(settings.cashFlow?.enabled);
   const { entries: flowEntries, error: flowError, loading: flowLoading } = useFlowEntries(cashFlowEnabled);
   const diffHistory = useSnapshotDiffHistory('graphs-diff', snapshots);
@@ -254,6 +255,17 @@ export default function GraphsPage() {
       delta: Math.round(total - previousTotal)
     };
   });
+
+  const allIncomeMultiplePoints = useMemo(
+    () => cashFlowEnabled ? calculateNetWorthIncome(snapshots, flowEntries, baseCurrency, new Date()) : [],
+    [snapshots, flowEntries, baseCurrency, cashFlowEnabled]
+  );
+  const incomeMultiplePoints = useMemo(() => {
+    if (filteredSnapshots.length === 0) return [];
+    const first = filteredSnapshots[0].month;
+    const last = filteredSnapshots[filteredSnapshots.length - 1].month;
+    return allIncomeMultiplePoints.filter(point => point.month >= first && point.month <= last);
+  }, [allIncomeMultiplePoints, filteredSnapshots]);
 
   const decompositionData: Record<string, any>[] = filteredSnapshots.map(snapshot => {
     const previousSnapshot = previousSnapshotByMonth.get(snapshot.month) || null;
@@ -523,12 +535,12 @@ export default function GraphsPage() {
   }, [hiddenSeries]);
 
   if (loading || flowLoading) return <PageLoader label="Loading portfolio analytics" />;
-  if (flowError) {
+  if (snapshotError || flowError) {
     return (
       <div className="glass-panel" style={{ maxWidth: '680px', margin: '48px auto', textAlign: 'center' }}>
-        <h2 style={{ marginTop: 0 }}>Cash Flow could not be loaded</h2>
+        <h2 style={{ marginTop: 0 }}>{snapshotError ? 'Snapshots could not be loaded' : 'Cash Flow could not be loaded'}</h2>
         <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          Estimated capital return is hidden because showing it without the recorded external movements would be misleading.
+          {snapshotError ? 'Portfolio Analytics needs snapshot history to calculate its charts.' : 'Income and return charts need the recorded Cash Flow entries to calculate their values.'}
         </p>
         <Link to="/" className="btn">Back to dashboard</Link>
       </div>
@@ -571,7 +583,11 @@ export default function GraphsPage() {
         </div>
       </StickyPageHeader>
 
-      <GraphsAnalyticsSections
+      {filteredSnapshots.length === 0 ? (
+        <div className="glass-panel" style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+          No snapshots in the selected range.
+        </div>
+      ) : <GraphsAnalyticsSections
         baseCurrency={baseCurrency}
         cashFlowEnabled={cashFlowEnabled}
         capitalReturnSummary={cashFlowEnabled ? {
@@ -597,6 +613,8 @@ export default function GraphsPage() {
         decompositionData={decompositionData}
         hiddenSeries={hiddenSeries}
         netWorthData={netWorthData}
+        incomeMultiplePoints={incomeMultiplePoints}
+        hasFlowEntries={flowEntries.length > 0}
         orgTrendData={orgTrendData}
         organizationCurrencyBreakdown={organizationCurrencyBreakdown}
         organizationCurrencyMonth={latestSnapshot?.month}
@@ -614,7 +632,7 @@ export default function GraphsPage() {
         uxMetricsData={uxMetricsData}
         handleLegendClickSmart={handleLegendClickSmart}
         onOpenSnapshotDiff={handleOpenSnapshotDiff}
-      />
+      />}
 
       {diffModalData && (
         <SnapshotDiffModal
