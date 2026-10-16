@@ -136,6 +136,7 @@ export function FlowPeriodModal({
   const initialDrafts = useRef(JSON.stringify(drafts));
   const listRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToEnd = useRef(false);
+  const pendingScrollToDraft = useRef<string | null>(null);
   const [validationError, setValidationError] = useState('');
   const [commentEditor, setCommentEditor] = useState<{ clientID: string; text: string } | null>(null);
   const [copiedPrevious, setCopiedPrevious] = useState(false);
@@ -207,6 +208,10 @@ export function FlowPeriodModal({
   });
 
   useEffect(() => {
+    if (pendingScrollToDraft.current) {
+      document.getElementById(`flow-period-draft-${pendingScrollToDraft.current}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      pendingScrollToDraft.current = null;
+    }
     if (!pendingScrollToEnd.current) return;
     pendingScrollToEnd.current = false;
 
@@ -218,6 +223,15 @@ export function FlowPeriodModal({
   const addDraft = () => {
     pendingScrollToEnd.current = true;
     setDrafts(current => [...current, emptyDraft(defaultCurrency)]);
+    setValidationError('');
+  };
+
+  const copyDraft = (draft: FlowPeriodDraft) => {
+    if (saving) return;
+    const { id: _id, ...values } = draft;
+    const copy = { ...values, clientID: draftID() };
+    pendingScrollToDraft.current = copy.clientID;
+    setDrafts(current => current.flatMap(item => item.clientID === draft.clientID ? [item, copy] : [item]));
     setValidationError('');
   };
 
@@ -335,7 +349,7 @@ export function FlowPeriodModal({
           ) : drafts.map((draft, index) => (
             <div
               key={draft.clientID}
-              id={draft.id ? `flow-period-entry-${draft.id}` : undefined}
+              id={draft.id ? `flow-period-entry-${draft.id}` : `flow-period-draft-${draft.clientID}`}
               className={`cash-flow-period-row${draft.entryType === 'transfer' ? ' is-transfer' : ''}${draft.id === focusEntryID ? ' is-focused' : ''}`}
             >
               <div className="cash-flow-period-row-number">{index + 1}</div>
@@ -442,7 +456,10 @@ export function FlowPeriodModal({
                   </button>
                 </QuickHoverTooltip>
               </div>
-              <button type="button" className="btn btn-danger cash-flow-period-remove" onClick={() => setDrafts(current => current.filter(item => item.clientID !== draft.clientID))} title="Remove movement"><Trash2 size={16} /></button>
+              <div className="cash-flow-period-row-actions">
+                <button type="button" className="btn" onClick={() => copyDraft(draft)} disabled={saving} title="Copy movement" aria-label={`Copy movement ${index + 1}`}><Copy size={16} /></button>
+                <button type="button" className="btn btn-danger" onClick={() => setDrafts(current => current.filter(item => item.clientID !== draft.clientID))} disabled={saving} title="Remove movement" aria-label={`Remove movement ${index + 1}`}><Trash2 size={16} /></button>
+              </div>
             </div>
           ))}
         </div>

@@ -16,6 +16,8 @@ export type Organization = {
 export type SnapshotData = {
   comment?: string;
   rates: Record<string, number | string>;
+  /** Rates as stored, before the display currency is normalized or filled in. */
+  sourceRates?: Record<string, number | string>;
   organizations: Organization[];
 };
 

@@ -12,10 +12,13 @@ type UseSnapshotsOptions = {
 
 const NO_SNAPSHOTS: ParsedSnapshot[] = [];
 
-const parseSnapshot = (snapshot: Snapshot, baseCurrency: string): ParsedSnapshot => normalizeSnapshotRates({
-  ...snapshot,
-  data: JSON.parse(snapshot.data)
-}, baseCurrency);
+const parseSnapshot = (snapshot: Snapshot, baseCurrency: string): ParsedSnapshot => {
+  const data = JSON.parse(snapshot.data) as ParsedSnapshot['data'];
+  return normalizeSnapshotRates({
+    ...snapshot,
+    data: { ...data, sourceRates: { ...data.rates } }
+  }, baseCurrency);
+};
 
 const sortSnapshots = (snapshots: ParsedSnapshot[], direction: SortDirection) => {
   return [...snapshots].sort((a, b) => {
