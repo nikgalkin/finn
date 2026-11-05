@@ -3053,6 +3053,17 @@ main > .page-loader { animation: none; }
   font-size: 12px;
 }
 
+.settings-timing-switch { flex: 0 0 auto; }
+
+.settings-timing-switch .segmented-control { height: 32px; }
+
+.settings-timing-switch .segmented-control.is-compact .segmented-control-option {
+  flex: 1;
+  justify-content: center;
+  padding-block: 0;
+  white-space: nowrap;
+}
+
 .settings-enabled-switch {
   display: inline-grid;
   grid-template-columns: repeat(2, 42px);
@@ -3445,12 +3456,12 @@ main > .page-loader { animation: none; }
 
 .cash-flow-net-summary.is-compact .cash-flow-net-pill { padding: 4px 7px; font-size: 11px; }
 
-.capital-return-card { height: 320px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.capital-return-card { min-height: 320px; display: flex; flex-direction: column; overflow: hidden; }
 
 .capital-return-tag-panel-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 
 .capital-return-tag-scroll {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-height: 80px;
   overflow-y: auto;
   padding-right: 4px;
@@ -3606,7 +3617,7 @@ main > .page-loader { animation: none; }
 .capital-return-tag-footer { display: flex; flex-direction: column; margin-top: auto; }
 
 .capital-return-tag-row {
-  grid-template-columns: minmax(90px, 1fr) auto 76px 14px;
+  grid-template-columns: minmax(90px, 1fr) minmax(170px, 1fr) 76px 14px;
   width: 100%;
   height: 40px;
   padding: 0;
@@ -3640,6 +3651,8 @@ main > .page-loader { animation: none; }
 .capital-return-tag-name i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; }
 
 .capital-return-tag-rate { text-align: right; }
+
+.capital-return-tag-metric { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 
 .capital-return-tag-group-title {
   display: flex;
@@ -3993,6 +4006,25 @@ main > .page-loader { animation: none; }
 }
 
 .capital-return-tag-modal-month-detail p { margin: 9px 2px 0; color: var(--text-secondary); font-size: 10px; line-height: 1.4; }
+
+.capital-return-tag-modal-formula.has-classification { grid-template-columns: repeat(4, minmax(0, 1fr) auto) minmax(0, 1fr); }
+
+.capital-return-account-table-scroll { margin-top: 14px; overflow-x: auto; }
+
+.capital-return-account-table { font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.capital-return-account-table caption { padding: 0 0 9px; text-align: left; color: var(--text-secondary); font-size: 10px; }
+
+.capital-return-account-table th,
+.capital-return-account-table td { padding: 8px 7px; text-align: right; white-space: nowrap; }
+
+.capital-return-account-table th { font-size: inherit; }
+
+.capital-return-account-table th:first-child { text-align: left; }
+
+.capital-return-account-table small { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 9px; font-weight: 400; }
+
+.capital-return-tag-modal-month-detail .capital-return-classification-note { color: var(--warning); }
 
 .capital-return-tag-modal .scroll-for-more { margin: 5px 24px 0; }
 
@@ -5628,11 +5660,34 @@ main > .page-loader { animation: none; }
 
 .offer-cards { margin-bottom: 14px; }
 
+.deposit-offer-cards { row-gap: 0; }
+
+/* Share six summary rows and six working rows between the two offers. */
+.deposit-offer-cards > .offer-card {
+  display: grid;
+  grid-row: 1 / span 12;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: subgrid;
+  row-gap: 0;
+}
+
+.deposit-offer-cards .offer-breakdown {
+  display: grid;
+  grid-row: 7 / span 6;
+  grid-template-rows: subgrid;
+}
+
 .offer-card > .calculator-field-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 
 .offer-card .calculator-field > span { min-height: 18px; }
 
 .offer-card > .deposit-rate-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 9px; }
+
+.deposit-conversion-note { grid-column: 1 / -1; justify-content: center; }
+
+.deposit-rate-fields .calculator-input > b { gap: 6px; }
+
+.deposit-rate-fields .calculator-input > b > small { font-size: 10px; font-weight: 500; }
 
 .offer-card .calculator-field:not(:has(> small))::after {
   font-size: 9px;
@@ -6179,6 +6234,12 @@ main > .page-loader { animation: none; }
 
 @media (max-width: 760px) {
   .tool-modal-overlay { padding: 48px 10px 16px; }
+
+  .deposit-offer-cards { row-gap: 14px; }
+
+  .deposit-offer-cards > .offer-card { display: block; grid-row: auto; }
+
+  .deposit-offer-cards .offer-breakdown { display: flex; }
 
   .tool-modal { max-height: calc(100vh - 80px); }
 

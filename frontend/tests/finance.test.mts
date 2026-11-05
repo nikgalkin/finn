@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateTaggedCapitalReturns } from '../src/lib/finance.ts';
+import { calculateTaggedCapitalReturns, summarizeTaggedCapitalReturns } from '../src/lib/finance.ts';
+import { flowsBetweenSnapshots } from '../src/lib/cashFlow.ts';
 import type { FlowEntry, ParsedSnapshot } from '../src/types.ts';
 
 const snapshot = (month: string, balances: Array<{ amount: number; currency?: string; tags?: string[] }>): ParsedSnapshot => ({
@@ -98,6 +99,179 @@ test('does not turn a tag edit into artificial earnings', () => {
 
   assert.equal(result.returns.reduce((sum, item) => sum + item.result, 0), 0);
   result.returns.forEach(item => assert.equal(item.result, 0));
+  const byTag = Object.fromEntries(result.returns.map(item => [item.tag, item]));
+  assert.equal(byTag.deposit.openingCapital, 100);
+  assert.equal(byTag.deposit.closingCapital, 0);
+  assert.equal(byTag.deposit.classificationChange, -100);
+  assert.equal(byTag.stocks.openingCapital, 0);
+  assert.equal(byTag.stocks.closingCapital, 100);
+  assert.equal(byTag.stocks.classificationChange, 100);
+  assert.equal(byTag.stocks.ratePercent, null);
+});
+
+test('does not invent deposit earnings when salary arrives in a newly added checking balance', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 1000000, tags: ['deposit'] }, { amount: 100000, tags: ['checking'] }]),
+    snapshot('2026-01', [{ amount: 1000000, tags: ['deposit'] }]),
+    [externalFlow(100000, { tag: 'checking' })],
+    'RUB', ['checking']
+  );
+  const byTag = Object.fromEntries(result.returns.map(item => [item.tag, item]));
+  assert.equal(byTag.deposit.openingCapital, 1000000);
+  assert.equal(byTag.deposit.closingCapital, 1000000);
+  assert.equal(byTag.deposit.result, 0);
+  assert.equal(byTag.deposit.ratePercent, 0);
+  assert.equal(byTag.checking.openingCapital, 0);
+  assert.equal(byTag.checking.closingCapital, 100000);
+  assert.equal(byTag.checking.assignedFlow, 100000);
+  assert.equal(byTag.checking.result, 0);
+});
+
+test('retains capitalized interest alongside a new checking balance', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 1010000, tags: ['deposit'] }, { amount: 100000, tags: ['checking'] }]),
+    snapshot('2026-01', [{ amount: 1000000, tags: ['deposit'] }]),
+    [externalFlow(100000, { tag: 'checking' })],
+    'RUB'
+  );
+  const deposit = result.returns.find(item => item.tag === 'deposit')!;
+  assert.equal(deposit.result, 10000);
+  assert.equal(deposit.ratePercent, 1);
+  assert.ok(Math.abs(summarizeTaggedCapitalReturns([{ ...deposit, month: '2026-02' }])[0].ratePercent! - 1) < 1e-10);
+  assert.equal(result.returns.find(item => item.tag === 'checking')!.result, 0);
+});
+
+test('preserves native currency details and separates withdrawals from capitalized interest', () => {
+  const previous = snapshot('2026-01', [{ amount: 10000, currency: 'USD', tags: ['deposit'] }]);
+  const current = snapshot('2026-02', [{ amount: 9100, currency: 'USD', tags: ['deposit'] }]);
+  previous.data.rates.USD = 80;
+  current.data.rates.USD = 90;
+  const result = calculateTaggedCapitalReturns(current, previous,
+    [externalFlow(1000, { direction: 'out', currency: 'USD', tag: 'deposit' })], 'RUB');
+  const deposit = result.returns[0];
+  assert.equal(deposit.result, 9000);
+  assert.equal(deposit.openingCapital, 900000);
+  assert.equal(deposit.closingCapital, 819000);
+  assert.deepEqual(deposit.details, [{
+    account: 'Broker', currency: 'USD', openingBalance: 10000, closingBalance: 9100,
+    inflow: 0, outflow: 1000, classificationChange: 0, result: 100, resultBase: 9000,
+    proportional: false, tagsChanged: false
+  }]);
+});
+
+test('does not mistake fully recorded movements for reclassification when all tags change', () => {
+  const result = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 100, tags: ['stocks'] }]),
+    snapshot('2026-01', [{ amount: 100, tags: ['deposit'] }]),
+    [externalFlow(100, { direction: 'out', tag: 'deposit' }), externalFlow(100, { tag: 'stocks' })],
+    'RUB'
+  );
+  result.returns.forEach(item => {
+    assert.equal(item.result, 0);
+    assert.equal(item.classificationChange, 0);
+    assert.equal(item.ratePercent, 0);
+  });
+});
+
+test('shows return over the calculable intervals and reports omitted active months for any tag', () => {
+  const unrated = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 100, tags: ['deposit'] }]),
+    snapshot('2026-01', [{ amount: 0, tags: ['deposit'] }]), [], 'RUB'
+  ).returns[0];
+  const rated = calculateTaggedCapitalReturns(
+    snapshot('2026-03', [{ amount: 110, tags: ['deposit'] }]),
+    snapshot('2026-02', [{ amount: 100, tags: ['deposit'] }]), [], 'RUB'
+  ).returns[0];
+  const summary = summarizeTaggedCapitalReturns([{ ...unrated, month: '2026-02' }, { ...rated, month: '2026-03' }])[0];
+  assert.equal(summary.result, 110);
+  assert.ok(Math.abs(summary.ratePercent! - 10) < 1e-10);
+  assert.deepEqual(summary.returnCoverage, { rated: 1, total: 2, excludedMonths: ['2026-02'] });
+});
+
+test('empty months before a tag has any capital do not block its later return', () => {
+  const empty = calculateTaggedCapitalReturns(snapshot('2026-02', [{ amount: 0, tags: ['deposit'] }]),
+    snapshot('2026-01', [{ amount: 0, tags: ['deposit'] }]), [], 'RUB').returns[0];
+  const funded = calculateTaggedCapitalReturns(snapshot('2026-03', [{ amount: 100, tags: ['deposit'] }]),
+    snapshot('2026-02', [{ amount: 0, tags: ['deposit'] }]), [externalFlow(100, { tag: 'deposit' })], 'RUB').returns[0];
+  const summary = summarizeTaggedCapitalReturns([{ ...empty, month: '2026-02' }, { ...funded, month: '2026-03' }])[0];
+  assert.equal(summary.ratePercent, 0);
+  assert.deepEqual(summary.returnCoverage, { rated: 1, total: 1, excludedMonths: [] });
+});
+
+test('links available returns across an unrated interval and exposes the gap', () => {
+  const rated = calculateTaggedCapitalReturns(
+    snapshot('2026-02', [{ amount: 110, tags: ['stocks'] }]),
+    snapshot('2026-01', [{ amount: 100, tags: ['stocks'] }]), [], 'RUB'
+  ).returns[0];
+  const unrated = calculateTaggedCapitalReturns(
+    snapshot('2026-03', [{ amount: 100, tags: ['stocks'] }]),
+    snapshot('2026-02', [{ amount: 0, tags: ['stocks'] }]), [], 'RUB'
+  ).returns[0];
+  const summary = summarizeTaggedCapitalReturns([
+    { ...rated, month: '2026-02' }, { ...unrated, month: '2026-03' }, { ...rated, month: '2026-04' }
+  ])[0];
+  assert.ok(Math.abs(summary.ratePercent! - 21) < 1e-10);
+  assert.equal(summary.result, 120);
+  assert.deepEqual(summary.returnCoverage, { rated: 2, total: 3, excludedMonths: ['2026-03'] });
+});
+
+test('incoming tax and outgoing movements are netted against the tagged balance exactly once', () => {
+  const result = calculateTaggedCapitalReturns(snapshot('2026-02', [{ amount: 1140, tags: ['deposit'] }]),
+    snapshot('2026-01', [{ amount: 1000, tags: ['deposit'] }]), [
+      externalFlow(200, { tag: 'deposit', taxRate: 10 }),
+      externalFlow(50, { tag: 'deposit', direction: 'out' })
+    ], 'RUB').returns[0];
+  assert.equal(result.assignedFlow, 130);
+  assert.equal(result.details[0].inflow, 180);
+  assert.equal(result.details[0].outflow, 50);
+  assert.equal(result.result, 10);
+});
+
+test('counts proportional attribution on transfers and keeps both bank legs in their own currencies', () => {
+  const previous = snapshot('2026-01', [{ amount: 100, tags: ['deposit'] }, { amount: 900, tags: ['stocks'] }]);
+  const current = snapshot('2026-02', [{ amount: 90, tags: ['deposit'] }, { amount: 810, tags: ['stocks'] }]);
+  current.data.organizations.push({ id: 'other', name: 'Other bank', balances: [{ currency: 'USD', amount: 10, tags: ['checking'] }] });
+  current.data.rates.USD = 10;
+  const result = calculateTaggedCapitalReturns(current, previous, [externalFlow(100, {
+    entryType: 'transfer', toAccount: 'Other bank', toTag: 'checking', toCurrency: 'USD', toAmount: 10
+  })], 'RUB');
+  assert.equal(result.proportionallyAllocatedEntries, 1);
+  result.returns.forEach(item => assert.equal(item.result, 0));
+  assert.equal(result.returns.find(item => item.tag === 'checking')!.details[0].inflow, 10);
+});
+
+test('a prior-month transfer is a contribution in start-of-month snapshots, not Anorbank earnings', () => {
+  const previous = snapshot('2026-10', [{ currency: 'UZS', amount: 100000000, tags: ['deposit'] }]);
+  const current = snapshot('2026-11', [{ currency: 'UZS', amount: 26500000, tags: ['deposit'] }]);
+  previous.data.organizations.push({ id: 'anor', name: 'Anorbank', balances: [{ currency: 'UZS', amount: 100000000, tags: ['deposit'] }] });
+  current.data.organizations.push({ id: 'anor', name: 'Anorbank', balances: [{ currency: 'UZS', amount: 176000000, tags: ['deposit'] }] });
+  previous.data.rates.UZS = current.data.rates.UZS = 0.007;
+  const journal = [externalFlow(75000000, { month: '2026-10', entryType: 'transfer', currency: 'UZS', tag: 'deposit',
+    toAccount: 'Anorbank', toTag: 'deposit', toCurrency: 'UZS', toAmount: 75000000 })];
+  const result = calculateTaggedCapitalReturns(current, previous,
+    flowsBetweenSnapshots(journal, previous.month, current.month, 'start'), 'RUB').returns[0];
+  assert.equal(result.details.find(detail => detail.account === 'Anorbank')!.result, 1000000);
+  assert.equal(result.assignedFlow, 0);
+  assert.equal(result.result, 17500);
+});
+
+test('keeps separate bank contributions and reconciles every detail to the tag total', () => {
+  const previous = snapshot('2026-01', [{ amount: 1000, tags: ['deposit'] }]);
+  const current = snapshot('2026-02', [{ amount: 910, tags: ['deposit'] }]);
+  previous.data.organizations.push({ id: 'second', name: 'Other bank', balances: [{ currency: 'RUB', amount: 2000, tags: ['deposit'] }] });
+  current.data.organizations.push({ id: 'second', name: 'Other bank', balances: [{ currency: 'RUB', amount: 2220, tags: ['deposit'] }] });
+  const result = calculateTaggedCapitalReturns(current, previous, [
+    externalFlow(100, { direction: 'out', tag: 'deposit' }),
+    externalFlow(200, { account: 'Other bank', tag: 'deposit' })
+  ], 'RUB');
+  const deposit = result.returns[0];
+  assert.equal(deposit.result, 30);
+  assert.equal(deposit.details.find(item => item.account === 'Broker')!.result, 10);
+  assert.equal(deposit.details.find(item => item.account === 'Other bank')!.result, 20);
+  assert.equal(deposit.details.reduce((sum, item) => sum + item.resultBase, 0), deposit.result);
+  for (const item of deposit.details) {
+    assert.equal(item.openingBalance + item.inflow - item.outflow + item.classificationChange + item.result, item.closingBalance);
+  }
 });
 
 test('treats empty tag values as untagged and preserves reconciliation', () => {

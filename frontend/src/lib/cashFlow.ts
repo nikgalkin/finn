@@ -1,4 +1,12 @@
-import type { FlowEntry } from '../types';
+import type { FlowEntry, SnapshotTiming } from '../types';
+import { snapshotFlowPeriod } from './snapshotMonth.ts';
+
+export const flowsBetweenSnapshots = (
+  entries: FlowEntry[], previousMonth: string, currentMonth: string, timing: SnapshotTiming = 'end'
+) => {
+  const { fromMonth, toMonth } = snapshotFlowPeriod(previousMonth, currentMonth, timing);
+  return entries.filter(entry => entry.month >= fromMonth && entry.month <= toMonth);
+};
 
 export type FlowPeriodSeed = Omit<FlowEntry, 'id' | 'month'>;
 

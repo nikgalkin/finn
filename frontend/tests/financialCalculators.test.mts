@@ -8,6 +8,7 @@ import {
   calculateGoalContribution,
   calculateGrowthProjection,
   calculateRebalance,
+  calculateRateChangePercent,
   calculateXirr,
   compareDepositOffers,
   compareFxDeals,
@@ -293,6 +294,20 @@ test('taxes only the interest above the tax-free amount', () => {
   assertClose(taxed.maturityValue, 111_740);
   assert.equal(covered.tax, 0);
   assertClose(covered.maturityValue, 112_000);
+});
+
+test('reports the signed change of the displayed exchange-rate quote', () => {
+  assertClose(calculateRateChangePercent(100, 110)!, 10);
+  assertClose(calculateRateChangePercent(100, 80)!, -20);
+  assert.equal(calculateRateChangePercent(100, 100), 0);
+  assert.equal(calculateRateChangePercent(100, 0), -100);
+  assertClose(calculateRateChangePercent(1 / 100, 1 / 110)!, -100 / 11);
+});
+
+test('leaves the exchange-rate change unavailable for invalid quotes or overflow', () => {
+  for (const [initial, final] of [[0, 100], [-1, 100], [100, -1], [NaN, 100], [100, Infinity], [Infinity, 100], [Number.MIN_VALUE, Number.MAX_VALUE]]) {
+    assert.equal(calculateRateChangePercent(initial, final), null);
+  }
 });
 
 test('converts a foreign deposit in at the entry rate and out at the maturity rate', () => {

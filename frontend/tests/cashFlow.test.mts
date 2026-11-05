@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { copyFlowPeriodEntries, serializeFlowPeriodEntries } from '../src/lib/cashFlow.ts';
+import { copyFlowPeriodEntries, flowsBetweenSnapshots, serializeFlowPeriodEntries } from '../src/lib/cashFlow.ts';
 import type { FlowEntry } from '../src/types.ts';
 
 const income: FlowEntry = {
@@ -21,6 +21,17 @@ const income: FlowEntry = {
   toCurrency: '',
   toAmount: 0
 };
+
+test('selects external movements and both transfer legs in the snapshot interval without changing the journal', () => {
+  const entries: FlowEntry[] = ['2026-09', '2026-10', '2026-11'].flatMap(month => [
+    { ...income, month }, { ...income, month, entryType: 'transfer' }
+  ]);
+  assert.deepEqual(flowsBetweenSnapshots(entries, '2026-10', '2026-11', 'start'), entries.filter(entry => entry.month === '2026-10'));
+  assert.deepEqual(flowsBetweenSnapshots(entries, '2026-10', '2026-11'), entries.filter(entry => entry.month === '2026-11'));
+  assert.equal(flowsBetweenSnapshots(entries, '2026-09', '2026-11', 'start').length, 4);
+  assert.equal(flowsBetweenSnapshots(entries, '2026-11', '2026-11', 'start').length, 0);
+  assert.equal(entries[0].month, '2026-09');
+});
 
 test('saving an edited period preserves income and both transfer tags in the request', () => {
   const { month: _month, ...entry } = income;

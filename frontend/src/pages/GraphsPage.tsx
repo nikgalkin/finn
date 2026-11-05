@@ -5,9 +5,11 @@ import type { ParsedSnapshot } from '../types';
 import { useSettings } from '../hooks/useSettings';
 import { useSnapshots } from '../hooks/useSnapshots';
 import { useEscapeToDashboard } from '../hooks/useEscapeToDashboard';
-import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount, monthsBetween, type TaggedReturnKind } from '../lib/finance';
+import { calculateEstimatedCapitalReturn, calculateFlowDecomposition, calculateNetExternalFlow, calculateSnapshotTotalAtRates, calculateTaggedCapitalReturns, calculateTotals, convertAmount, monthsBetween, summarizeTaggedCapitalReturns, type TaggedCapitalReturnMonth } from '../lib/finance';
 import { isTextInputTarget } from '../lib/hotkeys';
 import { calculateNetWorthIncome } from '../lib/netWorthIncome';
+import { flowsBetweenSnapshots } from '../lib/cashFlow';
+import { snapshotFlowPeriod } from '../lib/snapshotMonth';
 import { useFlowEntries } from '../hooks/useFlowEntries';
 import { GraphsAnalyticsSections, type HiddenLegendSeries, type LegendGroup } from './components/graphs/GraphsAnalyticsSections';
 import { PageLoader } from './components/PageLoader';
@@ -96,6 +98,7 @@ export default function GraphsPage() {
   const baseCurrency = settings.baseCurrency || 'RUB';
   const { snapshots, loading, error: snapshotError } = useSnapshots({ sort: 'asc', baseCurrency });
   const cashFlowEnabled = Boolean(settings.cashFlow?.enabled);
+  const tagReturnSnapshotTiming = settings.tagReturnSnapshotTiming || 'start';
   const { entries: flowEntries, error: flowError, loading: flowLoading } = useFlowEntries(cashFlowEnabled);
   const diffHistory = useSnapshotDiffHistory('graphs-diff', snapshots);
   const diffModalData = diffHistory.data;
@@ -243,7 +246,6 @@ export default function GraphsPage() {
   const previousSnapshotByMonth = useMemo(() => new Map(
     snapshots.map((snapshot, index) => [snapshot.month, index > 0 ? snapshots[index - 1] : null])
   ), [snapshots]);
-
   const netWorthData = filteredSnapshots.map(snapshot => {
     const previousSnapshot = previousSnapshotByMonth.get(snapshot.month) || null;
     const total = getSnapshotTotalBase(snapshot);
@@ -399,59 +401,43 @@ export default function GraphsPage() {
     ? (Math.pow(periodReturnMultiplier, 12 / ratedMonthSpan) - 1) * 100
     : null;
   const monthsWithoutRecordedFlow = capitalReturnMonths.filter(month => month.recordedMovements === 0).length;
-  const taggedReturnTotals = new Map<string, {
-    result: number;
-    multiplier: number;
-    ratedMonths: number;
-    kind: TaggedReturnKind;
-    monthly: Array<{ month: string; openingCapital: number; closingCapital: number; assignedFlow: number; result: number; ratePercent: number | null }>;
-  }>();
+  const calculateTaggedMonth = (snapshot: ParsedSnapshot) => {
+    const previousSnapshot = previousSnapshotByMonth.get(snapshot.month);
+    if (!cashFlowEnabled || !previousSnapshot) return null;
+    const monthEntries = flowsBetweenSnapshots(flowEntries, previousSnapshot.month, snapshot.month, tagReturnSnapshotTiming);
+    const flowPeriod = snapshotFlowPeriod(previousSnapshot.month, snapshot.month, tagReturnSnapshotTiming);
+    const breakdown = calculateTaggedCapitalReturns(snapshot, previousSnapshot, monthEntries, baseCurrency, settings.nonYieldingTags || []);
+    return {
+      ...breakdown,
+      month: snapshot.month,
+      returns: breakdown.returns.map(item => ({ ...item, month: snapshot.month, flowPeriod }))
+    };
+  };
+  const taggedMonthBreakdowns = filteredSnapshots.map(calculateTaggedMonth).filter(item => item !== null);
+  const taggedReturnMonths: TaggedCapitalReturnMonth[] = [];
   let assignedExternalEntries = 0;
   let totalExternalEntries = 0;
   let proportionallyAllocatedEntries = 0;
   let unattributedFlow = 0;
   const unknownFlowAccounts = new Set<string>();
-  filteredSnapshots.forEach(snapshot => {
-    const previousSnapshot = previousSnapshotByMonth.get(snapshot.month);
-    if (!cashFlowEnabled || !previousSnapshot) return;
-    const monthEntries = flowEntries.filter(entry => entry.month === snapshot.month);
-    const breakdown = calculateTaggedCapitalReturns(snapshot, previousSnapshot, monthEntries, baseCurrency, settings.nonYieldingTags || []);
+  taggedMonthBreakdowns.forEach(breakdown => {
     assignedExternalEntries += breakdown.assignedExternalEntries;
     totalExternalEntries += breakdown.totalExternalEntries;
     proportionallyAllocatedEntries += breakdown.proportionallyAllocatedEntries;
     unattributedFlow += breakdown.unattributedFlow;
     breakdown.unknownAccounts.forEach(account => unknownFlowAccounts.add(account));
-    breakdown.returns.forEach(item => {
-      const total = taggedReturnTotals.get(item.tag) || { result: 0, multiplier: 1, ratedMonths: 0, kind: item.kind, monthly: [] };
-      total.result += item.result;
-      total.monthly.push({
-        month: snapshot.month,
-        openingCapital: item.openingCapital,
-        closingCapital: item.closingCapital,
-        assignedFlow: item.assignedFlow,
-        result: item.result,
-        ratePercent: item.ratePercent
-      });
-      if (item.ratePercent !== null && Number.isFinite(item.ratePercent)) {
-        total.multiplier *= 1 + item.ratePercent / 100;
-        total.ratedMonths += 1;
-      }
-      taggedReturnTotals.set(item.tag, total);
-    });
+    taggedReturnMonths.push(...breakdown.returns);
   });
-  const tagReturnStats = Array.from(taggedReturnTotals.entries())
-    .map(([tag, total]) => ({
-      tag,
-      kind: total.kind,
-      result: total.result,
-      ratePercent: total.kind === 'spending' || total.ratedMonths === 0 ? null : (total.multiplier - 1) * 100,
-      monthly: total.monthly
-    }))
-    .filter(item => Math.abs(item.result) >= 0.01 || item.ratePercent !== null)
-    .sort((left, right) => Math.abs(right.result) - Math.abs(left.result));
-  const nonYieldingResult = tagReturnStats
-    .filter(item => item.kind === 'spending')
-    .reduce((total, item) => total + item.result, 0);
+  const tagReturnStats = summarizeTaggedCapitalReturns(taggedReturnMonths);
+  // The portfolio card keeps its existing same-month convention. This setting
+  // changes only the tag breakdown, including its spending estimates.
+  const nonYieldingResult = filteredSnapshots.reduce((sum, snapshot) => {
+    const previous = previousSnapshotByMonth.get(snapshot.month);
+    if (!cashFlowEnabled || !previous) return sum;
+    const returns = calculateTaggedCapitalReturns(snapshot, previous,
+      flowEntries.filter(entry => entry.month === snapshot.month), baseCurrency, settings.nonYieldingTags || []).returns;
+    return sum + returns.filter(item => item.kind === 'spending').reduce((subtotal, item) => subtotal + item.result, 0);
+  }, 0);
   const summaryStats = [
     {
       label: 'Net worth',

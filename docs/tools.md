@@ -421,6 +421,8 @@ Per offer you set:
   1, the same rule the transfer rates in Cash Flow follow, so a small-unit currency is quoted as
   `per 1 RUB` rather than as a string of leading zeros. Rates are held to two decimals throughout,
   entry and exit alike, so leaving the field untouched really does mean no currency movement.
+  The percentage beside the maturity quote shows its change from the purchase quote, in the
+  displayed quote direction; an untouched maturity quote shows `0.00%`.
 
 Each card leads with the **interest earned**, stated in the comparison currency and net of tax and
 the currency move, with the deposit's own net annual rate and the full amount you end up holding
@@ -428,7 +430,9 @@ beside it. Under that sits one line about currency risk, and nothing else. **Sho
 unfolds the arithmetic — deposit, purchase rate, interest before and after tax, and the maturity
 value — all in the deposit's own currency, so you can check the deposit on its own terms before the
 conversion. Both cards unfold together, and both keep the same rows above the fold, so the two sets
-of figures always line up against each other.
+of figures always line up against each other. Results and working rows share their heights across
+the cards, including when text wraps. A deposit already in the comparison currency shows **No
+currency conversion** in place of the rate fields; its working shows the maturity amount too.
 
 The verdict at the bottom names the winner, the gap in money, and both net annual returns side by
 side in the comparison currency.

@@ -6,6 +6,18 @@ Enable Cash Flow in **Settings** when you want to record incoming, outgoing, and
 
 A movement can also carry a balance tag of its own. Leave it on **Auto** to derive the tag from the balances of the chosen account; pick a tag when that guess is wrong, when the account holds several tags at once, or when the money belongs to a tag you cannot express through an account. Movements that reach neither a tag nor a known account are reported as a separate reconciliation line in Portfolio Analytics rather than counted as somebody's earnings.
 
+## Estimated earnings by tag
+
+Set **Settings → Cash Flow → Snapshot timing** to match your month labels. The switch defaults to **Start of month**: a November snapshot uses October movements, suitable for balances recorded on November 1–3. **End of month** matches it with November movements. A previously saved choice is preserved. This setting affects only earnings and spending by balance tag in Graphs, across the tag history. It does not change journal entries, other charts, or snapshot editors. If snapshots skip a month, tag estimates include all movements between the two snapshots.
+
+For capitalized interest, record contributions and withdrawals, including internal transfers, and let the change in the snapshot balance capture the interest. An incoming Cash Flow entry is treated as contributed money, even when its category describes interest; recording capitalized interest that way subtracts it from estimated earnings.
+
+Open a tag in **Graphs**, then expand a month to see opening balances, incoming and outgoing movements, closing balances, and estimated earnings by bank and currency. Detail amounts use the original currency; foreign-currency results also show their value in the base currency at the closing exchange rate. Missing contributions or withdrawals remain part of estimated earnings.
+
+Each tag row shows the total for the selected period, with the latest snapshot's estimated earnings and return relative to the preceding snapshot below it. These are the earnings and return in the first row of the monthly breakdown. For a range ending in November, the smaller figures show November's result against October's opening position. Hover them to see the snapshot month and Cash Flow period. The timing setting still determines which Cash Flow months enter each calculation. When only one interval is selected, the total and smaller figures coincide. A tag with no balance or movement in the latest interval shows zero for the amount and a dash for the percentage.
+
+Adding or removing a neighboring tag preserves the actual balances and does not hide return percentages. If an account's tags are completely replaced, offsetting unexplained principal is shown separately as estimated reclassification; the affected interval's percentage is unavailable. An interval also has no percentage without a positive capital basis. For every tag, the period percentage links the intervals that can be calculated. If active intervals are omitted, the percentage is marked with **≈** and the tag details list those intervals. The earnings amount still includes the entire selected history. Empty intervals before a tag holds any capital do not count as omissions. Percentages assume movements happen halfway through the snapshot interval; they are not annualized.
+
 ## Non-yielding tags
 
 Portfolio Analytics reads what a balance changed by beyond its recorded movements as estimated earnings. Tags such as `cash` or `checking` cannot earn anything, so for them the same difference means the opposite: money that was spent and never written down.
