@@ -21,6 +21,7 @@ import { QuickHoverTooltip } from './components/QuickHoverTooltip';
 import { SettingsValidationModal } from './components/SettingsValidationModal';
 import type { SettingsValidationIssue } from './components/SettingsValidationModal';
 import { ScrollForMore } from './components/ScrollForMore';
+import { SegmentedControl } from './components/SegmentedControl';
 
 type SettingsListKey = 'currencies' | 'tags';
 type FlowSettingsListKey = 'sources' | 'categories';
@@ -104,9 +105,10 @@ const SettingsFlagToggle = ({ active, disabled, icon, label, tooltip, onToggle }
 
 type SettingsPanelProps = {
   children: ReactNode; description: string; enabled: boolean; icon: ReactNode; intro: string; onEnabledChange: (enabled: boolean) => void; title: string;
+  statusExtra?: ReactNode;
 };
 
-const SettingsPanel = ({ children, description, enabled, icon, intro, onEnabledChange, title }: SettingsPanelProps) => (
+const SettingsPanel = ({ children, description, enabled, icon, intro, onEnabledChange, title, statusExtra }: SettingsPanelProps) => (
   <details className="glass-panel" open={enabled} style={{ marginTop: '16px', padding: 0 }}>
     <summary style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', cursor: 'pointer', color: 'var(--text-secondary)', userSelect: 'none' }}>
       {icon}
@@ -114,26 +116,29 @@ const SettingsPanel = ({ children, description, enabled, icon, intro, onEnabledC
       <span style={{ fontSize: '12px' }}>{description}</span>
     </summary>
     <div className="cash-flow-settings-body">
-      <div className="cash-flow-settings-status">
-        <span>{intro}</span>
-        <div className="settings-enabled-switch" role="group" aria-label={`${title} status`}>
-          <button
-            type="button"
-            className={!enabled ? 'is-active is-off' : ''}
-            aria-pressed={!enabled}
-            onClick={() => onEnabledChange(false)}
-          >
-            Off
-          </button>
-          <button
-            type="button"
-            className={enabled ? 'is-active is-on' : ''}
-            aria-pressed={enabled}
-            onClick={() => onEnabledChange(true)}
-          >
-            On
-          </button>
+      <div className={statusExtra ? 'cash-flow-settings-grid' : undefined}>
+        <div className="cash-flow-settings-status">
+          <span>{intro}</span>
+          <div className="settings-enabled-switch" role="group" aria-label={`${title} status`}>
+            <button
+              type="button"
+              className={!enabled ? 'is-active is-off' : ''}
+              aria-pressed={!enabled}
+              onClick={() => onEnabledChange(false)}
+            >
+              Off
+            </button>
+            <button
+              type="button"
+              className={enabled ? 'is-active is-on' : ''}
+              aria-pressed={enabled}
+              onClick={() => onEnabledChange(true)}
+            >
+              On
+            </button>
+          </div>
         </div>
+        {statusExtra}
       </div>
       {children}
     </div>
@@ -350,6 +355,7 @@ export default function Settings() {
       ...settings,
       currencies: normalizedCurrencies,
       baseCurrency,
+      tagReturnSnapshotTiming: settings.tagReturnSnapshotTiming || 'start',
       secondaryCurrency: secondaryCurrency === baseCurrency ? '' : secondaryCurrency,
       autoFetchCurrencies: Array.from(new Set(
         (settings.autoFetchCurrencies || [])
@@ -895,9 +901,37 @@ export default function Settings() {
 
       <SettingsPanel
         title="Cash Flow" description="External incoming and outgoing money movements"
-        intro="Reusable suggestions for the period editor." icon={<ArrowDownUp size={17} />}
+        intro="Enable Cash Flow tracking" icon={<ArrowDownUp size={17} />}
         enabled={settings.cashFlow?.enabled ?? false}
         onEnabledChange={enabled => updateCashFlow({ enabled })}
+        statusExtra={
+          <section className="cash-flow-settings-status">
+            <div className="flex items-center gap-2">
+              <span id="settings-tag-return-timing-label">Snapshot timing</span>
+              <HelpTooltip
+                text="For the earnings and spending by balance tag in Graphs. Start of month: a November snapshot uses October movements. End of month: it uses November movements. Applies to the tag history only."
+                ariaLabel="Snapshot timing explanation"
+                width={340}
+              />
+            </div>
+            <div
+              id="settings-tag-return-timing"
+              className="settings-timing-switch"
+              role="group"
+              aria-labelledby="settings-tag-return-timing-label"
+            >
+              <SegmentedControl
+                compact
+                value={settings.tagReturnSnapshotTiming || 'start'}
+                options={[
+                  { value: 'start', label: 'Start of month' },
+                  { value: 'end', label: 'End of month' }
+                ]}
+                onChange={value => setSettings({ ...settings, tagReturnSnapshotTiming: value })}
+              />
+            </div>
+          </section>
+        }
       >
           <div className="cash-flow-settings-grid" style={{ opacity: settings.cashFlow?.enabled ? 1 : 0.55 }}>
             <section className="cash-flow-settings-section">

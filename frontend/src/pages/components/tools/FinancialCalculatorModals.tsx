@@ -17,6 +17,7 @@ import {
   calculateGoalContribution,
   calculateGrowthProjection,
   calculateRebalance,
+  calculateRateChangePercent,
   calculateXirr,
   compareDepositOffers,
   compareFxDeals,
@@ -44,6 +45,7 @@ import {
   type FetchedCurrencyQuote,
 } from '../../../lib/exchangeRates';
 import { orientExchangeRate } from '../../../lib/finance';
+import { formatPercent } from '../../../lib/format';
 import { parseNumberExpression } from '../../../lib/numberExpression';
 import { useFlowEntries } from '../../../hooks/useFlowEntries';
 import { useSettings } from '../../../hooks/useSettings';
@@ -70,7 +72,7 @@ type CalculatorFieldProps = {
   label: string;
   value: NumericValue;
   onChange: (value: NumericValue) => void;
-  suffix?: string;
+  suffix?: ReactNode;
   hint?: string;
   help?: ReactNode;
   maximumFractionDigits?: number;
@@ -1462,12 +1464,15 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
       quotedExitRate
     } = sides[side];
     const result = results[side];
+    const rateChangePercent = calculateRateChangePercent(numeric(quotedRate), numeric(quotedExitRate));
     const isBest = comparison.betterOffer === side;
     const rateUnit = `${orientation.toCurrency} per 1 ${orientation.fromCurrency}`;
     const mathBreakEven = breakEven[side];
     const breakEvenRate = mathBreakEven === null || mathBreakEven <= 0
       ? null
       : Math.round((orientation.inverted ? 1 / mathBreakEven : mathBreakEven) * 100) / 100;
+    const breakEvenRateChangePercent = breakEvenRate === null
+      ? null : calculateRateChangePercent(numeric(quotedRate), breakEvenRate);
 
     return (
       <section className={`calculator-panel offer-card is-offer-${side.toLowerCase()}${isBest ? ' is-best' : ''}`}>
@@ -1514,32 +1519,46 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
             help={`Interest up to this amount is not taxed. The tax rate applies only to whatever is left above it, once, at the end of the term. Leave it at zero for a plain flat tax on all interest.`}
           />
         </div>
-        {isForeign && (
-          <div className="calculator-field-grid deposit-rate-fields">
-            <CalculatorField
-              label="Rate at purchase"
-              value={quotedRate}
-              onChange={value => patchOffer(side, { entryRate: value })}
-              suffix={orientation.toCurrency}
-              help={`How much 1 ${orientation.fromCurrency} costs in ${orientation.toCurrency} when you buy the deposit currency. Defaults to the latest snapshot rate; enter your actual purchase rate to override it.`}
-              hint={`per 1 ${orientation.fromCurrency} · ${draft.entryRate !== null
-                ? 'custom'
-                : snapshotRate === null
-                  ? 'type one'
-                  : latestSnapshot?.month}`}
-            />
-            <CalculatorField
-              label="Rate at maturity"
-              value={quotedExitRate}
-              onChange={value => patchOffer(side, { exitRate: value })}
-              suffix={orientation.toCurrency}
-              help={`How much 1 ${orientation.fromCurrency} is worth in ${orientation.toCurrency} when the deposit closes. Left alone it repeats the purchase rate, which assumes the currency does not move.`}
-              hint={`per 1 ${orientation.fromCurrency} · ${draft.exitRate !== null
-                ? 'expected'
-                : 'same as purchase'}`}
-            />
-          </div>
-        )}
+        <div className="calculator-field-grid deposit-rate-fields">
+          {isForeign ? (
+            <>
+              <CalculatorField
+                label="Rate at purchase"
+                value={quotedRate}
+                onChange={value => patchOffer(side, { entryRate: value })}
+                suffix={orientation.toCurrency}
+                help={`How much 1 ${orientation.fromCurrency} costs in ${orientation.toCurrency} when you buy the deposit currency. Defaults to the latest snapshot rate; enter your actual purchase rate to override it.`}
+                hint={`per 1 ${orientation.fromCurrency} · ${draft.entryRate !== null
+                  ? 'custom'
+                  : snapshotRate === null
+                    ? 'type one'
+                    : latestSnapshot?.month}`}
+              />
+              <CalculatorField
+                label="Rate at maturity"
+                value={quotedExitRate}
+                onChange={value => patchOffer(side, { exitRate: value })}
+                suffix={(
+                  <>
+                    <small title={`Change in the displayed ${rateUnit} quote from purchase to maturity.`}>
+                      {rateChangePercent === null ? '—' : formatPercent(rateChangePercent)}
+                    </small>
+                    {orientation.toCurrency}
+                  </>
+                )}
+                help={`How much 1 ${orientation.fromCurrency} is worth in ${orientation.toCurrency} when the deposit closes. Left alone it repeats the purchase rate, which assumes the currency does not move.`}
+                hint={`per 1 ${orientation.fromCurrency} · ${draft.exitRate !== null
+                  ? 'expected'
+                  : 'same as purchase'}`}
+              />
+            </>
+          ) : (
+            <div className="calculator-result deposit-conversion-note">
+              <span>No currency conversion</span>
+              <em>The deposit and results are both in {currency}.</em>
+            </div>
+          )}
+        </div>
         <ResultMetric
           primary
           tone={result.profitInBase < 0 ? 'negative' : isBest ? 'positive' : 'neutral'}
@@ -1568,10 +1587,9 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
                 : (
                   <>
                     {formatValue(breakEvenRate)} {rateUnit}
-                    {numeric(quotedRate) > 0 && (
+                    {breakEvenRateChangePercent !== null && (
                       <small>
-                        {breakEvenRate >= numeric(quotedRate) ? '+' : ''}
-                        {formatValue((breakEvenRate / numeric(quotedRate) - 1) * 100)}% vs purchase
+                        {formatPercent(breakEvenRateChangePercent)} vs purchase
                       </small>
                     )}
                   </>
@@ -1590,15 +1608,14 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
         {workingExpanded && (
           <dl className="offer-breakdown is-working">
             <div><dt>Deposit</dt><dd>{formatMoney(result.principal, offerCurrency)}</dd></div>
-            {isForeign && (
-              <div><dt>Bought at</dt><dd>{formatValue(numeric(quotedRate))} {rateUnit}</dd></div>
-            )}
+            <div>
+              <dt>Bought at</dt>
+              <dd>{isForeign ? `${formatValue(numeric(quotedRate))} ${rateUnit}` : 'No conversion'}</dd>
+            </div>
             <div><dt>Interest before tax</dt><dd>{formatMoney(result.grossInterest, offerCurrency)}</dd></div>
             <div><dt>Tax withheld</dt><dd>{formatMoney(result.tax, offerCurrency)}</dd></div>
             <div><dt>Interest after tax</dt><dd>{formatMoney(result.netInterest, offerCurrency)}</dd></div>
-            {isForeign && (
-              <div><dt>At maturity</dt><dd>{formatMoney(result.maturityValue, offerCurrency)}</dd></div>
-            )}
+            <div><dt>At maturity</dt><dd>{formatMoney(result.maturityValue, offerCurrency)}</dd></div>
           </dl>
         )}
       </section>
@@ -1656,7 +1673,7 @@ export function DepositComparatorCalculatorModal({ onClose }: { onClose: () => v
         ]}
       />
 
-      <div className="calculator-shell offer-cards">
+      <div className="calculator-shell offer-cards deposit-offer-cards">
         {renderOffer('A')}
         {renderOffer('B')}
       </div>

@@ -50,11 +50,14 @@ export type AppSettings = {
   autoFetchCurrencies?: string[];
   baseCurrency?: string;
   secondaryCurrency?: string;
+  tagReturnSnapshotTiming?: SnapshotTiming;
   tags?: string[]; // Balance analytical tagging infrastructure array
   nonYieldingTags?: string[];
   cashFlow?: CashFlowSettings;
   localAI?: LocalAISettings;
 };
+
+export type SnapshotTiming = 'start' | 'end';
 
 export type CashFlowSettings = {
   enabled: boolean;

@@ -491,6 +491,12 @@ export const compareFxDealsForTarget = (
 
 export type DepositCompounding = 'daily' | 'monthly' | 'quarterly' | 'annually' | 'maturity';
 
+export const calculateRateChangePercent = (initialRate: number, finalRate: number): number | null => {
+  if (!(initialRate > 0) || finalRate < 0 || !Number.isFinite(initialRate) || !Number.isFinite(finalRate)) return null;
+  const change = (finalRate / initialRate - 1) * 100;
+  return Number.isFinite(change) ? change : null;
+};
+
 const DEPOSIT_PERIODS_PER_YEAR: Record<Exclude<DepositCompounding, 'maturity'>, number> = {
   daily: 365,
   monthly: 12,

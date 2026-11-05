@@ -11,6 +11,7 @@ const defaultSettings: AppSettings = {
   tags: [],
   baseCurrency: 'RUB',
   secondaryCurrency: 'USD',
+  tagReturnSnapshotTiming: 'start',
   cashFlow: {
     enabled: false,
     sources: [],

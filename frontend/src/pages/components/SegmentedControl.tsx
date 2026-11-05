@@ -21,6 +21,7 @@ export function SegmentedControl<Value extends string>({ options, value, onChang
           key={option.value}
           type="button"
           className={`btn segmented-control-option${option.value === value ? ' is-active' : ''}`}
+          aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
         >
           {option.icon}
